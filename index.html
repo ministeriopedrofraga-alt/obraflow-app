@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#12211b" />
+    <meta name="description" content="Gestão de equipamentos e plataformas elevatórias para obras de data center." />
+    <title>ObraFlow | Gestão de Equipamentos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <a class="brand" href="#dashboard" aria-label="ObraFlow - início">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32"><path d="M7 21.5V11l9-5 9 5v10.5l-9 5-9-5Z"/><path d="m11.5 18 4.5 2.5 4.5-2.5v-5L16 10.5 11.5 13v5Z"/></svg>
+          </span>
+          <span><strong>Obra</strong>Flow<small>GESTÃO HVAC</small></span>
+        </a>
+
+        <nav class="main-nav" aria-label="Navegação principal">
+          <p class="nav-label">VISÃO GERAL</p>
+          <a href="#dashboard" class="nav-link active" data-page="dashboard"><span data-icon="grid"></span>Dashboard</a>
+          <p class="nav-label">MÓDULOS DA OBRA</p>
+          <a href="#equipamentos" class="nav-link" data-page="equipamentos"><span data-icon="lift"></span>Controle de PTAs <b id="navEquipmentCount">0</b></a>
+          <p class="nav-label">CADASTROS</p>
+          <a href="#empresas" class="nav-link" data-page="empresas"><span data-icon="building"></span>Empresas & Efetivo</a>
+          <a href="#relatorios" class="nav-link" data-page="relatorios"><span data-icon="chart"></span>Relatórios</a>
+        </nav>
+
+        <div class="sidebar-help">
+          <span data-icon="shield"></span>
+          <div><strong>Gestão da obra</strong><small>Novos módulos podem ser adicionados aqui.</small></div>
+        </div>
+        <div class="sidebar-user">
+          <span class="avatar">PA</span>
+          <div><strong>Pedro Alves</strong><small>Administrador</small></div>
+          <button class="icon-button" aria-label="Opções"><span data-icon="more"></span></button>
+        </div>
+      </aside>
+
+      <div class="main-area">
+        <header class="topbar">
+          <button class="icon-button mobile-menu" id="menuButton" aria-label="Abrir menu"><span data-icon="menu"></span></button>
+          <div class="site-selector"><span class="status-dot"></span><div><small>OBRA ATIVA</small><strong>Data Center Fortaleza</strong></div><span data-icon="chevron"></span></div>
+          <div class="top-actions">
+            <label class="global-search"><span data-icon="search"></span><input id="globalSearch" type="search" placeholder="Buscar equipamento, responsável..." /><kbd>⌘ K</kbd></label>
+            <button class="icon-button notification-button" aria-label="Notificações"><span data-icon="bell"></span><i></i></button>
+            <button class="button button-dark compact" id="quickScanButton"><span data-icon="scan"></span> Ler QR Code</button>
+          </div>
+        </header>
+
+        <main id="app" tabindex="-1"></main>
+      </div>
+    </div>
+
+    <div class="mobile-backdrop" id="mobileBackdrop"></div>
+    <div id="modalRoot"></div>
+    <div id="toastRoot" class="toast-root" aria-live="polite"></div>
+
+    <script async src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
