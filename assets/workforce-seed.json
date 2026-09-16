@@ -1,0 +1,450 @@
+{
+    "source":  "RELATÓRIO DE EFETIVO - OBRA OMNIA-PÉCEM - Setembro",
+    "updatedAt":  "2026-09-16T12:00:00",
+    "people":  [
+                   {
+                       "company":  "AIR TEC",
+                       "name":  "ADILSON LOPES DOS SANTOS",
+                       "role":  "MONTADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "AIR TEC",
+                       "name":  "ANTONIO SOUZA JUNIOR",
+                       "role":  "ENCARREGADO",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "AIR TEC",
+                       "name":  "BENJAMIM BENZAQUEM NETO",
+                       "role":  "SUPERVISOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "AIR TEC",
+                       "name":  "BRENDO WALLACE DA SILVA GONCALVES",
+                       "role":  "AJUDANTE",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "AIR TEC",
+                       "name":  "CRYSTIAN JONATHAN SOUZA DA SILVA",
+                       "role":  "MONTADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "AIR TEC",
+                       "name":  "EMERSON SANTOS DO BOMFIM",
+                       "role":  "MONTADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "AIR TEC",
+                       "name":  "GEOVANI RIBEIRO DA SILVA",
+                       "role":  "MONTADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "AIR TEC",
+                       "name":  "JEILTON SOARES DE OLIVEIRA",
+                       "role":  "MONTADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "AIR TEC",
+                       "name":  "JOSE SIDNEY PEREIRA ALVES",
+                       "role":  "MONTADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "AIR TEC",
+                       "name":  "LUIS FELIPE GOMES CARVALHO",
+                       "role":  "MONTADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "AIR TEC",
+                       "name":  "MATHEUS AUGUSTO PEREIRA SOUZA",
+                       "role":  "MONTADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "ANDERSON JOSÉ DA SILVA ROSA",
+                       "role":  "ANALISTA DE QUALIDADE PLENO",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "ANDREA FELIX AZEVEDO COSTA",
+                       "role":  "TECNICA DE SEGURANÇA",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "ANTONIA JOELINE LOPES FARIAS",
+                       "role":  "AUX. DE SERVIÇOS GERAIS",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "BRUNO DOS SANTOS SILVA",
+                       "role":  "ENGº DE SEGURANÇA",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "BRUNO MENDONÇA SILVA",
+                       "role":  "SUPERVISOR DE OBRAS",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "CARLOS FERNANDES BEZERRA DOS SANTOS",
+                       "role":  "AJUDANTE DE OBRAS",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "CLEYLTON PEREIRA NASCIMENTO",
+                       "role":  "ANALISTA DE QUALIDADE JR",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "DANIEL ARAGÃO DE ALMEIDA",
+                       "role":  "TEC. SEGURANÇA E MEIO AMBIENTE",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "DANIEL PEREIRA DA PENHA",
+                       "role":  "TECNICO DE SEGURANÇA",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "DIOGO LOPES DO NASCIMENTO",
+                       "role":  "AJUDANTE DE OBRA",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "EDIMARA SANDERS DA COSTA",
+                       "role":  "AUX. DE SERVIÇOS GERAIS",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "FERNANDO MOREIRA REIS COUTINHO LEAL",
+                       "role":  "COOD. PLANEJAMENTO",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "JOSE DAVI ABREU GOMES",
+                       "role":  "ALMOXARIFE",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "JOSE PALADINO JUNIOR",
+                       "role":  "GERENTE CONTRATO",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "JOSENILDO JOSÉ",
+                       "role":  "AJUDANTE DE ALMOXARIFADO",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "LUIZ EDUARDO MATIAS DA SILVA",
+                       "role":  "AJUDANTE DE OBRA",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "NATALIA BASTOS DE OLIVEIRA BALTAZAR",
+                       "role":  "ADMINISTRATIVO OBRA",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "NATALIA LIMA DE ANDRADE",
+                       "role":  "ANALISTA DE QUALIDADE SÊNIOR",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "PATRIK EDUARDO PAVANI",
+                       "role":  "SUPERVISOR.DE OBRA",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "PAULO SERRA MARQUES",
+                       "role":  "ENGEHEIRO OBRA SÊNIOR",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "PEDRO GABRIEL DE FRAGA ALVES",
+                       "role":  "ENGENHEIRO DE OBRA PLENO",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "RODRIGO MIRANDA BORGES",
+                       "role":  "TÉCNICO DE SEGURANÇA SUPERVISOR",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "RODRIGO PASCOAL",
+                       "role":  "PROJETISTA SR",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "RONILSON BATISTA NERES",
+                       "role":  "TÉCNICO DE SEGURANÇA",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "SILAS FERREIRA TAVARES M. MIRANDA",
+                       "role":  "ENGENHEIRO DE OBRA PLENO",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "THALLES BARROS DOS SANTOS",
+                       "role":  "ENGENHEIRO DE OBRA",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "THIAGO MENEZES LOPES",
+                       "role":  "ALMOXARIFE",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "THIAGO SOUSA BARBOSA",
+                       "role":  "ENGENHEIRO DE OBRA",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "VANESSA ROCHA DA SILVA",
+                       "role":  "ADM.INISTRATIVO OBRA",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "HEATING COOLING",
+                       "name":  "WALLACE CAMPOS MACHADO ALVES",
+                       "role":  "ESPECIALISTA EM PLANEJAMENTO",
+                       "status":  "INDIRETA"
+                   },
+                   {
+                       "company":  "JI ENGENHARIA",
+                       "name":  "ALISSON BARBOSA",
+                       "role":  "",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "JI ENGENHARIA",
+                       "name":  "ANDERSON BARBOSA",
+                       "role":  "",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "JI ENGENHARIA",
+                       "name":  "CLEMENTE MATOS DA SILVA",
+                       "role":  "ENCANADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "JI ENGENHARIA",
+                       "name":  "CRISTIANO ANTONIO GONÇALVES",
+                       "role":  "AUXILIAR DE ENCANADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "ANTONIO TIAGO DE ARAUJO SOUSA",
+                       "role":  "AJUDANTE GERAL",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "ARLINDO DA SILVA DE SOUZA",
+                       "role":  "AJUDANTE",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "CARLOS ANDRÉ SANTOS DA SILVA",
+                       "role":  "AJUDANTE GERAL",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "ERCILANE ARAUJO FREITAS",
+                       "role":  "ENCANADOR A",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "FRANCISCO DAS CHAGAS DA SILVA",
+                       "role":  "MEIO",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "FRANCISCO DAS CHAGAS LIMA",
+                       "role":  "ENCANADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "FRANCISCO VIEIRA DE BRITO",
+                       "role":  "AJUDANTE",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "GIVALDO BRANDÃO MELO",
+                       "role":  "AJUDANTE GERAL",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "IGO BRITO CARDOSO",
+                       "role":  "AJUDANTE GERAL",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "JOSE VERAS CARVALHO",
+                       "role":  "AJUDANTE GERAL",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "JOSE WILSON DE OLIVEIRA IBIAPINA",
+                       "role":  "AJUDANTE",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "LEANDRO RODRIGUES PEREIRA",
+                       "role":  "AJUDANTE GERAL",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "LUCAS IBIAPINA DA SILVA",
+                       "role":  "AJUDANTE GERAL A",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "MARCIEL MATOS CARDOSO",
+                       "role":  "ENCANADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "MAYLSON LIMA DE ARAÚJO",
+                       "role":  "ENCANADOR C",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "RONIELE ARAÚJO DE SOUSA",
+                       "role":  "ENCANDOR A",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "LA",
+                       "name":  "TIAGO LIMA VIEIRA",
+                       "role":  "ENCARREGADO A",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "SIP",
+                       "name":  "ADALBERTO FELIPE DA SILVA JUNIOR",
+                       "role":  "ENCANADOR A",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "SIP",
+                       "name":  "EDNALDO ALVES DE BARROS",
+                       "role":  "ENCANADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "SIP",
+                       "name":  "FÁBIO RODRIGUES DAMACENO",
+                       "role":  "ENCANADOR B",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "SIP",
+                       "name":  "FRANCISCO DAS CHAGAS S.DA CONCEICAO",
+                       "role":  "ENCANADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "SIP",
+                       "name":  "FRANCISCO JUNIOR SILVA TEIXEIRA",
+                       "role":  "ENCANADOR B",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "SIP",
+                       "name":  "JOSE DIMAS RODRIGUES N. DA SILVA",
+                       "role":  "ENCANADOR A",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "SIP",
+                       "name":  "JOSE FÁBIO LOPES DE CARVALHO",
+                       "role":  "ENCANADOR A",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "SIP",
+                       "name":  "KAYAN PEREIRA DE CARVALHO",
+                       "role":  "GERENTE ADMINISTRATIVO",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "SIP",
+                       "name":  "NATANAEL ROCHA COSMO",
+                       "role":  "ENCANADOR",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "SIP",
+                       "name":  "OZIEL PEREIRA DA CRUZ",
+                       "role":  "ENCANADOR A",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "SIP",
+                       "name":  "UDSON DOS SANTOS CORREA",
+                       "role":  "ENCANADOR LIDER",
+                       "status":  "DIRETA"
+                   },
+                   {
+                       "company":  "SIP",
+                       "name":  "WERBSON DO LIVRAMENTO MOURA",
+                       "role":  "AJUDANTE",
+                       "status":  "DIRETA"
+                   }
+               ]
+}
