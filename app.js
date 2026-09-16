@@ -608,4 +608,4 @@ document.getElementById('quickScanButton').addEventListener('click',openScanModa
 document.getElementById('globalSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){const q=e.target.value.toLowerCase();const eq=equipments.find(x=>`${x.code} ${x.name} ${x.usage?.responsible||''}`.toLowerCase().includes(q));eq?openEquipmentDetails(eq.id):toast('Nenhum equipamento encontrado.',true);}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();document.getElementById('globalSearch').focus();}});
 window.addEventListener('hashchange',render);
-hydrateIcons(); render(); initializeWorkforce();
+hydrateIcons(); initializeApp();
