@@ -81,44 +81,54 @@ let workforceMeta = { source: 'Nenhuma base', updatedAt: '' };
 let currentPage = 'dashboard';
 
 async function save() {
-  for (const eq of equipments) await supabase.from('equipments').upsert(eq);
-  for (const h of history) await supabase.from('history').upsert(h);
+  try {
+    for (const eq of equipments) await supabase.from('equipments').upsert(eq, { onConflict: 'id' });
+    for (const h of history) await supabase.from('history').upsert(h, { onConflict: 'id' });
+  } catch(e) { console.warn('Erro ao salvar no Supabase:', e); }
 }
 
 async function initializeApp() {
-  const { data: eqData } = await supabase.from('equipments').select('*');
-  if (eqData && eqData.length > 0) equipments = eqData;
-  else {
+  try {
+    const { data: eqData, error: eqErr } = await supabase.from('equipments').select('*');
+    if (eqErr) console.warn('Erro ao carregar equipamentos:', eqErr.message);
+    if (eqData && eqData.length > 0) {
+      equipments = eqData;
+    } else {
+      equipments = seedEquipments;
+      history = seedHistory;
+      await save();
+    }
+
+    const { data: hsData } = await supabase.from('history').select('*');
+    if (hsData && hsData.length > 0) history = hsData;
+
+    const { data: wfData } = await supabase.from('workforce').select('*');
+    if (wfData && wfData.length > 0) {
+      workforce = wfData;
+    } else {
+      try {
+        const res = await fetch('assets/workforce-seed.json');
+        const data = await res.json();
+        workforce = data.people || [];
+        for(const p of workforce) {
+          if (!p.id) p.id = crypto.randomUUID();
+          await supabase.from('workforce').upsert(p, { onConflict: 'id' });
+        }
+      } catch(e) { console.warn('Seed workforce falhou:', e); }
+    }
+
+    const { data: appMeta } = await supabase.from('app_metadata').select('*');
+    if (appMeta) {
+      const eqMeta = appMeta.find(m => m.key === 'equipment_import_meta');
+      if (eqMeta) equipmentImportMeta = eqMeta.value;
+      const wfMeta = appMeta.find(m => m.key === 'workforce_meta');
+      if (wfMeta) workforceMeta = wfMeta.value;
+    }
+  } catch(e) {
+    console.warn('Falha na conexão com Supabase, usando dados locais:', e);
     equipments = seedEquipments;
     history = seedHistory;
-    await save();
   }
-
-  const { data: hsData } = await supabase.from('history').select('*');
-  if (hsData) history = hsData;
-
-  const { data: wfData } = await supabase.from('workforce').select('*');
-  if (wfData && wfData.length > 0) workforce = wfData;
-  else {
-    try {
-      const res = await fetch('assets/workforce-seed.json');
-      const data = await res.json();
-      workforce = data.people || [];
-      for(const p of workforce) {
-          if (!p.id) p.id = crypto.randomUUID();
-          await supabase.from('workforce').upsert(p);
-      }
-    } catch {}
-  }
-  
-  const { data: appMeta } = await supabase.from('app_metadata').select('*');
-  if (appMeta) {
-    const eqMeta = appMeta.find(m => m.key === 'equipment_import_meta');
-    if (eqMeta) equipmentImportMeta = eqMeta.value;
-    const wfMeta = appMeta.find(m => m.key === 'workforce_meta');
-    if (wfMeta) workforceMeta = wfMeta.value;
-  }
-
   hydrateIcons();
   render();
 }
