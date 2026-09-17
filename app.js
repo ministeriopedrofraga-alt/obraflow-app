@@ -36,8 +36,8 @@ const icons = {
 
 const seedEquipments = [
   // 08M
-  { id:'tpta00674', code:'TPTA00674', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023A00135', productCode:'931-000235', invoice:'2623', emissionDate:'2026-09-10', hourmeter:170, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
-  { id:'tpta00845', code:'TPTA00845', afNumber:'686', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701N010208', productCode:'931-000233', invoice:'2533', emissionDate:'2026-08-12', hourmeter:101, battery:'Lítio', contractor:'LA', status:'available', inspection:'', usage:null },
+  { id:'tpta00674', code:'TPTA00674', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023A00135', productCode:'931-000235', invoice:'2623', emissionDate:'2026-09-10', hourmeter:170, battery:'Chumbo', contractor:'', status:'in-use', inspection:'', usage:{ person:'BRUNO DOS SANTOS SILVA', company:'HEATING COOLING', role:'Encanador', phone:'', dataHall:'Data Hall 04', location:'corredor a forca a', activity:'Instalação Hidráulica', expectedAt:'2026-09-16T22:27:00' } },
+  { id:'tpta00845', code:'TPTA00845', afNumber:'686', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701N010208', productCode:'931-000233', invoice:'2533', emissionDate:'2026-08-12', hourmeter:101, battery:'Lítio', contractor:'LA', status:'in-use', inspection:'', usage:{ person:'JOSE VERAS CARVALHO', company:'LA', role:'Eletricista', phone:'', dataHall:'Data Hall 06', location:'corredor a', activity:'Instalação Elétrica', expectedAt:'2026-09-16T22:56:00' } },
   { id:'tpta02796', code:'TPTA02796', afNumber:'626', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04867', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'AIRTEC', status:'available', inspection:'', usage:null },
   { id:'tpta02797', code:'TPTA02797', afNumber:'687', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04855', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'SIP', status:'available', inspection:'', usage:null },
   { id:'tpta02798', code:'TPTA02798', afNumber:'683', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04865', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'SIP', status:'available', inspection:'', usage:null },
@@ -59,7 +59,104 @@ const seedEquipments = [
   { id:'tpta01095', code:'TPTA01095', afNumber:'', name:'Plataforma Tesoura 12m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 12m 4x2 Li', serial:'0775500500N010105', productCode:'931-000238', invoice:'2623', emissionDate:'2026-09-10', hourmeter:112.4, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null }
 ];
 
-const seedHistory = [];
+const seedHistory = [
+  {
+    id: 1001,
+    equipmentId: 'tpta00674',
+    equipmentCode: 'TPTA00674',
+    action: 'withdraw',
+    person: 'BRUNO DOS SANTOS SILVA',
+    company: 'HEATING COOLING',
+    role: 'Encanador',
+    date: '2026-09-16T18:27:00.000Z',
+    dataHall: 'Data Hall 04',
+    location: 'corredor a forca a',
+    activity: 'Instalação Hidráulica',
+    expectedAt: '2026-09-16T22:27:00.000Z',
+    inspection: {
+      mode: 'retirada',
+      equipmentCode: 'TPTA00674',
+      inspectedAt: '2026-09-16T18:27',
+      operatorName: 'BRUNO DOS SANTOS SILVA',
+      company: 'HEATING COOLING',
+      dataHall: 'Data Hall 04',
+      answers: ['A','A','A','A','A','A'],
+      observations: 'Equipamento em perfeito estado de operação.'
+    }
+  },
+  {
+    id: 1002,
+    equipmentId: 'tpta00845',
+    equipmentCode: 'TPTA00845',
+    action: 'withdraw',
+    person: 'JOSE VERAS CARVALHO',
+    company: 'LA',
+    role: 'Eletricista',
+    date: '2026-09-16T18:56:00.000Z',
+    dataHall: 'Data Hall 06',
+    location: 'corredor a',
+    activity: 'Instalação Elétrica',
+    expectedAt: '2026-09-16T22:56:00.000Z',
+    inspection: {
+      mode: 'retirada',
+      equipmentCode: 'TPTA00845',
+      inspectedAt: '2026-09-16T18:56',
+      operatorName: 'JOSE VERAS CARVALHO',
+      company: 'LA',
+      dataHall: 'Data Hall 06',
+      answers: ['A','A','A','A','A','A'],
+      observations: 'Sem avarias observadas no momento da retirada.'
+    }
+  },
+  {
+    id: 1003,
+    equipmentId: 'tpta02796',
+    equipmentCode: 'TPTA02796',
+    action: 'withdraw',
+    person: 'AIRTON SENNA SILVA',
+    company: 'AIRTEC',
+    role: 'Técnico HVAC',
+    date: '2026-09-15T14:10:00.000Z',
+    dataHall: 'Data Hall 02',
+    location: 'Área Técnica',
+    activity: 'Montagem de Dutos',
+    expectedAt: '2026-09-15T18:00:00.000Z',
+    inspection: {
+      mode: 'retirada',
+      equipmentCode: 'TPTA02796',
+      inspectedAt: '2026-09-15T14:10',
+      operatorName: 'AIRTON SENNA SILVA',
+      company: 'AIRTEC',
+      dataHall: 'Data Hall 02',
+      answers: ['A','A','A','A','A','A'],
+      observations: 'Checklist inicial OK.'
+    }
+  },
+  {
+    id: 1004,
+    equipmentId: 'tpta02797',
+    equipmentCode: 'TPTA02797',
+    action: 'withdraw',
+    person: 'SERGIO PEREIRA',
+    company: 'SIP',
+    role: 'Isolador',
+    date: '2026-09-15T09:30:00.000Z',
+    dataHall: 'Data Hall 01',
+    location: 'Pátio Externo',
+    activity: 'Isolamento Térmico',
+    expectedAt: '2026-09-15T17:00:00.000Z',
+    inspection: {
+      mode: 'retirada',
+      equipmentCode: 'TPTA02797',
+      inspectedAt: '2026-09-15T09:30',
+      operatorName: 'SERGIO PEREIRA',
+      company: 'SIP',
+      dataHall: 'Data Hall 01',
+      answers: ['A','A','A','A','A','A'],
+      observations: 'Operação liberada.'
+    }
+  }
+];
 
 const checklistItems = [
   { group: 'Comandos', title: 'Comandos e controles', text: 'Os comandos e controles estão funcionando perfeitamente.' },
@@ -333,7 +430,17 @@ async function initializeApp() {
         }
 
         const { data: hsData } = await client.from('history').select('*');
-        if (hsData && hsData.length > 0) history = hsData;
+        if (hsData && hsData.length > 0) {
+          const mergedHsMap = new Map();
+          seedHistory.forEach(h => mergedHsMap.set(String(h.id), h));
+          hsData.forEach(h => mergedHsMap.set(String(h.id), h));
+          history = Array.from(mergedHsMap.values());
+        } else {
+          history = seedHistory;
+          for (const h of history) {
+            await client.from('history').upsert(h, { onConflict: 'id' });
+          }
+        }
 
         const { data: wfData } = await client.from('workforce').select('*');
         if (wfData && wfData.length > 0) workforce = wfData;
