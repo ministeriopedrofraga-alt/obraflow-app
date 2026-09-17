@@ -1,4 +1,3 @@
-alert('App.js carregou!');
 window.addEventListener('error', function(e) { document.getElementById('app').innerHTML = '<div style="padding: 20px; color: red;"><h2>Global Error</h2><p>' + e.message + '</p><pre>' + e.filename + ':' + e.lineno + '</pre></div>'; });
 window.addEventListener('unhandledrejection', function(e) { document.getElementById('app').innerHTML = '<div style="padding: 20px; color: red;"><h2>Unhandled Promise</h2><p>' + e.reason + '</p></div>'; });
 const icons = {
@@ -90,9 +89,9 @@ async function save() {
   } catch(e) { console.warn('Erro ao salvar no Supabase:', e); }
 }
 
-async function initializeApp() {
+async function initializeApp() { document.getElementById('app').innerHTML = '<h2>Loading 1/5...</h2>';
   try {
-    const { data: eqData, error: eqErr } = await supabase.from('equipments').select('*');
+    document.getElementById('app').innerHTML = '<h2>Loading 2/5 (Equipments)...</h2>'; const { data: eqData, error: eqErr } = await supabase.from('equipments').select('*');
     if (eqErr) console.warn('Erro ao carregar equipamentos:', eqErr.message);
     if (eqData && eqData.length > 0) {
       equipments = eqData;
@@ -102,10 +101,10 @@ async function initializeApp() {
       await save();
     }
 
-    const { data: hsData } = await supabase.from('history').select('*');
+    document.getElementById('app').innerHTML = '<h2>Loading 3/5 (History)...</h2>'; const { data: hsData } = await supabase.from('history').select('*');
     if (hsData && hsData.length > 0) history = hsData;
 
-    const { data: wfData } = await supabase.from('workforce').select('*');
+    document.getElementById('app').innerHTML = '<h2>Loading 4/5 (Workforce)...</h2>'; const { data: wfData } = await supabase.from('workforce').select('*');
     if (wfData && wfData.length > 0) {
       workforce = wfData;
     } else {
@@ -120,7 +119,7 @@ async function initializeApp() {
       } catch(e) { console.warn('Seed workforce falhou:', e); }
     }
 
-    const { data: appMeta } = await supabase.from('app_metadata').select('*');
+    document.getElementById('app').innerHTML = '<h2>Loading 5/5 (Meta)...</h2>'; const { data: appMeta } = await supabase.from('app_metadata').select('*');
     if (appMeta) {
       const eqMeta = appMeta.find(m => m.key === 'equipment_import_meta');
       if (eqMeta) equipmentImportMeta = eqMeta.value;
