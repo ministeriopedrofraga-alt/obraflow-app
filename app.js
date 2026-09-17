@@ -1,3 +1,4 @@
+alert('App.js carregou!');
 window.addEventListener('error', function(e) { document.getElementById('app').innerHTML = '<div style="padding: 20px; color: red;"><h2>Global Error</h2><p>' + e.message + '</p><pre>' + e.filename + ':' + e.lineno + '</pre></div>'; });
 window.addEventListener('unhandledrejection', function(e) { document.getElementById('app').innerHTML = '<div style="padding: 20px; color: red;"><h2>Unhandled Promise</h2><p>' + e.reason + '</p></div>'; });
 const icons = {
