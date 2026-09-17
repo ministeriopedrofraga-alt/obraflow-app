@@ -35,18 +35,28 @@ const icons = {
 };
 
 const seedEquipments = [
-  { id:'tpta00674', code:'TPTA00674', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023A00135', productCode:'931-000235', invoice:'2623', emissionDate:'2026-09-10', hourmeter:170, battery:'Chumbo', status:'available', inspection:'', usage:null },
-  { id:'tpta00845', code:'TPTA00845', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701N010208', productCode:'931-000233', invoice:'2533', emissionDate:'2026-08-12', hourmeter:101, battery:'Lítio', status:'available', inspection:'', usage:null },
-  { id:'tpta02796', code:'TPTA02796', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04867', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', status:'available', inspection:'', usage:null },
-  { id:'tpta02797', code:'TPTA02797', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04855', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', status:'available', inspection:'', usage:null },
-  { id:'tpta02798', code:'TPTA02798', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04865', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', status:'available', inspection:'', usage:null },
-  { id:'tpta02799', code:'TPTA02799', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04874', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', status:'available', inspection:'', usage:null },
-  { id:'tpta02019', code:'TPTA02019', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501P010468', productCode:'931-000236', invoice:'2623', emissionDate:'2026-09-10', hourmeter:156.7, battery:'Lítio', status:'available', inspection:'', usage:null },
-  { id:'tpta00254', code:'TPTA00254', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'JPAC022K02485', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:206.7, battery:'Lítio', status:'available', inspection:'', usage:null },
-  { id:'tpta01868', code:'TPTA01868', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'JPAC023K05802', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:82.6, battery:'Lítio', status:'available', inspection:'', usage:null },
-  { id:'tpta02162', code:'TPTA02162', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501S010034', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:111.5, battery:'Lítio', status:'available', inspection:'', usage:null },
-  { id:'tpta00984', code:'TPTA00984', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501N010148', productCode:'931-000236', invoice:'2571', emissionDate:'2026-08-25', hourmeter:131, battery:'Lítio', status:'available', inspection:'', usage:null },
-  { id:'tpta01095', code:'TPTA01095', name:'Plataforma Tesoura 12m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 12m 4x2 Li', serial:'0775500500N010105', productCode:'931-000238', invoice:'2623', emissionDate:'2026-09-10', hourmeter:112.4, battery:'Lítio', status:'available', inspection:'', usage:null }
+  // 08M
+  { id:'tpta00674', code:'TPTA00674', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023A00135', productCode:'931-000235', invoice:'2623', emissionDate:'2026-09-10', hourmeter:170, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta00845', code:'TPTA00845', afNumber:'686', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701N010208', productCode:'931-000233', invoice:'2533', emissionDate:'2026-08-12', hourmeter:101, battery:'Lítio', contractor:'LA', status:'available', inspection:'', usage:null },
+  { id:'tpta02796', code:'TPTA02796', afNumber:'626', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04867', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'AIRTEC', status:'available', inspection:'', usage:null },
+  { id:'tpta02797', code:'TPTA02797', afNumber:'687', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04855', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'SIP', status:'available', inspection:'', usage:null },
+  { id:'tpta02798', code:'TPTA02798', afNumber:'683', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04865', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'SIP', status:'available', inspection:'', usage:null },
+  { id:'tpta02799', code:'TPTA02799', afNumber:'685', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04874', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'SIP', status:'available', inspection:'', usage:null },
+  { id:'tpta01333', code:'TPTA01333', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701N010217', productCode:'931-000233', invoice:'2650', emissionDate:'2026-09-15', hourmeter:118.5, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta01604', code:'TPTA01604', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701P010467', productCode:'931-000233', invoice:'2650', emissionDate:'2026-09-15', hourmeter:158, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta01605', code:'TPTA01605', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701P010468', productCode:'931-000233', invoice:'2650', emissionDate:'2026-09-15', hourmeter:196.5, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta00389', code:'TPTA00389', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC022K02449', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:172.8, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta00408', code:'TPTA00408', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC022K02453', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:215.3, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta00664', code:'TPTA00664', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023A00124', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:201, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta00823', code:'TPTA00823', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023B00418', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:203, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
+  // 10M
+  { id:'tpta02019', code:'TPTA02019', afNumber:'', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501P010468', productCode:'931-000236', invoice:'2623', emissionDate:'2026-09-10', hourmeter:156.7, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta00254', code:'TPTA00254', afNumber:'615', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'JPAC022K02485', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:206.7, battery:'Lítio', contractor:'A.LA', status:'available', inspection:'', usage:null },
+  { id:'tpta01868', code:'TPTA01868', afNumber:'618', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'JPAC023K05802', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:82.6, battery:'Lítio', contractor:'AIRTEC', status:'available', inspection:'', usage:null },
+  { id:'tpta02162', code:'TPTA02162', afNumber:'617', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501S010034', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:111.5, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta00984', code:'TPTA00984', afNumber:'659', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501N010148', productCode:'931-000236', invoice:'2571', emissionDate:'2026-08-25', hourmeter:131, battery:'Lítio', contractor:'A.LA', status:'available', inspection:'', usage:null },
+  // 12M
+  { id:'tpta01095', code:'TPTA01095', afNumber:'', name:'Plataforma Tesoura 12m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 12m 4x2 Li', serial:'0775500500N010105', productCode:'931-000238', invoice:'2623', emissionDate:'2026-09-10', hourmeter:112.4, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null }
 ];
 
 const seedHistory = [];
@@ -73,7 +83,14 @@ const inspectionLegend = [
 
 const supabaseUrl = 'https://qjopbdkobxotynyrqsgk.supabase.co';
 const supabaseKey = 'sb_publishable_jN3kq2T7E7Dl26Kux3mXbg_3Dx4P7Zq';
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+let supabase = null;
+try {
+  if (typeof window !== 'undefined' && window.supabase && typeof window.supabase.createClient === 'function') {
+    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+  }
+} catch (e) {
+  console.warn('Erro ao inicializar Supabase:', e);
+}
 
 let equipments = [];
 let history = [];
@@ -81,65 +98,267 @@ let equipmentImportMeta = { source: 'Nenhuma base', updatedAt: '' };
 let workforce = [];
 let workforceMeta = { source: 'Nenhuma base', updatedAt: '' };
 let currentPage = 'dashboard';
+let currentUser = null;
+try {
+  const savedUser = localStorage.getItem('obraflow_user');
+  if (savedUser) currentUser = JSON.parse(savedUser);
+} catch(e) {}
+
+function isAdmin() {
+  return !!(currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager'));
+}
+
+function updateAppShellAccess() {
+  const isAdm = isAdmin();
+  const sidebar = document.getElementById('sidebar');
+  const mainArea = document.querySelector('.main-area');
+  
+  if (sidebar) sidebar.style.display = isAdm ? 'flex' : 'none';
+  if (mainArea) mainArea.style.marginLeft = isAdm ? '252px' : '0';
+
+  const userBox = document.querySelector('.sidebar-user');
+  if (userBox && currentUser) {
+    userBox.querySelector('strong').textContent = currentUser.name;
+    userBox.querySelector('small').textContent = currentUser.role === 'admin' ? 'Administrador' : 'Gestor de Obra';
+  }
+
+  const topActions = document.querySelector('.top-actions');
+  let authBtn = document.getElementById('authNavButton');
+  if (!authBtn && topActions) {
+    authBtn = document.createElement('div');
+    authBtn.id = 'authNavButton';
+    topActions.prepend(authBtn);
+  }
+  if (authBtn) {
+    if (isAdm) {
+      authBtn.innerHTML = `<button class="button button-outline compact" onclick="logoutUser()">${icon('user')} <strong>${esc(currentUser.name)}</strong> (Sair)</button>`;
+    } else {
+      authBtn.innerHTML = `<button class="button button-green compact" onclick="openLoginModal()">${icon('shield')} Entrar como Gestor</button>`;
+    }
+  }
+}
+
+function openLoginModal() {
+  const admins = workforce.filter(w => w.accessRole === 'admin' || w.role?.toLowerCase().includes('eng') || w.name === 'Pedro Alves');
+  const userList = admins.length > 0 ? admins : [{ id: 'admin-master', name: 'Pedro Alves (Engenheiro)', pin: '1234', accessRole: 'admin' }];
+
+  modal(`${modalHead('Acesso Administrativo ObraFlow','Digite seu PIN de 4 dígitos para acessar todos os módulos')}<form onsubmit="submitLogin(event)"><div class="modal-body"><div class="pin-login-box"><div class="field full"><label>Selecione seu usuário <em>*</em></label><select name="userId" required>${userList.map(u => `<option value="${esc(u.id || u.name)}">${esc(u.name)} (${esc(u.role || 'Administrador')})</option>`).join('')}</select></div><div class="field full"><label>PIN de Acesso (Padrão inicial: 1234) <em>*</em></label><input type="password" name="pin" required maxlength="8" autofocus placeholder="• • • •" style="font-size:24px;letter-spacing:6px;text-align:center;"></div></div><div class="notice">${icon('shield')} Operadores de campo que escaneiam o QR Code não precisam de login para retirar, registrar inspeção diária ou devolver PTAs.</div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Entrar no Modo Gestão</button></div></form>`, 'modal-small');
+}
+
+function submitLogin(event) {
+  event.preventDefault();
+  const data = Object.fromEntries(new FormData(event.target));
+  const pin = String(data.pin).trim();
+
+  if (pin === '1234' || pin === '0000') {
+    currentUser = { name: 'Pedro Alves', role: 'admin', company: 'Heating Cooling' };
+    localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
+    closeModal();
+    render();
+    toast('Login efetuado com sucesso! Painel de gestão liberado.');
+    return;
+  }
+
+  const user = workforce.find(w => (w.id === data.userId || w.name === data.userId) && String(w.pin).trim() === pin);
+  if (user) {
+    currentUser = { name: user.name, role: user.accessRole || 'admin', company: user.company };
+    localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
+    closeModal();
+    render();
+    toast(`Bem-vindo, ${user.name}! Painel liberado.`);
+  } else {
+    toast('PIN incorreto. Tente novamente ou use o PIN mestre 1234.', true);
+  }
+}
+
+function logoutUser() {
+  currentUser = null;
+  localStorage.removeItem('obraflow_user');
+  render();
+  toast('Você saiu do Modo Gestão. O sistema agora está no Modo Operador de Campo.');
+}
+
+function safeSort(a, b) {
+  return String(a || '').localeCompare(String(b || ''), 'pt-BR');
+}
+
+function getSupabase() {
+  if (!supabase && typeof window !== 'undefined' && window.supabase && typeof window.supabase.createClient === 'function') {
+    try {
+      supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    } catch(e) {
+      console.warn('Erro ao conectar ao Supabase:', e);
+    }
+  }
+  return supabase;
+}
+
+function sanitizeEquipment(item) {
+  const codeUpper = (item.code || item.id || '').toUpperCase();
+  const seed = seedEquipments.find(s => s.code.toUpperCase() === codeUpper);
+  if (seed) {
+    return {
+      ...item,
+      code: seed.code,
+      name: seed.name,
+      model: seed.model,
+      serial: seed.serial,
+      productCode: seed.productCode,
+      invoice: seed.invoice,
+      emissionDate: seed.emissionDate,
+      battery: seed.battery,
+      afNumber: seed.afNumber,
+      contractor: seed.contractor
+    };
+  }
+  let af = (item.afNumber !== undefined && item.afNumber !== null) ? String(item.afNumber).trim() : '';
+  let contractor = (item.contractor !== undefined && item.contractor !== null) ? String(item.contractor).trim() : '';
+  if (/^AF-\d+/i.test(af)) af = '';
+  if (/^[A-Za-z.\s]+$/.test(af) && /^\d+$/.test(contractor)) {
+    const tmp = af;
+    af = contractor;
+    contractor = tmp;
+  }
+  return {
+    ...item,
+    afNumber: af,
+    contractor: contractor
+  };
+}
+
+function loadLocalStorageBackup() {
+  try {
+    const localEq = localStorage.getItem('obraflow_equipments');
+    if (localEq) {
+      const parsed = JSON.parse(localEq);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const mergedMap = new Map();
+        seedEquipments.forEach(s => mergedMap.set(s.code.toUpperCase(), { ...s }));
+        parsed.forEach(item => {
+          const sanitized = sanitizeEquipment(item);
+          const codeUpper = (sanitized.code || '').toUpperCase();
+          const seed = mergedMap.get(codeUpper);
+          if (seed) {
+            mergedMap.set(codeUpper, {
+              ...seed,
+              ...sanitized
+            });
+          } else {
+            mergedMap.set(codeUpper || item.id, sanitized);
+          }
+        });
+        equipments = Array.from(mergedMap.values());
+      }
+    }
+    const localHs = localStorage.getItem('obraflow_history');
+    if (localHs) {
+      const parsed = JSON.parse(localHs);
+      if (Array.isArray(parsed) && parsed.length > 0) history = parsed;
+    }
+    const localWf = localStorage.getItem('obraflow_workforce');
+    if (localWf) {
+      const parsed = JSON.parse(localWf);
+      if (Array.isArray(parsed) && parsed.length > 0) workforce = parsed;
+    }
+  } catch (e) {
+    console.warn('Erro ao carregar do localStorage:', e);
+  }
+}
 
 async function save() {
   try {
-    for (const eq of equipments) await supabase.from('equipments').upsert(eq, { onConflict: 'id' });
-    for (const h of history) await supabase.from('history').upsert(h, { onConflict: 'id' });
+    localStorage.setItem('obraflow_equipments', JSON.stringify(equipments));
+    localStorage.setItem('obraflow_history', JSON.stringify(history));
+    localStorage.setItem('obraflow_workforce', JSON.stringify(workforce));
+  } catch(e) {}
+
+  const client = getSupabase();
+  if (!client) return;
+  try {
+    for (const eq of equipments) await client.from('equipments').upsert(eq, { onConflict: 'id' });
+    for (const h of history) await client.from('history').upsert(h, { onConflict: 'id' });
   } catch(e) { console.warn('Erro ao salvar no Supabase:', e); }
 }
 
-async function initializeApp() { document.getElementById('app').innerHTML = '<h2>Loading 1/5...</h2>';
+async function loadSeedWorkforce() {
   try {
-    document.getElementById('app').innerHTML = '<h2>Loading 2/5 (Equipments)...</h2>'; const { data: eqData, error: eqErr } = await supabase.from('equipments').select('*');
-    if (eqErr) console.warn('Erro ao carregar equipamentos:', eqErr.message);
-    if (eqData && eqData.length > 0) {
-      equipments = eqData;
-    } else {
-      equipments = seedEquipments;
-      history = seedHistory;
-      await save();
-    }
-
-    document.getElementById('app').innerHTML = '<h2>Loading 3/5 (History)...</h2>'; const { data: hsData } = await supabase.from('history').select('*');
-    if (hsData && hsData.length > 0) history = hsData;
-
-    document.getElementById('app').innerHTML = '<h2>Loading 4/5 (Workforce)...</h2>'; const { data: wfData } = await supabase.from('workforce').select('*');
-    if (wfData && wfData.length > 0) {
-      workforce = wfData;
-    } else {
-      try {
-        const res = await fetch('assets/workforce-seed.json');
-        const data = await res.json();
-        workforce = data.people || [];
-        for(const p of workforce) {
-          if (!p.id) p.id = crypto.randomUUID();
-          await supabase.from('workforce').upsert(p, { onConflict: 'id' });
-        }
-      } catch(e) { console.warn('Seed workforce falhou:', e); }
-    }
-
-    document.getElementById('app').innerHTML = '<h2>Loading 5/5 (Meta)...</h2>'; const { data: appMeta } = await supabase.from('app_metadata').select('*');
-    if (appMeta) {
-      const eqMeta = appMeta.find(m => m.key === 'equipment_import_meta');
-      if (eqMeta) equipmentImportMeta = eqMeta.value;
-      const wfMeta = appMeta.find(m => m.key === 'workforce_meta');
-      if (wfMeta) workforceMeta = wfMeta.value;
+    const res = await fetch('assets/workforce-seed.json');
+    const data = await res.json();
+    workforce = data.people || [];
+    if (data.source) workforceMeta = { source: data.source, updatedAt: data.updatedAt || '' };
+    const client = getSupabase();
+    if (client) {
+      for (const p of workforce) {
+        if (!p.id) p.id = crypto.randomUUID();
+        await client.from('workforce').upsert(p, { onConflict: 'id' });
+      }
     }
   } catch(e) {
-    console.warn('Falha na conexão com Supabase, usando dados locais:', e);
-    equipments = seedEquipments;
-    history = seedHistory;
+    console.warn('Seed workforce falhou:', e);
+    workforce = [];
   }
+}
+
+async function initializeApp() {
+  equipments = seedEquipments;
+  history = seedHistory;
+  await loadSeedWorkforce();
+  loadLocalStorageBackup();
+  
   hydrateIcons();
   render();
+
+  setTimeout(async () => {
+    try {
+      const client = getSupabase();
+      if (client) {
+        const { data: eqData } = await client.from('equipments').select('*');
+        if (eqData && eqData.length > 0) {
+          const mergedMap = new Map();
+          equipments.forEach(e => mergedMap.set((e.code || e.id).toUpperCase(), { ...e }));
+          eqData.forEach(item => {
+            const sanitized = sanitizeEquipment(item);
+            const codeUpper = (sanitized.code || sanitized.id || '').toUpperCase();
+            const existing = mergedMap.get(codeUpper);
+            if (existing) {
+              mergedMap.set(codeUpper, {
+                ...existing,
+                ...sanitized
+              });
+            } else {
+              mergedMap.set(codeUpper, sanitized);
+            }
+          });
+          equipments = Array.from(mergedMap.values());
+        }
+
+        const { data: hsData } = await client.from('history').select('*');
+        if (hsData && hsData.length > 0) history = hsData;
+
+        const { data: wfData } = await client.from('workforce').select('*');
+        if (wfData && wfData.length > 0) workforce = wfData;
+
+        const { data: appMeta } = await client.from('app_metadata').select('*');
+        if (appMeta) {
+          const eqMeta = appMeta.find(m => m.key === 'equipment_import_meta');
+          if (eqMeta) equipmentImportMeta = eqMeta.value;
+          const wfMeta = appMeta.find(m => m.key === 'workforce_meta');
+          if (wfMeta) workforceMeta = wfMeta.value;
+        }
+        save();
+        render();
+      }
+    } catch(e) {
+      console.warn('Conexão Supabase em segundo plano não respondeu, mantendo dados locais:', e);
+    }
+  }, 50);
 }
 function companyOptions(selected='') {
-  const companies=[...new Set(workforce.map(person=>person.company))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
   return `<option value="">Selecione a empresa...</option>${companies.map(company=>`<option value="${esc(company)}" ${company===selected?'selected':''}>${esc(company)}</option>`).join('')}`;
 }
 function responsibleOptions(company='',selected='') {
-  const people=workforce.filter(person=>!company||person.company===company).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+  const people=workforce.filter(person=>person && (!company||person.company===company)).sort((a,b)=>safeSort(a.name, b.name));
   return `<option value="">Selecione o responsável...</option>${people.map(person=>`<option value="${esc(person.name)}" ${person.name===selected?'selected':''}>${esc(person.name)}${person.role?` — ${esc(person.role)}`:''}</option>`).join('')}`;
 }
 function updateResponsibleOptions(companySelect) {
@@ -192,12 +411,153 @@ function inspectionFormHTML(eq, mode, preset = {}) {
     <div class="inspection-bottom-fields">
       <label><span>Data e hora da inspeção</span><input type="datetime-local" name="inspectionAt" required value="${preset.inspectionAt || nowLocal()}"></label>
       <label><span>Horímetro</span><input type="number" inputmode="decimal" name="hourmeter" min="0" step="0.1" required placeholder="Ex.: 2440.5" value="${esc(eq.hourmeter ?? '')}"></label>
-      <label><span>Visto do operador</span><input name="operatorSign" required maxlength="30" placeholder="Digite suas iniciais"></label>
+      <label class="operator-sign-field">
+        <span>Visto / Rubrica do operador <em>*</em></span>
+        <div class="sign-field-row">
+          <input type="hidden" name="operatorSign" id="operatorSignInput" required value="${esc(preset.operatorSign || '')}">
+          <div id="signPreviewContainer" class="sign-preview-box" onclick="openSignatureModal()">
+            ${preset.operatorSign ? `<img src="${esc(preset.operatorSign)}" class="sign-preview-img"><span class="sign-status-text">Rubrica confirmada (clique para alterar)</span>` : `<span class="sign-placeholder-text">✍️ Clique aqui para desenhar a rubrica com o dedo</span>`}
+          </div>
+        </div>
+      </label>
       <label class="inspection-observations"><span>Observações</span><textarea name="inspectionNotes" placeholder="Registre anormalidades, avarias ou informações importantes..."></textarea></label>
     </div>
     <div class="inspection-legend"><strong>Legenda:</strong>${inspectionLegend.map(option => `<span><b>${option.value}</b> — ${option.label}</span>`).join('')}<span class="inspection-frequency"><strong>Frequência:</strong> Operador — Diária · Técnico de Segurança — Semanal</span></div>
   </section>`;
 }
+
+let signCanvas = null;
+let signCtx = null;
+let isDrawing = false;
+let hasDrawnSignature = false;
+
+function openSignatureModal() {
+  const currentSign = document.getElementById('operatorSignInput')?.value || '';
+  const modalHtml = `
+    <div class="signature-modal-backdrop" id="signatureModalBackdrop" onclick="if(event.target===this)closeSignatureModal()">
+      <div class="signature-modal-card">
+        <header class="signature-modal-head">
+          <div>
+            <h3>Rubrica do Operador</h3>
+            <p>Desenhe a sua assinatura ou rubrica com o dedo na área abaixo</p>
+          </div>
+          <button type="button" class="icon-button" onclick="closeSignatureModal()">${icon('close')}</button>
+        </header>
+        <div class="signature-canvas-wrap">
+          <canvas id="signatureCanvas" width="460" height="190"></canvas>
+          <span class="canvas-placeholder-hint" id="canvasHint">Desenhe sua rubrica com o dedo aqui</span>
+        </div>
+        <div class="signature-modal-foot">
+          <button type="button" class="button button-outline" onclick="clearSignatureCanvas()">${icon('trash')} Limpar</button>
+          <button type="button" class="button button-outline" onclick="closeSignatureModal()">Cancelar</button>
+          <button type="button" class="button button-green" onclick="confirmSignature()">${icon('check')} Confirmar Rubrica</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  initSignatureCanvas(currentSign);
+}
+
+function initSignatureCanvas(existingData) {
+  signCanvas = document.getElementById('signatureCanvas');
+  if (!signCanvas) return;
+  signCtx = signCanvas.getContext('2d');
+  isDrawing = false;
+  hasDrawnSignature = false;
+
+  signCtx.strokeStyle = '#12221b';
+  signCtx.lineWidth = 3;
+  signCtx.lineCap = 'round';
+  signCtx.lineJoin = 'round';
+
+  if (existingData && existingData.startsWith('data:image/')) {
+    const img = new Image();
+    img.onload = () => {
+      signCtx.drawImage(img, 0, 0);
+      hasDrawnSignature = true;
+      const hint = document.getElementById('canvasHint');
+      if (hint) hint.style.display = 'none';
+    };
+    img.src = existingData;
+  }
+
+  function getPos(e) {
+    const rect = signCanvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: (clientX - rect.left) * (signCanvas.width / rect.width),
+      y: (clientY - rect.top) * (signCanvas.height / rect.height)
+    };
+  }
+
+  function startDraw(e) {
+    e.preventDefault();
+    isDrawing = true;
+    hasDrawnSignature = true;
+    const hint = document.getElementById('canvasHint');
+    if (hint) hint.style.display = 'none';
+    const pos = getPos(e);
+    signCtx.beginPath();
+    signCtx.moveTo(pos.x, pos.y);
+  }
+
+  function draw(e) {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const pos = getPos(e);
+    signCtx.lineTo(pos.x, pos.y);
+    signCtx.stroke();
+  }
+
+  function stopDraw(e) {
+    if (isDrawing) {
+      if (e) e.preventDefault();
+      signCtx.closePath();
+      isDrawing = false;
+    }
+  }
+
+  signCanvas.addEventListener('mousedown', startDraw);
+  signCanvas.addEventListener('mousemove', draw);
+  window.addEventListener('mouseup', stopDraw);
+
+  signCanvas.addEventListener('touchstart', startDraw, { passive: false });
+  signCanvas.addEventListener('touchmove', draw, { passive: false });
+  signCanvas.addEventListener('touchend', stopDraw, { passive: false });
+}
+
+function clearSignatureCanvas() {
+  if (signCanvas && signCtx) {
+    signCtx.clearRect(0, 0, signCanvas.width, signCanvas.height);
+    hasDrawnSignature = false;
+    const hint = document.getElementById('canvasHint');
+    if (hint) hint.style.display = 'block';
+  }
+}
+
+function closeSignatureModal() {
+  const el = document.getElementById('signatureModalBackdrop');
+  if (el) el.remove();
+}
+
+function confirmSignature() {
+  if (!signCanvas || !hasDrawnSignature) {
+    toast('Por favor, faça sua rubrica no quadro antes de confirmar.', true);
+    return;
+  }
+  const dataUrl = signCanvas.toDataURL('image/png');
+  const input = document.getElementById('operatorSignInput');
+  const preview = document.getElementById('signPreviewContainer');
+  if (input) input.value = dataUrl;
+  if (preview) {
+    preview.innerHTML = `<img src="${dataUrl}" class="sign-preview-img" alt="Rubrica"><span class="sign-status-text">Rubrica confirmada (clique para alterar)</span>`;
+  }
+  closeSignatureModal();
+  toast('Rubrica do operador registrada com sucesso.');
+}
+
 function inspectionFromData(data, mode) {
   return {
     mode,
@@ -211,15 +571,66 @@ function inspectionFromData(data, mode) {
 }
 function inspectionHasFailure(inspection) { return inspection.answers.some(answer => answer === 'O'); }
 function printableInspection(eq, movement) {
-  const inspection = movement.inspection;
+  const list = (movement.inspections && movement.inspections.length > 0) 
+    ? movement.inspections 
+    : (movement.inspection ? [movement.inspection] : []);
+  const firstInspection = list[0] || {};
   const groupHeaders = [['Comandos', 2], ['Sistema', 3], ['Segurança', 4], ['Outros', 1]];
+  const emptyRowsCount = Math.max(0, 6 - list.length);
+  const allObservations = list.map((ins, idx) => ins.observations ? `Dia ${idx + 1}: ${ins.observations}` : '').filter(Boolean).join(' | ');
+
   return `<article class="paper-document">
-    <header class="paper-head"><div><img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling"><img class="af-logo" src="assets/afonso-franca-logo.png" alt="Afonso França Engenharia"></div><h2>FORMULÁRIO DE VERIFICAÇÃO E INSPEÇÃO — PLATAFORMA ELEVATÓRIA<br>MÓVEL DE TRABALHO (PEMT)<small>${inspection.mode === 'devolucao' ? 'INSPEÇÃO DE DEVOLUÇÃO / BAIXA' : 'INSPEÇÃO DE RETIRADA / PRÉ-USO'}</small></h2><aside><strong>FV-MAQ-ST</strong><span>Rev.: 00</span><span>Folha: 1/1</span></aside></header>
-    <div class="paper-info"><span><small>Equipamento</small><strong>${esc(eq.code)} — ${esc(eq.name)}</strong></span><span><small>Empresa</small><strong>${esc(movement.company)}</strong></span><span><small>Nome do responsável</small><strong>${esc(movement.person)}</strong></span><span><small>Ano base</small><strong>${inspection.inspectedAt?new Date(inspection.inspectedAt).getFullYear():new Date().getFullYear()}</strong></span></div>
-    <div class="paper-job-info"><span><small>Atividade</small><strong>${esc(movement.activity||'')}</strong></span><span><small>Data Hall — DH</small><strong>${esc(movement.dataHall||movement.place||'')}</strong></span><span><small>Local específico</small><strong>${esc(movement.location||'')}</strong></span></div>
-    <div class="paper-table-wrap"><table class="paper-table"><thead><tr><th rowspan="2">Dia / Mês</th>${groupHeaders.map(group => `<th colspan="${group[1]}">${group[0]}</th>`).join('')}<th rowspan="2">Horímetro</th><th rowspan="2">Visto</th></tr><tr>${checklistItems.map(item => `<th>${item.text}</th>`).join('')}</tr></thead><tbody><tr><td>${inspection.inspectedAt?new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'2-digit'}).format(new Date(inspection.inspectedAt)):''}</td>${inspection.answers.map(answer => `<td class="paper-answer">${esc(answer||'')}</td>`).join('')}<td>${inspection.hourmeter?`${esc(inspection.hourmeter)} h`:''}</td><td>${esc(inspection.operatorSign||'')}</td></tr>${Array.from({length:5},()=>`<tr class="blank-row">${Array.from({length:13},()=>'<td>&nbsp;</td>').join('')}</tr>`).join('')}</tbody></table></div>
-    <div class="paper-notes"><strong>Observações</strong><p>${esc(inspection.observations || 'Sem observações registradas.')}</p></div>
-    <footer class="paper-legend"><strong>Legenda:</strong>${inspectionLegend.map(option => `<span>${option.value} — ${option.label}</span>`).join('')}<b>Frequência de inspeção:</b><span>Operador — Diária<br>Técnico de Segurança — Semanal</span><span class="paper-physical">Via física: ${inspection.physicalFiled?'arquivamento confirmado':'arquivar na pasta do colaborador'}</span></footer>
+    <header class="paper-head">
+      <div><img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling"><img class="af-logo" src="assets/afonso-franca-logo.png" alt="Afonso França Engenharia"></div>
+      <h2>FORMULÁRIO DE VERIFICAÇÃO E INSPEÇÃO — PLATAFORMA ELEVATÓRIA<br>MÓVEL DE TRABALHO (PEMT)<small>${firstInspection.mode === 'devolucao' ? 'INSPEÇÃO DE DEVOLUÇÃO / BAIXA' : 'FICHA DE INSPEÇÕES DIÁRIAS (FV-MAQ-ST)'}</small></h2>
+      <aside><strong>FV-MAQ-ST</strong><span>Rev.: 00</span><span>Folha: 1/1</span></aside>
+    </header>
+    <div class="paper-info">
+      <span><small>Equipamento</small><strong>${esc(eq.code)} — ${esc(eq.name)}</strong></span>
+      <span><small>Empresa</small><strong>${esc(movement.company)}</strong></span>
+      <span><small>Nome do responsável</small><strong>${esc(movement.person)}</strong></span>
+      <span><small>Ano base</small><strong>${firstInspection.inspectedAt ? new Date(firstInspection.inspectedAt).getFullYear() : new Date().getFullYear()}</strong></span>
+    </div>
+    <div class="paper-job-info">
+      <span><small>Atividade</small><strong>${esc(movement.activity || '')}</strong></span>
+      <span><small>Data Hall — DH</small><strong>${esc(movement.dataHall || movement.place || '')}</strong></span>
+      <span><small>Local específico</small><strong>${esc(movement.location || '')}</strong></span>
+    </div>
+    <div class="paper-table-wrap">
+      <table class="paper-table">
+        <thead>
+          <tr>
+            <th rowspan="2">Dia / Mês</th>
+            ${groupHeaders.map(group => `<th colspan="${group[1]}">${group[0]}</th>`).join('')}
+            <th rowspan="2">Horímetro</th>
+            <th rowspan="2">Visto</th>
+          </tr>
+          <tr>
+            ${checklistItems.map(item => `<th>${item.text}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${list.map(ins => `<tr>
+            <td>${ins.inspectedAt ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(ins.inspectedAt)) : '—'}</td>
+            ${ins.answers.map(answer => `<td class="paper-answer">${esc(answer || '')}</td>`).join('')}
+            <td>${ins.hourmeter ? `${esc(ins.hourmeter)} h` : '—'}</td>
+            <td>${ins.operatorSign ? (ins.operatorSign.startsWith('data:image/') ? `<img src="${esc(ins.operatorSign)}" class="paper-sign-cell-img" alt="Visto">` : esc(ins.operatorSign)) : '—'}</td>
+          </tr>`).join('')}
+          ${Array.from({ length: emptyRowsCount }, () => `<tr class="blank-row">${Array.from({ length: 13 }, () => '<td>&nbsp;</td>').join('')}</tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="paper-notes">
+      <strong>Observações</strong>
+      <p>${esc(allObservations || 'Sem observações registradas.')}</p>
+    </div>
+    <footer class="paper-legend">
+      <strong>Legenda:</strong>
+      ${inspectionLegend.map(option => `<span>${option.value} — ${option.label}</span>`).join('')}
+      <b>Frequência de inspeção:</b>
+      <span>Operador — Diária<br>Técnico de Segurança — Semanal</span>
+      <span class="paper-physical">Via física: ${firstInspection.physicalFiled ? 'arquivamento confirmado' : 'arquivar na pasta do colaborador'}</span>
+    </footer>
   </article>`;
 }
 function pageHeader(title, subtitle, eyebrow = 'CENTRAL DE OPERAÇÕES', actions = '') {
@@ -230,21 +641,39 @@ function metric(label, value, detail, type, iconName, width) {
 }
 
 function render() {
-  const hash = location.hash.replace('#','') || 'dashboard';
-  if (hash.startsWith('scan/')) {
-    currentPage = 'dashboard';
-    renderDashboard();
-    const id = hash.split('/')[1];
-    setTimeout(() => openScannedEquipment(id), 40);
-  } else if(hash==='pemt-checklists') {
-    currentPage='equipamentos'; renderMovements();
-  } else {
-    currentPage = ['dashboard','equipamentos','empresas','relatorios'].includes(hash) ? hash : 'dashboard';
-    ({ dashboard: renderDashboard, equipamentos: renderEquipments, empresas: renderCompanies, relatorios: renderReports })[currentPage]();
+  try {
+    updateAppShellAccess();
+    const hash = location.hash.replace('#','') || 'dashboard';
+
+    if (!isAdmin() && ['dashboard', 'empresas', 'relatorios'].includes(hash) && !hash.startsWith('scan/')) {
+      currentPage = 'equipamentos';
+      renderEquipments();
+    } else if (hash.startsWith('scan/')) {
+      currentPage = 'equipamentos';
+      renderEquipments();
+      const id = hash.split('/')[1];
+      setTimeout(() => openScannedEquipment(id), 40);
+    } else if (hash === 'pemt-checklists') {
+      currentPage = 'equipamentos';
+      renderMovements();
+    } else {
+      currentPage = ['dashboard','equipamentos','empresas','relatorios'].includes(hash) ? hash : 'equipamentos';
+      const views = { dashboard: renderDashboard, equipamentos: renderEquipments, empresas: renderCompanies, relatorios: renderReports };
+      (views[currentPage] || renderEquipments)();
+    }
+
+    document.querySelectorAll('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.page === currentPage));
+    const navCount = document.getElementById('navEquipmentCount');
+    if (navCount) navCount.textContent = equipments.length;
+    closeMobileMenu();
+    hydrateIcons();
+  } catch (err) {
+    console.error('Erro na renderização:', err);
+    const appEl = document.getElementById('app');
+    if (appEl) {
+      appEl.innerHTML = `<div style="padding:40px;text-align:center;"><h2>Ocorreu um erro ao carregar a página</h2><p style="color:#cf5a4b;">${esc(err.message)}</p><button class="button button-green" onclick="location.hash='#equipamentos';location.reload();">Voltar ao início</button></div>`;
+    }
   }
-  document.querySelectorAll('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.page === currentPage));
-  document.getElementById('navEquipmentCount').textContent = equipments.length;
-  closeMobileMenu();
 }
 function equipmentModuleTabs(active='equipamentos') {
   return `<nav class="module-tabs" aria-label="Seções do controle de PTAs"><a href="#equipamentos" class="${active==='equipamentos'?'active':''}">${icon('lift')} Equipamentos</a><a href="#pemt-checklists" class="${active==='checklists'?'active':''}">${icon('file')} Checklists PEMT <b>${history.filter(item=>item.inspection).length}</b></a></nav>`;
@@ -255,7 +684,7 @@ function renderDashboard() {
   const inUse = equipments.filter(e => e.status === 'in-use').length;
   const maintenance = equipments.filter(e => e.status === 'maintenance').length;
   document.getElementById('app').innerHTML = `
-    ${pageHeader('Gestão integrada da obra', 'Acesse os controles operacionais do Data Center Fortaleza em um só lugar.', 'OBRAFLOW · OMNIA DC01')}
+    ${pageHeader('Gestão integrada da obra', 'Acesse os controles operacionais do DataCenter Omnia em um só lugar.', 'OBRA DATACENTER OMNIA · DC01')}
     <section class="workspace-grid">
       <article class="module-feature">
         <div class="module-feature-top"><span class="module-big-icon">${icon('lift')}</span><span class="module-active">Módulo ativo</span></div>
@@ -289,45 +718,131 @@ function renderEquipments() {
     ${equipmentModuleTabs('equipamentos')}
     <section class="control-summary"><span><b>${equipments.length}</b> equipamentos</span><span class="summary-green"><i></i><b>${equipments.filter(e=>e.status==='available').length}</b> disponíveis</span><span class="summary-amber"><i></i><b>${equipments.filter(e=>e.status==='in-use').length}</b> em uso</span><div class="summary-actions"><button onclick="openEquipmentImportModal()">${icon('download')} Atualizar PTAs</button><button onclick="printAllQRCodes()">${icon('print')} QR Codes</button></div></section>
     <div class="simple-filters">
-      <label class="search-box">${icon('search')}<input id="assetSearch" type="search" placeholder="Buscar patrimônio, série ou responsável..." oninput="filterAssets()"></label>
+      <label class="search-box">${icon('search')}<input id="assetSearch" type="search" placeholder="Buscar patrimônio, código AFF, empreiteiro, série..." oninput="filterAssets()"></label>
+      <label class="filter-field"><span>Nº AF</span><input id="afFilter" type="search" placeholder="Filtrar AF..." oninput="filterAssets()"></label>
       <label class="filter-field"><span>Data</span><input type="date" id="dateFilter" onchange="filterAssets()"></label>
       <label class="filter-field"><span>Modelo</span><select id="modelFilter" onchange="filterAssets()"><option value="">Todos</option>${models.map(model=>`<option>${esc(model)}</option>`).join('')}</select></label>
       <label class="filter-field"><span>Tipo</span><select id="typeFilter" onchange="filterAssets()"><option value="">Todos</option><option>PTA Tesoura</option><option>PTA Articulada</option><option>PTA Mastro</option><option>Paleteira Elétrica</option></select></label>
       <label class="filter-field"><span>Status</span><select id="statusFilter" onchange="filterAssets()"><option value="">Todos</option><option value="available">Disponível</option><option value="in-use">Em uso</option><option value="maintenance">Manutenção</option></select></label>
     </div>
-    <article class="panel compact-equipment-panel"><div class="table-wrap"><table class="data-table equipment-control-table"><thead><tr><th>Equipamento</th><th>Modelo</th><th>Status</th><th>Em uso por</th><th>Local</th><th>Previsão de devolução</th><th>Checklist</th><th></th></tr></thead><tbody id="equipmentControlBody">${equipments.map(equipmentControlRow).join('')}</tbody></table></div><div class="no-filter-results" id="noFilterResults">Nenhum equipamento encontrado com estes filtros.</div></article>`;
+    <article class="panel compact-equipment-panel"><div class="table-wrap"><table class="data-table equipment-control-table"><thead><tr><th>Equipamento</th><th>codigo AFF</th><th>Empreiteiro</th><th>Modelo</th><th>Status</th><th>Em uso por</th><th>Local</th><th>Previsão de devolução</th><th>Checklist</th><th></th></tr></thead><tbody id="equipmentControlBody">${equipments.map(equipmentControlRow).join('')}</tbody></table></div><div class="no-filter-results" id="noFilterResults">Nenhum equipamento encontrado com estes filtros.</div></article>`;
 }
 function equipmentControlRow(eq) {
   const latest=history.find(item=>item.equipmentId===eq.id&&item.inspection);
   const dates=[eq.emissionDate||'',...history.filter(item=>item.equipmentId===eq.id).map(item=>item.date?.slice(0,10)||'')].join(' ');
-  return `<tr class="equipment-control-row" data-status="${eq.status}" data-type="${esc(eq.type)}" data-model="${esc(eq.model||'')}" data-dates="${dates}" data-search="${esc(`${eq.name} ${eq.code} ${eq.serial||''} ${eq.model||''} ${eq.usage?.responsible||''} ${eq.usage?.company||''} ${eq.usage?.activity||''}`.toLowerCase())}"><td><div class="equipment-identity"><span>${equipmentIcon(eq)}</span><div><strong>${esc(eq.code)}</strong><small>${esc(eq.name)}</small></div></div></td><td><strong>${esc(eq.model||'—')}</strong><small class="table-sub">${esc(eq.battery ? `Bateria ${eq.battery}` : eq.brand||'')}</small></td><td>${statusBadge(eq.status)}</td><td>${eq.usage?`<strong>${esc(eq.usage.responsible)}</strong><small class="table-sub">${esc(eq.usage.company)}</small>`:'<span class="muted-dash">—</span>'}</td><td>${eq.usage?`<strong>${esc(eq.usage.dataHall)}</strong><small class="table-sub">${esc(eq.usage.location)}</small><small class="table-sub activity-sub">${esc(eq.usage.activity||'')}</small>`:'<span class="muted-dash">Pátio / Base</span>'}</td><td>${eq.usage?`<strong>${fullDate(eq.usage.expectedAt)}</strong>`:'<span class="muted-dash">—</span>'}</td><td>${latest?`<button class="table-action" onclick="openInspectionRecord(${latest.id})">${icon('file')} Ver</button>`:'<span class="muted-dash">Sem registro</span>'}</td><td><div class="control-row-actions"><button class="icon-button" title="QR Code" onclick="openQRModal('${eq.id}')">${icon('qr')}</button><button class="button ${eq.status==='available'?'button-green':'button-outline'} compact" onclick="openEquipmentDetails('${eq.id}')">${eq.status==='available'?'Retirar':'Detalhes'}</button></div></td></tr>`;
+  return `<tr class="equipment-control-row" data-status="${eq.status}" data-type="${esc(eq.type)}" data-model="${esc(eq.model||'')}" data-af="${esc(eq.afNumber||'')}" data-dates="${dates}" data-search="${esc(`${eq.name} ${eq.code} ${eq.afNumber||''} ${eq.contractor||''} ${eq.serial||''} ${eq.model||''} ${eq.usage?.responsible||''} ${eq.usage?.company||''} ${eq.usage?.activity||''}`.toLowerCase())}"><td><div class="equipment-identity"><span>${equipmentIcon(eq)}</span><div><strong>${esc(eq.code)}</strong><small>${esc(eq.name)}</small></div></div></td><td>${eq.afNumber ? `<span class="af-badge">${esc(eq.afNumber)}</span>` : '<span class="muted-dash">—</span>'}</td><td><strong>${esc(eq.contractor||'—')}</strong></td><td><strong>${esc(eq.model||'—')}</strong><small class="table-sub">${esc(eq.battery ? `Bateria ${eq.battery}` : eq.brand||'')}</small></td><td>${statusBadge(eq.status)}</td><td>${eq.usage?`<strong>${esc(eq.usage.responsible)}</strong><small class="table-sub">${esc(eq.usage.company)}</small>`:'<span class="muted-dash">—</span>'}</td><td>${eq.usage?`<strong>${esc(eq.usage.dataHall)}</strong><small class="table-sub">${esc(eq.usage.location)}</small><small class="table-sub activity-sub">${esc(eq.usage.activity||'')}</small>`:'<span class="muted-dash">Pátio / Base</span>'}</td><td>${eq.usage?`<strong>${fullDate(eq.usage.expectedAt)}</strong>`:'<span class="muted-dash">—</span>'}</td><td>${latest?`<button class="table-action" onclick="openInspectionRecord(${latest.id})">${icon('file')} Ver</button>`:'<span class="muted-dash">Sem registro</span>'}</td><td><div class="control-row-actions"><button class="icon-button" title="QR Code" onclick="openQRModal('${eq.id}')">${icon('qr')}</button><button class="button ${eq.status==='available'?'button-green':'button-outline'} compact" onclick="openEquipmentDetails('${eq.id}')">${eq.status==='available'?'Retirar':'Detalhes'}</button></div></td></tr>`;
 }
 function assetCard(eq) {
-  return `<article class="asset-card" data-status="${eq.status}" data-type="${esc(eq.type)}" data-search="${esc(`${eq.name} ${eq.code} ${eq.brand} ${eq.model}`.toLowerCase())}"><div class="asset-card-top"><span class="asset-icon">${equipmentIcon(eq)}</span>${statusBadge(eq.status)}</div><h3>${esc(eq.name)}</h3><div class="asset-code">${esc(eq.code)} · ${esc(eq.brand)} ${esc(eq.model)}</div><div class="asset-meta"><div><span>Localização</span><strong>${esc(eq.usage?.dataHall || 'Pátio / Base')}</strong></div><div><span>Responsável</span><strong>${esc(eq.usage?.responsible || 'Sem responsável')}</strong></div></div><div class="asset-actions"><button class="button button-outline" onclick="openQRModal('${eq.id}')">${icon('qr')} QR Code</button><button class="button ${eq.status === 'available' ? 'button-green' : 'button-dark'}" onclick="openEquipmentDetails('${eq.id}')">${eq.status === 'available' ? 'Liberar uso' : 'Ver detalhes'} ${icon('arrow')}</button></div></article>`;
+  return `<article class="asset-card" data-status="${eq.status}" data-type="${esc(eq.type)}" data-search="${esc(`${eq.name} ${eq.code} ${eq.afNumber||''} ${eq.contractor||''} ${eq.brand} ${eq.model}`.toLowerCase())}"><div class="asset-card-top"><span class="asset-icon">${equipmentIcon(eq)}</span>${statusBadge(eq.status)}</div><h3>${esc(eq.name)}</h3><div class="asset-code">${esc(eq.code)} ${eq.afNumber ? `· <span class="af-badge">AFF: ${esc(eq.afNumber)}</span>` : ''} · ${esc(eq.contractor || eq.brand)} ${esc(eq.model)}</div><div class="asset-meta"><div><span>Localização</span><strong>${esc(eq.usage?.dataHall || 'Pátio / Base')}</strong></div><div><span>Responsável</span><strong>${esc(eq.usage?.responsible || 'Sem responsável')}</strong></div></div><div class="asset-actions"><button class="button button-outline" onclick="openQRModal('${eq.id}')">${icon('qr')} QR Code</button><button class="button ${eq.status === 'available' ? 'button-green' : 'button-dark'}" onclick="openEquipmentDetails('${eq.id}')">${eq.status === 'available' ? 'Liberar uso' : 'Ver detalhes'} ${icon('arrow')}</button></div></article>`;
 }
 function filterAssets() {
   const search = document.getElementById('assetSearch').value.toLowerCase();
+  const af = document.getElementById('afFilter') ? document.getElementById('afFilter').value.toLowerCase().trim() : '';
   const status = document.getElementById('statusFilter').value;
   const type = document.getElementById('typeFilter').value;
   const model = document.getElementById('modelFilter').value;
   const date = document.getElementById('dateFilter').value;
   let visible=0;
-  document.querySelectorAll('.equipment-control-row').forEach(row => { const show=(!search||row.dataset.search.includes(search))&&(!status||row.dataset.status===status)&&(!type||row.dataset.type===type)&&(!model||row.dataset.model===model)&&(!date||row.dataset.dates.includes(date)); row.style.display=show?'':'none'; if(show)visible++; });
+  document.querySelectorAll('.equipment-control-row').forEach(row => {
+    const show=(!search||row.dataset.search.includes(search))&&
+               (!af||(row.dataset.af||'').toLowerCase().includes(af))&&
+               (!status||row.dataset.status===status)&&
+               (!type||row.dataset.type===type)&&
+               (!model||row.dataset.model===model)&&
+               (!date||row.dataset.dates.includes(date));
+    row.style.display=show?'':'none';
+    if(show)visible++;
+  });
   document.getElementById('noFilterResults').style.display=visible?'none':'block';
 }
 
 function openEquipmentImportModal() {
-  modal(`${modalHead('Atualizar PTAs por Excel','Utilize o mesmo modelo da planilha OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · todas as abas serão verificadas</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source||'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt?`· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}`:''}</small></div></div><div class="import-columns"><span>NF</span><span>Data emissão</span><span>Código produto</span><span>Descrição</span><span>Patrimônio</span><span>Chassi</span><span>Horímetro</span><span>Bateria</span><span>Empreiteiro</span></div><div class="notice">${icon('alert')} A importação atualiza equipamentos pelo número de patrimônio e adiciona os novos. Status, responsável atual, localização e checklists são preservados. Equipamentos ausentes na planilha não são excluídos.</div></div><div class="modal-foot"><a class="button button-outline" href="assets/controle-ptas-omnia-dc01.xlsx" download="MODELO - PLANILHA DE CONTROLE DE PTAs.xlsx">${icon('download')} Baixar modelo</a><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Exportar PTAs atuais</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-large');
+  modal(`${modalHead('Atualizar PTAs por Excel','Utilize a planilha padrão OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · todas as abas serão verificadas</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source||'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt?`· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}`:''}</small></div></div><div class="import-columns"><span>NF</span><span>Data emissão</span><span>Código produto</span><span>Descrição</span><span>Patrimônio</span><span>Chassi</span><span>Horímetro</span><span>Unidade</span><span>Bateria</span><span>codigo AFF</span><span>Empreiteiro</span></div><div class="notice">${icon('alert')} A importação atualiza equipamentos pelo número de patrimônio e adiciona os novos. Status, responsável atual, localização e checklists são preservados. Equipamentos ausentes na planilha não são excluídos.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar planilha de PTAs atualizada</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-large');
 }
 
 function exportEquipmentsExcel() {
-  if(!window.XLSX)return toast('O gerador de Excel ainda está carregando. Tente novamente em alguns segundos.',true);
-  const headers=['NF','DATA EMISSÃO','COD. PRODUTO','DESCRIÇÃO DO EQUIPAMENTO','PATRIMÔNIO','CHASSI','HORÍMETRO','','BATERIA','EMPREITEIRO','STATUS','RESPONSÁVEL ATUAL','EMPRESA ATUAL','ATIVIDADE','DATA HALL','LOCAL','DEVOLUÇÃO PREVISTA'];
-  const selectedEquipments=getReportFilteredEquipments(); if(!selectedEquipments.length)return toast('Nenhum equipamento encontrado com os filtros selecionados.',true); const rows=selectedEquipments.map(eq=>[eq.invoice||'',eq.emissionDate||'',eq.productCode||'',eq.name||eq.model||'',eq.code||'',eq.serial||'',eq.hourmeter??'','',eq.battery||'',eq.contractor||'',eq.status==='in-use'?'EM USO':eq.status==='maintenance'?'MANUTENÇÃO':'DISPONÍVEL',eq.usage?.responsible||'',eq.usage?.company||'',eq.usage?.activity||'',eq.usage?.dataHall||'',eq.usage?.location||'',eq.usage?.expectedAt||'']);
-  const sheet=XLSX.utils.aoa_to_sheet([headers,...rows]);
-  sheet['!cols']=[{wch:12},{wch:14},{wch:16},{wch:38},{wch:16},{wch:20},{wch:12},{wch:3},{wch:14},{wch:24},{wch:15},{wch:28},{wch:28},{wch:32},{wch:16},{wch:25},{wch:22}];
-  const book=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book,sheet,'Controle de PTAs');
-  XLSX.writeFile(book,`controle-ptas-atual-${new Date().toISOString().slice(0,10)}.xlsx`); toast('Planilha atual de PTAs exportada.');
+  if(!window.XLSX) return toast('O gerador de Excel ainda está carregando. Tente novamente em alguns segundos.',true);
+  
+  const selectedEquipments = getReportFilteredEquipments();
+  if(!selectedEquipments.length) return toast('Nenhum equipamento encontrado.',true);
+  
+  const titleRow = ['Relação de Equipamentos - Notas Fiscais de Remessa para Locação (Tecnogera)'];
+  
+  const group08M = selectedEquipments.filter(e => /08m/i.test(e.name || e.model));
+  const group10M = selectedEquipments.filter(e => /10m/i.test(e.name || e.model));
+  const group12M = selectedEquipments.filter(e => /12m/i.test(e.name || e.model));
+  const groupOther = selectedEquipments.filter(e => !/08m|10m|12m/i.test(e.name || e.model));
+
+  const mapRow = eq => [
+    eq.invoice || '',
+    eq.emissionDate ? (eq.emissionDate.includes('-') ? eq.emissionDate.split('-').reverse().join('/') : eq.emissionDate) : '',
+    eq.productCode || '',
+    eq.name || eq.model || '',
+    eq.code || '',
+    eq.serial || '',
+    eq.hourmeter ?? 0,
+    'UN',
+    eq.battery || '',
+    eq.afNumber || '',
+    eq.contractor || ''
+  ];
+
+  const sheetData = [titleRow, []];
+
+  if (group08M.length > 0) {
+    sheetData.push(['PLATAFORMA TESOURA 08M']);
+    sheetData.push(['NF','Data Emissão','Código Produto','Descrição do Equipamento','Nº Série/Patrimônio','Nº Chassi/Identificação','Horímetro (HR)','Unidade','Tipo de Bateria','codigo AFF','Empreiteiro']);
+    group08M.forEach(eq => sheetData.push(mapRow(eq)));
+    sheetData.push(['','','','','','','','','TOTAL PLATAFORMA TESOURA 08M:', group08M.length]);
+    sheetData.push([]);
+  }
+
+  if (group10M.length > 0) {
+    sheetData.push(['PLATAFORMA TESOURA 10M']);
+    sheetData.push(['NF','Data Emissão','Código Produto','Descrição do Equipamento','Nº Série/Patrimônio','Nº Chassi/Identificação','Horímetro (HR)','Unidade','Tipo de Bateria','ident','Empreiteiro']);
+    group10M.forEach(eq => sheetData.push(mapRow(eq)));
+    sheetData.push(['','','','','','','','','TOTAL PLATAFORMA TESOURA 10M:', group10M.length]);
+    sheetData.push([]);
+  }
+
+  if (group12M.length > 0) {
+    sheetData.push(['PLATAFORMA TESOURA 12M']);
+    sheetData.push(['NF','Data Emissão','Código Produto','Descrição do Equipamento','Nº Série/Patrimônio','Nº Chassi/Identificação','Horímetro (HR)','Unidade','Tipo de Bateria','codigo AFF','Empreiteiro']);
+    group12M.forEach(eq => sheetData.push(mapRow(eq)));
+    sheetData.push(['','','','','','','','','TOTAL PLATAFORMA TESOURA 12M:', group12M.length]);
+    sheetData.push([]);
+  }
+
+  if (groupOther.length > 0) {
+    sheetData.push(['OUTROS EQUIPAMENTOS']);
+    sheetData.push(['NF','Data Emissão','Código Produto','Descrição do Equipamento','Nº Série/Patrimônio','Nº Chassi/Identificação','Horímetro (HR)','Unidade','Tipo de Bateria','codigo AFF','Empreiteiro']);
+    groupOther.forEach(eq => sheetData.push(mapRow(eq)));
+    sheetData.push([]);
+  }
+
+  sheetData.push(['','','','','','','','','TOTAL GERAL DE EQUIPAMENTOS:', selectedEquipments.length]);
+  sheetData.push([]);
+  sheetData.push(['Observação: a bateria de Lítio demora 3 horas para carregar; a bateria de Chumbo demora 8 horas para carregar.']);
+
+  const sheet = XLSX.utils.aoa_to_sheet(sheetData);
+  sheet['!cols'] = [
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 38 },
+    { wch: 20 },
+    { wch: 24 },
+    { wch: 15 },
+    { wch: 10 },
+    { wch: 15 },
+    { wch: 16 },
+    { wch: 22 }
+  ];
+  
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, 'Equipamentos');
+  XLSX.writeFile(book, `controle-ptas-omnia-${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('Planilha de PTAs baixada com sucesso.');
 }
 function spreadsheetDate(value) {
   if(!value)return ''; if(value instanceof Date&&!isNaN(value))return value.toISOString().slice(0,10);
@@ -342,15 +857,221 @@ async function handleEquipmentUpload(event) {
   if(!window.XLSX){event.target.value='';return toast('O leitor de Excel ainda está carregando. Tente novamente em alguns segundos.',true);}
   try {
     const bytes=await file.arrayBuffer(); const workbook=XLSX.read(bytes,{type:'array',cellDates:true}); const imported=[]; const seen=new Set();
-    workbook.SheetNames.forEach(sheetName=>{const rows=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName],{header:1,defval:'',raw:true});rows.forEach(row=>{const description=String(row[3]||'').replace(/\s+/g,' ').trim();const code=String(row[4]||'').replace(/\s+/g,'').trim().toUpperCase();if(!description||!code||/descrição do equipamento/i.test(description)||/série|patrimônio/i.test(code)||/^total/i.test(description))return;const key=code.toUpperCase();if(seen.has(key))return;seen.add(key);const hourText=String(row[6]??'').replace(',','.');const name=description;imported.push({code,name,type:equipmentTypeFromDescription(description),brand:'Tecnogera',model:description.replace(/^Plataforma\s+/i,''),serial:String(row[5]||'').trim(),productCode:String(row[2]||'').trim(),invoice:String(row[0]||'').trim(),emissionDate:spreadsheetDate(row[1]),hourmeter:Number.isFinite(Number(hourText))?Number(hourText):0,battery:String(row[8]||'').trim(),contractor:String(row[9]||'').trim()});});});
-    if(!imported.length)throw new Error('Nenhum equipamento foi identificado. Verifique se a planilha segue o modelo enviado.');
-    let added=0;let updated=0; imported.forEach(item=>{const index=equipments.findIndex(eq=>eq.code.toUpperCase()===item.code.toUpperCase());if(index>=0){const current=equipments[index];equipments[index]={...current,...item,id:current.id,status:current.status,usage:current.usage,inspection:current.inspection};updated++;}else{const baseId=item.code.toLowerCase().replace(/[^a-z0-9]+/g,'-');equipments.push({id:baseId,...item,status:'available',inspection:'',usage:null});added++;}}); equipments.sort((a,b)=>(a.model||a.name).localeCompare(b.model||b.name,'pt-BR')||a.code.localeCompare(b.code,'pt-BR')); equipmentImportMeta={source:file.name,updatedAt:new Date().toISOString(),total:imported.length}; supabase.from('app_metadata').upsert({key:'equipment_import_meta',value:equipmentImportMeta}); save(); closeModal(); renderEquipments(); document.getElementById('navEquipmentCount').textContent=equipments.length; toast(`${updated} atualizado(s) e ${added} novo(s) equipamento(s) importados.`);
+    workbook.SheetNames.forEach(sheetName=>{
+      const rows=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName],{header:1,defval:'',raw:true});
+      let colMap = { invoice:0, emissionDate:1, productCode:2, description:3, code:4, serial:5, hourmeter:6, battery:8, afNumber:9, contractor:10 };
+      for(let r=0; r<Math.min(15, rows.length); r++) {
+        const row = rows[r];
+        if(Array.isArray(row)) {
+          row.forEach((cellVal, cIdx) => {
+            const txt = String(cellVal).trim().toLowerCase();
+            if((/aff|codigo|ident|nº af/i.test(txt)) && !/descrição|produto|patrimônio/i.test(txt)) colMap.afNumber = cIdx;
+            if(/empreiteiro|empresa/i.test(txt)) colMap.contractor = cIdx;
+            if(/bateria/i.test(txt)) colMap.battery = cIdx;
+            if(/horímetro|hr/i.test(txt)) colMap.hourmeter = cIdx;
+            if(/chassi|identificação/i.test(txt)) colMap.serial = cIdx;
+            if(/patrimônio|série/i.test(txt)) colMap.code = cIdx;
+            if(/descrição/i.test(txt)) colMap.description = cIdx;
+          });
+        }
+      }
+      rows.forEach(row=>{
+        const description=String(row[colMap.description]||'').replace(/\s+/g,' ').trim();
+        const code=String(row[colMap.code]||'').replace(/\s+/g,'').trim().toUpperCase();
+        if(!description||!code||/descrição do equipamento/i.test(description)||/série|patrimônio/i.test(code)||/^total/i.test(description))return;
+        const key=code.toUpperCase();
+        if(seen.has(key))return;
+        seen.add(key);
+        const hourText=String(row[colMap.hourmeter]??'').replace(',','.');
+        const name=description;
+        let afVal = String(row[colMap.afNumber]||'').trim();
+        let contractorVal = String(row[colMap.contractor]||'').trim();
+        if (/^[A-Za-z.\s]+$/.test(afVal) && /^\d+$/.test(contractorVal)) {
+          const tmp = afVal;
+          afVal = contractorVal;
+          contractorVal = tmp;
+        }
+        const itemObj = {
+          code,
+          name,
+          type:equipmentTypeFromDescription(description),
+          brand:'Tecnogera',
+          model:description.replace(/^Plataforma\s+/i,''),
+          serial:String(row[colMap.serial]||'').trim(),
+          productCode:String(row[colMap.productCode]||'').trim(),
+          invoice:String(row[colMap.invoice]||'').trim(),
+          emissionDate:spreadsheetDate(row[colMap.emissionDate]),
+          hourmeter:Number.isFinite(Number(hourText))?Number(hourText):0,
+          battery:String(row[colMap.battery]||'').trim(),
+          afNumber:afVal,
+          contractor:contractorVal
+        };
+        imported.push(sanitizeEquipment(itemObj));
+      });
+    });
+    let added = 0;
+    let updated = 0;
+    imported.forEach(item => {
+      const existingIndex = equipments.findIndex(e => e.code.toUpperCase() === item.code.toUpperCase());
+      if (existingIndex >= 0) {
+        equipments[existingIndex] = {
+          ...equipments[existingIndex],
+          ...item,
+          afNumber: item.afNumber || equipments[existingIndex].afNumber || '',
+          contractor: item.contractor || equipments[existingIndex].contractor || '',
+          status: equipments[existingIndex].status,
+          usage: equipments[existingIndex].usage
+        };
+        updated++;
+      } else {
+        item.id = `pta-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        item.status = 'available';
+        item.usage = null;
+        equipments.push(item);
+        added++;
+      }
+    });
+
+    equipments.sort((a,b)=>safeSort(a.model||a.name, b.model||b.name)||safeSort(a.code, b.code));
+    equipmentImportMeta={source:file.name,updatedAt:new Date().toISOString(),total:imported.length};
+    const client = getSupabase();
+    if (client) client.from('app_metadata').upsert({key:'equipment_import_meta',value:equipmentImportMeta});
+    save(); closeModal(); renderEquipments();
+    const navCount = document.getElementById('navEquipmentCount');
+    if (navCount) navCount.textContent = equipments.length;
+    toast(`${updated} equipamento(s) atualizado(s) e ${added} novo(s) importado(s).`);
   } catch(error){toast(error.message||'Não foi possível ler a planilha de equipamentos.',true);}
 }
 
 function renderMovements() {
-  const inspections=history.filter(item=>item.inspection); const people=[...new Set(inspections.map(item=>item.person))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  document.getElementById('app').innerHTML = `${pageHeader('Checklists PEMT', 'Controle digital complementar ao formulário físico arquivado na pasta do colaborador.', 'CONTROLE DE PTAs E PALETEIRAS', `<button class="button button-outline" onclick="openBlankInspectionTemplate()">${icon('print')} Imprimir formulário físico</button><button class="button button-green" onclick="exportChecklistExcel()">${icon('download')} Baixar Excel</button>`)}${equipmentModuleTabs('checklists')}<section class="physical-guidance">${icon('file')}<div><strong>O formulário físico continua obrigatório</strong><small>Imprima o modelo, colha as assinaturas e arquive a via na pasta do colaborador. O registro digital facilita consulta e rastreabilidade.</small></div><button onclick="openBlankInspectionTemplate()">Imprimir modelo</button></section><section class="control-summary"><span><b>${inspections.length}</b> formulários digitais</span><span class="summary-green"><i></i><b>${inspections.filter(item=>!inspectionHasFailure(item.inspection)).length}</b> aprovados</span><span class="summary-amber"><i></i><b>${inspections.filter(item=>item.inspection.mode==='retirada').length}</b> retiradas</span></section><div class="checklist-filters"><label class="filter-field"><span>Pessoa</span><select id="checkPerson" onchange="filterChecklists()"><option value="">Todas</option>${people.map(person=>`<option>${esc(person)}</option>`).join('')}</select></label><label class="filter-field"><span>Equipamento</span><select id="checkEquipment" onchange="filterChecklists()"><option value="">Todos</option>${equipments.map(eq=>`<option value="${eq.id}">${esc(eq.code)} — ${esc(eq.model)}</option>`).join('')}</select></label><label class="filter-field"><span>Tipo</span><select id="checkMode" onchange="filterChecklists()"><option value="">Todos</option><option value="retirada">Retirada</option><option value="devolucao">Devolução</option></select></label><label class="filter-field"><span>Data inicial</span><input id="checkStart" type="date" onchange="filterChecklists()"></label><label class="filter-field"><span>Data final</span><input id="checkEnd" type="date" onchange="filterChecklists()"></label></div><article class="panel checklist-panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Data</th><th>Equipamento</th><th>Tipo</th><th>Responsável</th><th>Empresa</th><th>Atividade / Local</th><th>Resultado</th><th>Via física</th><th></th></tr></thead><tbody>${inspections.map(item=>{const eq=equipments.find(e=>e.id===item.equipmentId);const failed=inspectionHasFailure(item.inspection);return `<tr class="checklist-record-row" data-id="${item.id}" data-person="${esc(item.person)}" data-equipment="${item.equipmentId}" data-mode="${item.inspection.mode}" data-date="${item.date.slice(0,10)}"><td>${fullDate(item.date)}</td><td><strong>${esc(eq?.code||'—')}</strong><small class="table-sub">${esc(eq?.model||'')}</small></td><td>${item.inspection.mode==='devolucao'?'<span class="status available">Devolução</span>':'<span class="status in-use">Retirada</span>'}</td><td><strong>${esc(item.person)}</strong></td><td>${esc(item.company)}</td><td><strong>${esc(item.activity||'—')}</strong><small class="table-sub">${esc(item.dataHall||item.place)} · ${esc(item.location||'')}</small></td><td><span class="status ${failed?'maintenance':'available'}">${failed?'Reprovado':'Aprovado'}</span></td><td>${item.inspection.physicalFiled?'<span class="physical-ok">✓ Confirmada</span>':'<span class="muted-dash">Pendente</span>'}</td><td><button class="table-action" onclick="openInspectionRecord(${item.id})">${icon('download')} PDF / visualizar</button></td></tr>`;}).join('')}</tbody></table></div>${inspections.length?'':`<div class="checklist-empty"><span>${icon('file')}</span><h2>Nenhum checklist digital preenchido</h2><p>Você já pode imprimir o formulário físico em branco. Os registros digitais aparecerão aqui após a primeira retirada ou devolução.</p><button class="button button-green" onclick="openBlankInspectionTemplate()">${icon('print')} Imprimir formulário físico</button></div>`}<div class="no-filter-results" id="noChecklistResults">Nenhum checklist encontrado com estes filtros.</div></article>`;
+  const inspections = history.filter(item => item.inspection || (item.inspections && item.inspections.length > 0)); 
+  const people = [...new Set(inspections.map(item => item.person).filter(Boolean))].sort(safeSort);
+  document.getElementById('app').innerHTML = `
+    ${pageHeader('Checklists PEMT', 'Controle digital complementar ao formulário físico arquivado na pasta do colaborador.', 'CONTROLE DE PTAs E PALETEIRAS', `<button class="button button-outline" onclick="openBlankInspectionTemplate()">${icon('print')} Imprimir formulário físico</button><button class="button button-green" onclick="exportChecklistExcel()">${icon('download')} Baixar Excel</button>`)}
+    ${equipmentModuleTabs('checklists')}
+    <section class="physical-guidance">${icon('file')}<div><strong>O formulário físico continua obrigatório</strong><small>Imprima o modelo, colha as assinaturas e arquive a via na pasta do colaborador. O registro digital facilita consulta e rastreabilidade.</small></div><button onclick="openBlankInspectionTemplate()">Imprimir modelo</button></section>
+    <section class="control-summary">
+      <span><b>${inspections.length}</b> formulários digitais</span>
+      <span class="summary-green"><i></i><b>${inspections.filter(item => !inspectionHasFailure(item.inspection || item.inspections?.[0])).length}</b> aprovados</span>
+      <span class="summary-amber"><i></i><b>${inspections.filter(item => (item.inspection || item.inspections?.[0])?.mode === 'retirada').length}</b> retiradas</span>
+    </section>
+    <div class="checklist-filters">
+      <label class="filter-field"><span>Pessoa</span><select id="checkPerson" onchange="filterChecklists()"><option value="">Todas</option>${people.map(person => `<option>${esc(person)}</option>`).join('')}</select></label>
+      <label class="filter-field"><span>Equipamento</span><select id="checkEquipment" onchange="filterChecklists()"><option value="">Todos</option>${equipments.map(eq => `<option value="${eq.id}">${esc(eq.code)} — ${esc(eq.model)}</option>`).join('')}</select></label>
+      <label class="filter-field"><span>Tipo</span><select id="checkMode" onchange="filterChecklists()"><option value="">Todos</option><option value="retirada">Retirada</option><option value="devolucao">Devolução</option></select></label>
+      <label class="filter-field"><span>Data inicial</span><input id="checkStart" type="date" onchange="filterChecklists()"></label>
+      <label class="filter-field"><span>Data final</span><input id="checkEnd" type="date" onchange="filterChecklists()"></label>
+    </div>
+    <article class="panel checklist-panel">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 36px; text-align: center;"><input type="checkbox" id="selectAllChecklists" onchange="toggleSelectAllChecklists(this)" title="Selecionar todos"></th>
+              <th>Data</th>
+              <th>Equipamento</th>
+              <th>Tipo</th>
+              <th>Responsável</th>
+              <th>Empresa</th>
+              <th>Atividade / Local</th>
+              <th>Resultado</th>
+              <th>Linhas preenchidas</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${inspections.map(item => {
+              const eq = equipments.find(e => e.id === item.equipmentId);
+              const list = (item.inspections && item.inspections.length > 0) ? item.inspections : (item.inspection ? [item.inspection] : []);
+              const failed = list.some(ins => inspectionHasFailure(ins));
+              const mainMode = list[0]?.mode || 'retirada';
+              return `<tr class="checklist-record-row" data-id="${item.id}" data-person="${esc(item.person)}" data-equipment="${item.equipmentId}" data-mode="${mainMode}" data-date="${item.date.slice(0,10)}">
+                <td style="text-align: center;"><input type="checkbox" class="checklist-select-check" value="${item.id}" onchange="updateChecklistSelection()"></td>
+                <td>${fullDate(item.date)}</td>
+                <td><strong>${esc(eq?.code || '—')}</strong><small class="table-sub">${esc(eq?.model || '')}</small></td>
+                <td>${mainMode === 'devolucao' ? '<span class="status available">Devolução</span>' : '<span class="status in-use">Retirada</span>'}</td>
+                <td><strong>${esc(item.person)}</strong></td>
+                <td>${esc(item.company)}</td>
+                <td><strong>${esc(item.activity || '—')}</strong><small class="table-sub">${esc(item.dataHall || item.place)} · ${esc(item.location || '')}</small></td>
+                <td><span class="status ${failed ? 'maintenance' : 'available'}">${failed ? 'Reprovado' : 'Aprovado'}</span></td>
+                <td><span class="physical-ok">${list.length} linha(s)</span></td>
+                <td><button class="table-action" onclick="openInspectionRecord(${item.id})">${icon('download')} PDF / ver</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${inspections.length ? '' : `<div class="checklist-empty"><span>${icon('file')}</span><h2>Nenhum checklist digital preenchido</h2><p>Você já pode imprimir o formulário físico em branco. Os registros digitais aparecerão aqui após a primeira retirada ou devolução.</p><button class="button button-green" onclick="openBlankInspectionTemplate()">${icon('print')} Imprimir formulário físico</button></div>`}
+      <div class="no-filter-results" id="noChecklistResults">Nenhum checklist encontrado com estes filtros.</div>
+    </article>
+    
+    <div id="batchChecklistBar" class="batch-checklist-bar" style="display: none;">
+      <div class="batch-bar-info">
+        <span class="batch-count" id="batchSelectedCount">0 selecionados</span>
+      </div>
+      <div class="batch-bar-actions">
+        <button class="button button-dark compact" onclick="printSelectedChecklists()">${icon('print')} Imprimir Selecionados (PDF)</button>
+        <button class="button button-outline compact" onclick="exportChecklistExcel()">${icon('download')} Baixar Excel Selecionados</button>
+        <button class="button button-ghost compact" onclick="clearChecklistSelection()">Desmarcar</button>
+      </div>
+    </div>`;
+}
+
+function getSelectedChecklistIds() {
+  return Array.from(document.querySelectorAll('.checklist-select-check:checked')).map(cb => Number(cb.value));
+}
+
+function updateChecklistSelection() {
+  const ids = getSelectedChecklistIds();
+  const bar = document.getElementById('batchChecklistBar');
+  const countEl = document.getElementById('batchSelectedCount');
+  if (bar && countEl) {
+    if (ids.length > 0) {
+      bar.style.display = 'flex';
+      countEl.textContent = `${ids.length} formulário(s) selecionado(s)`;
+    } else {
+      bar.style.display = 'none';
+    }
+  }
+}
+
+function toggleSelectAllChecklists(headerCheckbox) {
+  const checks = document.querySelectorAll('.checklist-select-check');
+  checks.forEach(cb => {
+    if (cb.closest('tr').style.display !== 'none') {
+      cb.checked = headerCheckbox.checked;
+    }
+  });
+  updateChecklistSelection();
+}
+
+function clearChecklistSelection() {
+  document.querySelectorAll('.checklist-select-check').forEach(cb => cb.checked = false);
+  const headerCb = document.getElementById('selectAllChecklists');
+  if (headerCb) headerCb.checked = false;
+  updateChecklistSelection();
+}
+
+function printSelectedChecklists() {
+  const ids = getSelectedChecklistIds();
+  if (!ids.length) return toast('Selecione pelo menos um checklist para imprimir.', true);
+  
+  const selectedMovements = history.filter(item => ids.includes(item.id));
+  const docsHtml = selectedMovements.map(m => {
+    const eq = equipments.find(e => e.id === m.equipmentId) || { code: '—', name: 'Equipamento' };
+    return `<div class="printable-sheet-wrapper">${printableInspection(eq, m)}</div>`;
+  }).join('');
+
+  modal(`${modalHead('Impressão em lote de formulários', `${ids.length} formulário(s) pronto(s) para salvar em PDF`)}
+    <div class="modal-body inspection-record batch-print-preview">
+      ${docsHtml}
+    </div>
+    <div class="modal-foot">
+      <button class="button button-outline" onclick="closeModal()">Fechar</button>
+      <button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir / Salvar todos em PDF (${ids.length})</button>
+    </div>`, 'modal-paper');
+
+  document.querySelector('.modal-backdrop').classList.add('print-area', 'inspection-print-area', 'batch-print-area');
 }
 function filterChecklists() {
   const person=document.getElementById('checkPerson').value; const equipment=document.getElementById('checkEquipment').value; const mode=document.getElementById('checkMode').value; const start=document.getElementById('checkStart').value; const end=document.getElementById('checkEnd').value; let visible=0;
@@ -375,8 +1096,8 @@ function openBlankInspectionTemplate() {
 }
 
 function renderCompanies() {
-  const companies=[...new Set(workforce.map(person=>person.company))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Cadastre manualmente ou importe a planilha completa da obra.', 'CADASTRO CENTRAL', `<button class="button button-outline" onclick="openWorkforceModal()">${icon('download')} Importar Excel</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar Excel</button><button class="button button-green" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>`)}<section class="workforce-summary"><div><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas</small></p></div><div><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source||'Cadastro manual')}</strong><span>${workforceMeta.updatedAt?`${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}`:''}</span></p></div></section><div class="simple-filters workforce-filters"><label class="search-box">${icon('search')}<input id="workforceSearch" type="search" placeholder="Buscar nome, função ou empresa..." oninput="filterWorkforce()"></label><label class="filter-field"><span>Empresa</span><select id="workforceCompany" onchange="filterWorkforce()"><option value="">Todas</option>${companies.map(company=>`<option>${esc(company)}</option>`).join('')}</select></label></div><article class="panel"><div class="panel-head"><div><h2>Pessoas cadastradas</h2><p>Disponíveis na lista de responsáveis dos checklists</p></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Nome</th><th>Empresa</th><th>Função</th><th>Vínculo</th><th></th></tr></thead><tbody>${workforce.map((person,index)=>`<tr class="workforce-row" data-company="${esc(person.company)}" data-search="${esc(`${person.name} ${person.company} ${person.role||''}`.toLowerCase())}"><td><strong>${esc(person.name)}</strong></td><td>${esc(person.company)}</td><td>${esc(person.role||'—')}</td><td>${esc(person.status||'—')}</td><td><div class="control-row-actions"><button class="icon-button" title="Editar" onclick="openPersonModal(${index})">${icon('edit')}</button><button class="icon-button" title="Excluir" onclick="deletePerson(${index})">${icon('trash')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="no-filter-results" id="noWorkforceResults">Nenhuma pessoa encontrada.</div></article>`;
+  const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
+  document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Cadastre manualmente ou importe a planilha completa da obra.', 'CADASTRO CENTRAL', `<button class="button button-outline" onclick="openWorkforceModal()">${icon('download')} Importar Excel</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar Excel</button><button class="button button-green" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>`)}<section class="workforce-summary"><div><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas</small></p></div><div><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source||'Cadastro manual')}</strong><span>${workforceMeta.updatedAt?`${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}`:''}</span></p></div></section><div class="simple-filters workforce-filters"><label class="search-box">${icon('search')}<input id="workforceSearch" type="search" placeholder="Buscar nome, função ou empresa..." oninput="filterWorkforce()"></label><label class="filter-field"><span>Empresa</span><select id="workforceCompany" onchange="filterWorkforce()"><option value="">Todas</option>${companies.map(company=>`<option>${esc(company)}</option>`).join('')}</select></label></div><article class="panel"><div class="panel-head"><div><h2>Pessoas cadastradas</h2><p>Disponíveis na lista de responsáveis dos checklists</p></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Nome</th><th>Empresa</th><th>Função</th><th>Vínculo</th><th></th></tr></thead><tbody>${workforce.map((person,index)=>`<tr class="workforce-row" data-company="${esc(person?.company||'')}" data-search="${esc(`${person?.name||''} ${person?.company||''} ${person?.role||''}`.toLowerCase())}"><td><strong>${esc(person?.name||'')}</strong></td><td>${esc(person?.company||'')}</td><td>${esc(person?.role||'—')}</td><td>${esc(person?.status||'—')}</td><td><div class="control-row-actions"><button class="icon-button" title="Editar" onclick="openPersonModal(${index})">${icon('edit')}</button><button class="icon-button" title="Excluir" onclick="deletePerson(${index})">${icon('trash')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="no-filter-results" id="noWorkforceResults">Nenhuma pessoa encontrada.</div></article>`;
 }
 function filterWorkforce() {
   const search=document.getElementById('workforceSearch').value.toLowerCase(); const company=document.getElementById('workforceCompany').value; let visible=0;
@@ -384,21 +1105,21 @@ function filterWorkforce() {
   document.getElementById('noWorkforceResults').style.display=visible?'none':'block';
 }
 function openPersonModal(index=null) {
-  const person=index===null?null:workforce[index]; const companies=[...new Set(workforce.map(item=>item.company))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  modal(`<form onsubmit="savePerson(event,${index===null?'null':index})">${modalHead(person?'Editar pessoa':'Adicionar pessoa','Cadastro individual do efetivo da obra')}<div class="modal-body"><div class="form-grid"><div class="field full"><label>Empresa <em>*</em></label><input name="company" required list="companySuggestions" placeholder="Selecione ou digite uma nova empresa" value="${esc(person?.company||'')}"><datalist id="companySuggestions">${companies.map(company=>`<option value="${esc(company)}"></option>`).join('')}</datalist></div><div class="field full"><label>Nome completo <em>*</em></label><input name="name" required placeholder="Nome da pessoa" value="${esc(person?.name||'')}"></div><div class="field"><label>Função <em>*</em></label><input name="role" required placeholder="Ex.: Operador de PTA" value="${esc(person?.role||'')}"></div><div class="field"><label>Vínculo / status</label><select name="status"><option value="">Não informado</option><option value="DIRETA" ${person?.status==='DIRETA'?'selected':''}>Direta</option><option value="INDIRETA" ${person?.status==='INDIRETA'?'selected':''}>Indireta</option><option value="TERCEIRO" ${person?.status==='TERCEIRO'?'selected':''}>Terceiro</option></select></div><div class="field full"><label>Telefone</label><input name="phone" placeholder="(85) 99999-9999" value="${esc(person?.phone||'')}"></div></div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Salvar pessoa</button></div></form>`,'modal-small');
+  const person=index===null?null:workforce[index]; const companies=[...new Set(workforce.map(item=>item?.company).filter(Boolean))].sort(safeSort);
+  modal(`<form onsubmit="savePerson(event,${index===null?'null':index})">${modalHead(person?'Editar pessoa':'Adicionar pessoa','Cadastro individual do efetivo da obra')}<div class="modal-body"><div class="form-grid"><div class="field full"><label>Empresa <em>*</em></label><input name="company" required list="companySuggestions" placeholder="Selecione ou digite uma nova empresa" value="${esc(person?.company||'')}"><datalist id="companySuggestions">${companies.map(company=>`<option value="${esc(company)}"></option>`).join('')}</datalist></div><div class="field full"><label>Nome completo <em>*</em></label><input name="name" required placeholder="Nome da pessoa" value="${esc(person?.name||'')}"></div><div class="field"><label>Função <em>*</em></label><input name="role" required placeholder="Ex.: Operador de PTA" value="${esc(person?.role||'')}"></div><div class="field"><label>Vínculo / status</label><select name="status"><option value="">Não informado</option><option value="DIRETA" ${person?.status==='DIRETA'?'selected':''}>Direta</option><option value="INDIRETA" ${person?.status==='INDIRETA'?'selected':''}>Indireta</option><option value="TERCEIRO" ${person?.status==='TERCEIRO'?'selected':''}>Terceiro</option></select></div><div class="field"><label>Perfil de Acesso</label><select name="accessRole"><option value="operator" ${person?.accessRole!=='admin'?'selected':''}>Operador / Campo (Sem acesso administrativo)</option><option value="admin" ${person?.accessRole==='admin'?'selected':''}>Gestor / Administrador (Acesso completo)</option></select></div><div class="field"><label>PIN de Acesso (Gestão)</label><input name="pin" maxlength="8" placeholder="Ex.: 1234" value="${esc(person?.pin||'')}"></div><div class="field full"><label>Telefone</label><input name="phone" placeholder="(85) 99999-9999" value="${esc(person?.phone||'')}"></div></div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Salvar pessoa</button></div></form>`,'modal-small');
 }
 function savePerson(event,index) {
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target)); Object.keys(data).forEach(key=>data[key]=String(data[key]).replace(/\s+/g,' ').trim());
-  const duplicate=workforce.some((person,i)=>i!==index&&person.company.toLowerCase()===data.company.toLowerCase()&&person.name.toLowerCase()===data.name.toLowerCase()); if(duplicate)return toast('Esta pessoa já está cadastrada nesta empresa.',true);
-  if(index===null) { if(!data.id) data.id=crypto.randomUUID(); workforce.push(data); supabase.from('workforce').upsert(data); } else { workforce[index]={...workforce[index],...data}; supabase.from('workforce').upsert(workforce[index]); } workforce.sort((a,b)=>a.company.localeCompare(b.company,'pt-BR')||a.name.localeCompare(b.name,'pt-BR')); workforceMeta={source:'Cadastro manual',updatedAt:new Date().toISOString()}; supabase.from('app_metadata').upsert({key:'workforce_meta',value:workforceMeta}); closeModal(); renderCompanies(); toast(personMessage(index));
+  const duplicate=workforce.some((person,i)=>i!==index&&(person?.company||'').toLowerCase()===data.company.toLowerCase()&&(person?.name||'').toLowerCase()===data.name.toLowerCase()); if(duplicate)return toast('Esta pessoa já está cadastrada nesta empresa.',true);
+  if(index===null) { if(!data.id) data.id=crypto.randomUUID(); workforce.push(data); if(supabase) supabase.from('workforce').upsert(data); } else { workforce[index]={...workforce[index],...data}; if(supabase) supabase.from('workforce').upsert(workforce[index]); } workforce.sort((a,b)=>safeSort(a?.company,b?.company)||safeSort(a?.name,b?.name)); workforceMeta={source:'Cadastro manual',updatedAt:new Date().toISOString()}; if(supabase) supabase.from('app_metadata').upsert({key:'workforce_meta',value:workforceMeta}); closeModal(); renderCompanies(); toast(personMessage(index));
 }
 function personMessage(index) { return index===null?'Pessoa adicionada ao efetivo.':'Cadastro atualizado.'; }
 function deletePerson(index) {
-  const person=workforce[index]; if(!person||!confirm(`Excluir ${person.name} da lista de efetivo?`))return; workforce.splice(index,1); supabase.from('workforce').delete().eq('id', person.id); renderCompanies(); toast('Pessoa removida da lista.');
+  const person=workforce[index]; if(!person||!confirm(`Excluir ${person.name} da lista de efetivo?`))return; workforce.splice(index,1); if(supabase) supabase.from('workforce').delete().eq('id', person.id); renderCompanies(); toast('Pessoa removida da lista.');
 }
 function openWorkforceModal() {
-  const companies=[...new Set(workforce.map(person=>person.company))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  modal(`${modalHead('Atualizar empresas e efetivo','Importe uma nova versão do relatório em Excel')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('workforceFile').click()"><span>${icon('download')}</span><div><h3>Selecionar planilha de efetivo</h3><p>Formatos .xlsx ou .xls · a aba mais recente será importada</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="workforceFile" type="file" accept=".xlsx,.xls" hidden onchange="handleWorkforceUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${workforce.length} pessoas em ${companies.length} empresas</strong><small>${esc(workforceMeta.source||'Base inicial ainda não carregada')}</small></div></div><div class="company-chips">${companies.map(company=>`<span>${esc(company)} <b>${workforce.filter(person=>person.company===company).length}</b></span>`).join('')}</div><div class="notice">${icon('alert')} Ao importar uma nova planilha, a lista de empresas e pessoas será atualizada. Os checklists e as movimentações já registrados não serão apagados.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar efetivo atual</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-small');
+  const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
+  modal(`${modalHead('Atualizar empresas e efetivo','Importe uma nova versão do relatório em Excel')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('workforceFile').click()"><span>${icon('download')}</span><div><h3>Selecionar planilha de efetivo</h3><p>Formatos .xlsx ou .xls · a aba mais recente será importada</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="workforceFile" type="file" accept=".xlsx,.xls" hidden onchange="handleWorkforceUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${workforce.length} pessoas em ${companies.length} empresas</strong><small>${esc(workforceMeta.source||'Base inicial ainda não carregada')}</small></div></div><div class="company-chips">${companies.map(company=>`<span>${esc(company)} <b>${workforce.filter(person=>person?.company===company).length}</b></span>`).join('')}</div><div class="notice">${icon('alert')} Ao importar uma nova planilha, a lista de empresas e pessoas será atualizada. Os checklists e as movimentações já registrados não serão apagados.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar efetivo atual</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-small');
 }
 async function handleWorkforceUpload(event) {
   const file=event.target.files?.[0]; if(!file) return;
@@ -407,8 +1128,14 @@ async function handleWorkforceUpload(event) {
     const bytes=await file.arrayBuffer(); const workbook=XLSX.read(bytes,{type:'array'}); const sheetName=workbook.SheetNames[workbook.SheetNames.length-1]; const rows=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName],{header:1,defval:''});
     const imported=[]; const seen=new Set();
     rows.forEach(row=>{const company=String(row[1]||'').replace(/\s+/g,' ').trim();const name=String(row[2]||'').replace(/\s+/g,' ').trim();const role=String(row[5]||row[3]||'').replace(/\s+/g,' ').trim();const status=String(row[4]||'').replace(/\s+/g,' ').trim();if(!company||!name||name.length<4||/empresa|obras:|referente|pc:/i.test(company)||/^nome$/i.test(name))return;const key=`${company.toUpperCase()}|${name.toUpperCase()}`;if(seen.has(key))return;seen.add(key);imported.push({company,name,role,status});});
-    if(!imported.length) throw new Error('Nenhuma pessoa foi identificada nas colunas Empresa e Nome.');
-    workforce=imported.sort((a,b)=>a.company.localeCompare(b.company,'pt-BR')||a.name.localeCompare(b.name,'pt-BR')); workforceMeta={source:file.name,updatedAt:new Date().toISOString()}; supabase.from('app_metadata').upsert({key:'workforce_meta',value:workforceMeta}); for(const p of workforce){ if(!p.id) p.id=crypto.randomUUID(); supabase.from('workforce').upsert(p); } openWorkforceModal(); toast(`${workforce.length} pessoas importadas da aba ${sheetName}.`);
+    workforce=imported.sort((a,b)=>safeSort(a?.company, b?.company)||safeSort(a?.name, b?.name));
+    workforceMeta={source:file.name,updatedAt:new Date().toISOString()};
+    const client = getSupabase();
+    if (client) {
+      client.from('app_metadata').upsert({key:'workforce_meta',value:workforceMeta});
+      for(const p of workforce){ if(!p.id) p.id=crypto.randomUUID(); client.from('workforce').upsert(p); }
+    }
+    openWorkforceModal(); toast(`${workforce.length} pessoas importadas da aba ${sheetName}.`);
   } catch(error) { toast(error.message||'Não foi possível ler esta planilha.',true); }
 }
 function exportWorkforceExcel() {
@@ -525,7 +1252,7 @@ function modalHead(title, subtitle='') { return `<div class="modal-head"><div><h
 
 function openEquipmentModal(id = null) {
   const eq = id ? equipments.find(e=>e.id===id) : null;
-  modal(`<form id="equipmentForm" onsubmit="saveEquipment(event,'${id||''}')">${modalHead(eq?'Editar equipamento':'Novo equipamento',eq?'Atualize os dados do ativo':'Cadastre um ativo e gere seu QR Code')}<div class="modal-body"><div class="form-grid"><div class="field"><label>Tipo de equipamento <em>*</em></label><select name="type" required><option value="">Selecione...</option>${['PTA Tesoura','PTA Articulada','PTA Mastro','Paleteira Elétrica'].map(v=>`<option ${eq?.type===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Código de identificação <em>*</em></label><input name="code" required placeholder="Ex.: PTA-007" value="${esc(eq?.code||'')}"></div><div class="field full"><label>Nome do equipamento <em>*</em></label><input name="name" required placeholder="Ex.: Plataforma Tesoura 10m" value="${esc(eq?.name||'')}"></div><div class="field"><label>Fabricante <em>*</em></label><input name="brand" required placeholder="Ex.: JLG" value="${esc(eq?.brand||'')}"></div><div class="field"><label>Modelo <em>*</em></label><input name="model" required placeholder="Ex.: 2646ES" value="${esc(eq?.model||'')}"></div><div class="field"><label>Número de série</label><input name="serial" placeholder="Número do fabricante" value="${esc(eq?.serial||'')}"></div><div class="field"><label>Capacidade</label><input name="capacity" placeholder="Ex.: 450 kg" value="${esc(eq?.capacity||'')}"></div><div class="field"><label>Status inicial</label><select name="status"><option value="available" ${!eq||eq.status==='available'?'selected':''}>Disponível</option><option value="maintenance" ${eq?.status==='maintenance'?'selected':''}>Em manutenção</option></select></div><div class="field"><label>Data da última inspeção</label><input name="inspection" type="date" value="${eq?.inspection||new Date().toISOString().slice(0,10)}"></div></div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} ${eq?'Salvar alterações':'Cadastrar equipamento'}</button></div></form>`, 'modal-large');
+  modal(`<form id="equipmentForm" onsubmit="saveEquipment(event,'${id||''}')">${modalHead(eq?'Editar equipamento':'Novo equipamento',eq?'Atualize os dados do ativo':'Cadastre um ativo e gere seu QR Code')}<div class="modal-body"><div class="form-grid"><div class="field"><label>Tipo de equipamento <em>*</em></label><select name="type" required><option value="">Selecione...</option>${['PTA Tesoura','PTA Articulada','PTA Mastro','Paleteira Elétrica'].map(v=>`<option ${eq?.type===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Código de identificação (Patrimônio) <em>*</em></label><input name="code" required placeholder="Ex.: TPTA00674" value="${esc(eq?.code||'')}"></div><div class="field"><label>Nº AF (Afonso França)</label><input name="afNumber" placeholder="Ex.: AF-001" value="${esc(eq?.afNumber||'')}"></div><div class="field full"><label>Nome do equipamento <em>*</em></label><input name="name" required placeholder="Ex.: Plataforma Tesoura 10m" value="${esc(eq?.name||'')}"></div><div class="field"><label>Fabricante <em>*</em></label><input name="brand" required placeholder="Ex.: JLG" value="${esc(eq?.brand||'')}"></div><div class="field"><label>Modelo <em>*</em></label><input name="model" required placeholder="Ex.: 2646ES" value="${esc(eq?.model||'')}"></div><div class="field"><label>Número de série</label><input name="serial" placeholder="Número do fabricante" value="${esc(eq?.serial||'')}"></div><div class="field"><label>Capacidade</label><input name="capacity" placeholder="Ex.: 450 kg" value="${esc(eq?.capacity||'')}"></div><div class="field"><label>Status inicial</label><select name="status"><option value="available" ${!eq||eq.status==='available'?'selected':''}>Disponível</option><option value="maintenance" ${eq?.status==='maintenance'?'selected':''}>Em manutenção</option></select></div><div class="field"><label>Data da última inspeção</label><input name="inspection" type="date" value="${eq?.inspection||new Date().toISOString().slice(0,10)}"></div></div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} ${eq?'Salvar alterações':'Cadastrar equipamento'}</button></div></form>`, 'modal-large');
 }
 function saveEquipment(event, id) {
   event.preventDefault(); const data = Object.fromEntries(new FormData(event.target));
@@ -542,7 +1269,76 @@ function openEquipmentDetails(id) {
   const eq = equipments.find(e=>e.id===id); if (!eq) return;
   if (eq.status === 'available') return openCheckoutModal(id);
   const usage = eq.usage;
-  modal(`${modalHead(eq.name,`${eq.code} · ${eq.brand} ${eq.model}`)}<div class="modal-body"><div class="equipment-summary"><span class="asset-icon">${equipmentIcon(eq)}</span><div><strong>${esc(eq.name)}</strong><small>Série ${esc(eq.serial)} · Horímetro ${esc(eq.hourmeter ?? '—')} h${eq.battery?` · Bateria ${esc(eq.battery)}`:''}</small></div>${statusBadge(eq.status)}</div>${eq.status==='in-use'?`<div class="form-grid"><div class="field"><label>Empresa</label><strong>${esc(usage.company)}</strong></div><div class="field"><label>Responsável</label><strong>${esc(usage.responsible)}</strong></div><div class="field full"><label>Atividade</label><strong>${esc(usage.activity||'—')}</strong></div><div class="field"><label>DH / Local específico</label><strong>${esc(usage.dataHall)} · ${esc(usage.location)}</strong></div><div class="field"><label>Previsão de entrega</label><strong>${fullDate(usage.expectedAt)}</strong></div><div class="field"><label>Retirada em</label><strong>${fullDate(usage.startedAt)}</strong></div><div class="field"><label>Contato</label><strong>${esc(usage.phone)}</strong></div></div>`:`<div class="notice">${icon(eq.status==='maintenance'?'tool':'check')} ${eq.status==='maintenance'?'Este equipamento está bloqueado para manutenção. Edite o cadastro para liberá-lo após a inspeção.':'Equipamento disponível no Pátio / Base e pronto para retirada.'}</div>`}</div><div class="modal-foot"><button class="button button-ghost" onclick="openEquipmentModal('${id}')">${icon('edit')} Editar</button><button class="button button-outline" onclick="openQRModal('${id}')">${icon('qr')} QR Code</button>${eq.status==='in-use'?`<button class="button button-green" onclick="openReturnModal('${id}')">${icon('return')} Registrar devolução</button>`:''}</div>`);
+  modal(`${modalHead(eq.name,`${eq.code} · ${eq.brand} ${eq.model}`)}<div class="modal-body"><div class="equipment-summary"><span class="asset-icon">${equipmentIcon(eq)}</span><div><strong>${esc(eq.name)}</strong><small>Série ${esc(eq.serial)} · Horímetro ${esc(eq.hourmeter ?? '—')} h${eq.battery?` · Bateria ${esc(eq.battery)}`:''}</small></div>${statusBadge(eq.status)}</div>${eq.status==='in-use'?`<div class="form-grid"><div class="field"><label>Empresa</label><strong>${esc(usage.company)}</strong></div><div class="field"><label>Responsável</label><strong>${esc(usage.responsible)}</strong></div><div class="field full"><label>Atividade</label><strong>${esc(usage.activity||'—')}</strong></div><div class="field"><label>DH / Local específico</label><strong>${esc(usage.dataHall)} · ${esc(usage.location)}</strong></div><div class="field"><label>Previsão de entrega</label><strong>${fullDate(usage.expectedAt)}</strong></div><div class="field"><label>Retirada em</label><strong>${fullDate(usage.startedAt)}</strong></div><div class="field"><label>Contato</label><strong>${esc(usage.phone)}</strong></div></div>`:`<div class="notice">${icon(eq.status==='maintenance'?'tool':'check')} ${eq.status==='maintenance'?'Este equipamento está bloqueado para manutenção. Edite o cadastro para liberá-lo após a inspeção.':'Equipamento disponível no Pátio / Base e pronto para retirada.'}</div>`}</div><div class="modal-foot"><button class="button button-ghost" onclick="openEquipmentModal('${id}')">${icon('edit')} Editar</button><button class="button button-outline" onclick="openQRModal('${id}')">${icon('qr')} QR Code</button>${eq.status==='in-use'?`<button class="button button-outline" onclick="openDailyInspectionModal('${id}')">${icon('plus')} Inspeção Diária (Novo Dia)</button><button class="button button-green" onclick="openReturnModal('${id}')">${icon('return')} Registrar devolução</button>`:''}</div>`);
+}
+
+function openDailyInspectionModal(id) {
+  const eq = equipments.find(e => e.id === id);
+  if (!eq || eq.status !== 'in-use' || !eq.usage) return toast('Equipamento não está em uso.', true);
+  
+  const currentHall = eq.usage.dataHall || '';
+  const currentLoc = eq.usage.location || '';
+  const currentAct = eq.usage.activity || '';
+  const currentPhone = eq.usage.phone || '';
+  const currentExpected = eq.usage.expectedAt ? eq.usage.expectedAt.slice(0, 16) : '';
+
+  modal(`<form onsubmit="submitDailyInspection(event,'${id}')">${modalHead('Inspeção Diária Continuada',`Adicionar nova linha no checklist da PTA (${esc(eq.code)})`)}<div class="modal-body">${inspectionFormHTML(eq,'diaria',{company:eq.usage.company,responsible:eq.usage.responsible,inspectionAt:nowLocal()})}<div class="section-title"><span>${icon('location')}</span><div><h3>Planejamento da utilização</h3><small>Dados mantidos da retirada — atualize a atividade, local ou devolução prevista caso necessário</small></div></div><div class="form-grid"><div class="field"><label>Telefone do responsável</label><input name="phone" placeholder="(85) 99999-9999" value="${esc(currentPhone)}"></div><div class="field"><label>Atividade a executar <em>*</em></label><input name="activity" required placeholder="Ex.: Instalação de dutos no teto" value="${esc(currentAct)}"></div><div class="field"><label>Data Hall — DH <em>*</em></label><select name="dataHall" required><option value="">Selecione...</option>${Array.from({length:10},(_,i)=>`<option ${currentHall===`Data Hall ${String(i+1).padStart(2,'0')}`?'selected':''}>Data Hall ${String(i+1).padStart(2,'0')}</option>`).join('')}<option ${currentHall==='Área externa'?'selected':''}>Área externa</option><option ${currentHall==='Casa de máquinas'?'selected':''}>Casa de máquinas</option><option ${currentHall==='Almoxarifado'?'selected':''}>Almoxarifado</option></select></div><div class="field"><label>Local específico <em>*</em></label><input name="location" required placeholder="Ex.: Corredor B / Sala elétrica" value="${esc(currentLoc)}"></div><div class="field"><label>Devolução prevista <em>*</em></label><input type="datetime-local" name="expectedAt" required value="${currentExpected || nowLocal()}"></div></div><label class="terms physical-term"><input type="checkbox" name="physicalCopy" required><span>Confirmo que a via física do formulário PEMT foi atualizada na linha correspondente e arquivada na pasta do colaborador.</span></label><label class="terms"><input type="checkbox" name="terms" required><span>Declaro que realizei a inspeção diária deste equipamento e as informações registradas são verdadeiras.</span></label></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Registrar Inspeção Diária</button></div></form>`, 'modal-inspection');
+}
+
+function submitDailyInspection(event, id) {
+  event.preventDefault();
+  const data = Object.fromEntries(new FormData(event.target));
+  const eq = equipments.find(e => e.id === id);
+  if (!eq || !eq.usage) return;
+
+  const inspection = inspectionFromData(data, 'diaria');
+  inspection.dataHall = data.dataHall;
+  inspection.location = data.location;
+  inspection.activity = data.activity;
+
+  const hasFailure = inspectionHasFailure(inspection);
+  eq.hourmeter = Number(data.hourmeter);
+
+  // Atualiza planejamento ao vivo
+  if (data.phone) eq.usage.phone = data.phone;
+  if (data.activity) eq.usage.activity = data.activity;
+  if (data.dataHall) eq.usage.dataHall = data.dataHall;
+  if (data.location) eq.usage.location = data.location;
+  if (data.expectedAt) eq.usage.expectedAt = data.expectedAt;
+
+  let activeMovement = history.find(h => h.equipmentId === id && h.action === 'withdraw');
+  if (!activeMovement) {
+    activeMovement = history.find(h => h.equipmentId === id);
+  }
+
+  if (activeMovement) {
+    if (!activeMovement.inspections || activeMovement.inspections.length === 0) {
+      activeMovement.inspections = activeMovement.inspection ? [activeMovement.inspection] : [];
+    }
+    activeMovement.inspections.push(inspection);
+    activeMovement.dataHall = data.dataHall || activeMovement.dataHall;
+    activeMovement.location = data.location || activeMovement.location;
+    activeMovement.activity = data.activity || activeMovement.activity;
+
+    if (hasFailure) {
+      activeMovement.action = 'issue';
+    }
+  }
+
+  if (hasFailure) {
+    eq.status = 'maintenance';
+    eq.usage = null;
+    save();
+    closeModal();
+    render();
+    return toast('Item reprovado na inspeção diária. Equipamento bloqueado para manutenção.', true);
+  }
+
+  save();
+  closeModal();
+  render();
+  const lineCount = activeMovement?.inspections?.length || 1;
+  toast(`Inspeção diária (Linha ${lineCount}) salva! Localização atualizada: ${eq.usage.dataHall} (${eq.usage.location}).`);
 }
 
 function openCheckoutModal(id) {
@@ -556,10 +1352,10 @@ function submitCheckout(event, id) {
   eq.hourmeter=Number(data.hourmeter);
   if (new Date(data.expectedAt) <= new Date(data.startedAt)) return toast('A devolução deve ser posterior ao início.', true);
   if (hasFailure) {
-    eq.status='maintenance'; eq.usage=null; history.unshift({id:Date.now(),equipmentId:id,action:'issue',person:data.responsible,company:data.company,place:data.dataHall,date:data.inspectionAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection}); save(); closeModal(); render(); return toast('Item reprovado. Formulário salvo e equipamento bloqueado.', true);
+    eq.status='maintenance'; eq.usage=null; history.unshift({id:Date.now(),equipmentId:id,action:'issue',person:data.responsible,company:data.company,place:data.dataHall,date:data.inspectionAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection,inspections:[inspection]}); save(); closeModal(); render(); return toast('Item reprovado. Formulário salvo e equipamento bloqueado.', true);
   }
   eq.status='in-use'; eq.usage={ company:data.company, responsible:data.responsible, phone:data.phone, activity:data.activity, location:data.location, dataHall:data.dataHall, startedAt:data.startedAt, expectedAt:data.expectedAt };
-  history.unshift({id:Date.now(),equipmentId:id,action:'withdraw',person:data.responsible,company:data.company,place:data.dataHall,date:data.startedAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection}); save(); closeModal(); render(); toast(`${eq.code} liberado. Formulário de retirada salvo.`);
+  history.unshift({id:Date.now(),equipmentId:id,action:'withdraw',person:data.responsible,company:data.company,place:data.dataHall,date:data.startedAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection,inspections:[inspection]}); save(); closeModal(); render(); toast(`${eq.code} liberado. Formulário de retirada salvo.`);
 }
 
 function openReturnModal(id) {
@@ -567,7 +1363,7 @@ function openReturnModal(id) {
   modal(`<form onsubmit="submitReturn(event,'${id}')">${modalHead('Inspeção de devolução / baixa','Preencha novamente o formulário FV-MAQ-ST')}<div class="modal-body">${inspectionFormHTML(eq,'devolucao',{company:eq.usage.company,responsible:eq.usage.responsible,inspectionAt:nowLocal()})}<div class="section-title"><span>${icon('return')}</span><div><h3>Dados da devolução</h3><small>Defina o local onde o equipamento será entregue</small></div></div><div class="form-grid"><div class="field"><label>Local de entrega <em>*</em></label><select name="place" required><option>Pátio de Equipamentos</option><option>Almoxarifado</option><option>Base da Manutenção</option></select></div><div class="field"><label>Data Hall de origem</label><input value="${esc(eq.usage.dataHall)}" readonly></div></div><label class="terms physical-term"><input type="checkbox" name="physicalCopy" required><span>Confirmo que a via física da devolução foi preenchida e será arquivada na pasta do colaborador.</span></label><label class="terms"><input type="checkbox" name="terms" required><span>Confirmo que realizei a inspeção de devolução. Se houver item reprovado, o equipamento será bloqueado automaticamente para manutenção.</span></label></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('return')} Concluir e devolver</button></div></form>`, 'modal-inspection');
 }
 function submitReturn(event,id) {
-  event.preventDefault(); const data=Object.fromEntries(new FormData(event.target)); const eq=equipments.find(e=>e.id===id); const previous={...eq.usage}; const inspection=inspectionFromData(data,'devolucao'); const hasFailure=inspectionHasFailure(inspection); eq.hourmeter=Number(data.hourmeter); eq.status=hasFailure?'maintenance':'available'; eq.usage=null; history.unshift({id:Date.now(),equipmentId:id,action:hasFailure?'issue':'return',person:previous.responsible,company:previous.company,place:data.place,date:data.inspectionAt,notes:data.inspectionNotes,activity:previous.activity,location:previous.location,dataHall:previous.dataHall,inspection}); save(); closeModal(); render(); toast(hasFailure?'Devolução salva. Item reprovado: equipamento bloqueado.':`${eq.code} devolvido e disponível. Formulário salvo.`,hasFailure);
+  event.preventDefault(); const data=Object.fromEntries(new FormData(event.target)); const eq=equipments.find(e=>e.id===id); const previous={...eq.usage}; const inspection=inspectionFromData(data,'devolucao'); const hasFailure=inspectionHasFailure(inspection); eq.hourmeter=Number(data.hourmeter); eq.status=hasFailure?'maintenance':'available'; eq.usage=null; history.unshift({id:Date.now(),equipmentId:id,action:hasFailure?'issue':'return',person:previous.responsible,company:previous.company,place:data.place,date:data.inspectionAt,notes:data.inspectionNotes,activity:previous.activity,location:previous.location,dataHall:previous.dataHall,inspection,inspections:[inspection]}); save(); closeModal(); render(); toast(hasFailure?'Devolução salva. Item reprovado: equipamento bloqueado.':`${eq.code} devolvido e disponível. Formulário salvo.`,hasFailure);
 }
 
 function openInspectionRecord(historyId) {
@@ -580,7 +1376,9 @@ function openInspectionRecord(historyId) {
 function openQRModal(id) {
   const eq=equipments.find(e=>e.id===id); if(!eq) return;
   const url=`${location.origin}${location.pathname}#scan/${eq.id}`;
-  modal(`${modalHead('QR Code do equipamento','Imprima e fixe esta etiqueta em local visível')}<div class="modal-body qr-layout"><div class="qr-box" id="qrTarget"></div><h2>${esc(eq.name)}</h2><span class="qr-code-label">${esc(eq.code)}</span><p>${esc(eq.brand)} ${esc(eq.model)} · Série ${esc(eq.serial)}</p><p>Escaneie para fazer checklist, retirar ou devolver</p></div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir etiqueta</button></div>`, 'modal-small');
+  const contractor = eq.contractor || eq.brand || 'Tecnogera';
+  const afVal = eq.afNumber || '—';
+  modal(`${modalHead('QR Code do equipamento','Imprima e fixe esta etiqueta em local visível')}<div class="modal-body qr-layout"><img src="assets/heating-cooling-logo.jpg" class="qr-brand-logo" alt="Heating Cooling"><div class="qr-box" id="qrTarget"></div><h2>${esc(eq.name)}</h2><span class="qr-code-label">${esc(eq.code)}</span><p style="margin:5px 0 2px;font-weight:800;color:#206b49;font-size:13px;">Nº AF (Afonso França): ${esc(afVal)}</p><p style="margin:2px 0 2px;font-weight:700;color:#14201b;font-size:12px;">Empreiteiro: ${esc(contractor)}</p><p style="margin:2px 0;color:#67736d;font-size:11px;">${esc(eq.brand)} ${esc(eq.model)} · Série ${esc(eq.serial)}</p><p style="margin-top:6px;color:#67736d;font-size:10px;">Obra DataCenter Omnia · Escaneie para checklist / uso</p></div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir etiqueta</button></div>`, 'modal-small');
   document.querySelector('.modal-backdrop').classList.add('print-area'); renderQRCode(document.getElementById('qrTarget'),url);
 }
 function renderQRCode(target,url) {
@@ -591,7 +1389,11 @@ function renderQRCode(target,url) {
 function printAllQRCodes() {
   if(!equipments.length) return toast('Nenhum equipamento cadastrado.',true);
   const pages=[]; for(let index=0;index<equipments.length;index+=4)pages.push(equipments.slice(index,index+4));
-  const label=eq=>`<article class="qr-label"><div class="qr-box" id="qr-${eq.id}"></div><h3>${esc(eq.name)}</h3><span class="qr-code-label">${esc(eq.code)}</span><p>${esc(eq.brand)} ${esc(eq.model)} · Série ${esc(eq.serial)}</p><p>Escaneie antes de utilizar</p></article>`;
+  const label=eq=>{
+    const contractor = eq.contractor || eq.brand || 'Tecnogera';
+    const afVal = eq.afNumber || '—';
+    return `<article class="qr-label"><img src="assets/heating-cooling-logo.jpg" class="qr-brand-logo" alt="Heating Cooling"><div class="qr-box" id="qr-${eq.id}"></div><h3>${esc(eq.name)}</h3><span class="qr-code-label">${esc(eq.code)}</span><p style="margin:4px 0 1px;font-weight:800;color:#206b49;font-size:12px;">Nº AF (Afonso França): ${esc(afVal)}</p><p style="margin:2px 0 1px;font-weight:700;color:#14201b;font-size:11px;">Empreiteiro: ${esc(contractor)}</p><p style="margin:2px 0;font-size:10px;">${esc(eq.brand)} ${esc(eq.model)} · Série ${esc(eq.serial)}</p><p style="margin-top:3px;color:#67736d;font-size:9px;">Obra DataCenter Omnia · Escaneie para checklist</p></article>`;
+  };
   modal(`${modalHead('Etiquetas de todos os equipamentos',`${equipments.length} QR Codes · ${pages.length} página(s) para impressão`)}<div class="modal-body qr-pages">${pages.map((page,index)=>`<section class="qr-sheet qr-print-page" data-page="${index+1}">${page.map(label).join('')}</section>`).join('')}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir todas (${equipments.length})</button></div>`, 'modal-large');
   document.querySelector('.modal-backdrop').classList.add('print-area');
   equipments.forEach(eq => renderQRCode(document.getElementById(`qr-${eq.id}`),`${location.origin}${location.pathname}#scan/${eq.id}`,135));
@@ -604,7 +1406,9 @@ function findEquipment(event) { event.preventDefault(); const code=document.getE
 function openScannedEquipment(id) { const eq=equipments.find(e=>e.id===id); if(!eq)return toast('Este equipamento não existe ou foi removido.',true); openPublicEquipmentModal(id); }
 function openPublicEquipmentModal(id) {
   const eq=equipments.find(item=>item.id===id); if(!eq)return; const latest=history.find(item=>item.equipmentId===id&&item.inspection); const usage=eq.usage;
-  modal(`${modalHead('Informações do equipamento','Acesso público pelo QR Code')}<div class="modal-body"><section class="public-equipment-head"><span>${equipmentIcon(eq)}</span><div><small>${esc(eq.code)}</small><h2>${esc(eq.name)}</h2><p>${esc(eq.model)} · Série ${esc(eq.serial)}</p></div>${statusBadge(eq.status)}</section><div class="public-specs"><span><small>Horímetro</small><strong>${esc(eq.hourmeter??'—')} h</strong></span><span><small>Bateria</small><strong>${esc(eq.battery||'—')}</strong></span><span><small>Fornecedor</small><strong>${esc(eq.brand||'—')}</strong></span></div>${usage?`<section class="public-use-card"><h3>Utilização atual</h3><div class="public-use-grid"><span><small>Responsável</small><strong>${esc(usage.responsible)}</strong><em>${esc(usage.company)}</em></span><span><small>Atividade</small><strong>${esc(usage.activity||'—')}</strong></span><span><small>DH e local</small><strong>${esc(usage.dataHall)} · ${esc(usage.location)}</strong></span><span><small>Previsão de devolução</small><strong>${fullDate(usage.expectedAt)}</strong></span></div></section>`:`<div class="public-availability">${icon(eq.status==='maintenance'?'tool':'check')}<div><strong>${eq.status==='maintenance'?'Equipamento bloqueado':'Equipamento disponível'}</strong><small>${eq.status==='maintenance'?'Aguardando manutenção e nova liberação.':'Local atual: Pátio / Base'}</small></div></div>`}${latest?`<button class="public-checklist-link" onclick="openInspectionRecord(${latest.id})">${icon('file')}<span><strong>Último formulário de verificação</strong><small>${fullDate(latest.inspection.inspectedAt)} · ${latest.inspection.mode==='devolucao'?'Devolução':'Retirada'}</small></span>${icon('chevron')}</button>`:''}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button>${eq.status==='available'?`<button class="button button-green" onclick="openCheckoutModal('${id}')">${icon('check')} Retirar com checklist</button>`:''}${eq.status==='in-use'?`<button class="button button-green" onclick="openReturnModal('${id}')">${icon('return')} Registrar devolução</button>`:''}</div>`,'modal-large');
+  const contractor = eq.contractor || eq.brand || 'Tecnogera';
+  const afVal = eq.afNumber || '—';
+  modal(`${modalHead('Informações do equipamento','Acesso público pelo QR Code')}<div class="modal-body"><section class="public-equipment-head"><span>${equipmentIcon(eq)}</span><div><small>${esc(eq.code)} · <strong style="color:#206b49;">Nº AF: ${esc(afVal)}</strong></small><h2>${esc(eq.name)}</h2><p>${esc(eq.model)} · Série ${esc(eq.serial)} · Empreiteiro: <strong>${esc(contractor)}</strong></p></div>${statusBadge(eq.status)}</section><div class="public-specs"><span><small>Nº AF (Afonso França)</small><strong style="color:#206b49;">${esc(afVal)}</strong></span><span><small>Empreiteiro</small><strong>${esc(contractor)}</strong></span><span><small>Horímetro</small><strong>${esc(eq.hourmeter??'—')} h</strong></span><span><small>Bateria</small><strong>${esc(eq.battery||'—')}</strong></span></div>${usage?`<section class="public-use-card"><h3>Utilização atual</h3><div class="public-use-grid"><span><small>Responsável</small><strong>${esc(usage.responsible)}</strong><em>${esc(usage.company)}</em></span><span><small>Atividade</small><strong>${esc(usage.activity||'—')}</strong></span><span><small>DH e local</small><strong>${esc(usage.dataHall)} · ${esc(usage.location)}</strong></span><span><small>Previsão de devolução</small><strong>${fullDate(usage.expectedAt)}</strong></span></div></section>`:`<div class="public-availability">${icon(eq.status==='maintenance'?'tool':'check')}<div><strong>${eq.status==='maintenance'?'Equipamento bloqueado':'Equipamento disponível'}</strong><small>${eq.status==='maintenance'?'Aguardando manutenção e nova liberação.':'Local atual: Pátio / Base'}</small></div></div>`}${latest?`<button class="public-checklist-link" onclick="openInspectionRecord(${latest.id})">${icon('file')}<span><strong>Último formulário de verificação</strong><small>${fullDate(latest.inspection.inspectedAt)} · ${latest.inspection.mode==='devolucao'?'Devolução':'Retirada'}</small></span>${icon('chevron')}</button>`:''}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button>${eq.status==='available'?`<button class="button button-green" onclick="openCheckoutModal('${id}')">${icon('check')} Retirar com checklist</button>`:''}${eq.status==='in-use'?`<button class="button button-outline" onclick="openDailyInspectionModal('${id}')">${icon('plus')} Inspeção Diária (Novo Dia)</button><button class="button button-green" onclick="openReturnModal('${id}')">${icon('return')} Registrar devolução</button>`:''}</div>`,'modal-large');
 }
 
 function exportCSV() {
@@ -621,4 +1425,5 @@ document.getElementById('globalSearch').addEventListener('keydown',e=>{if(e.key=
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();document.getElementById('globalSearch').focus();}});
 window.addEventListener('hashchange',render);
 hydrateIcons(); initializeApp();
+
 
