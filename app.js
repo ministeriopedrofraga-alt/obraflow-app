@@ -1,3 +1,5 @@
+window.addEventListener('error', function(e) { document.getElementById('app').innerHTML = '<div style="padding: 20px; color: red;"><h2>Global Error</h2><p>' + e.message + '</p><pre>' + e.filename + ':' + e.lineno + '</pre></div>'; });
+window.addEventListener('unhandledrejection', function(e) { document.getElementById('app').innerHTML = '<div style="padding: 20px; color: red;"><h2>Unhandled Promise</h2><p>' + e.reason + '</p></div>'; });
 const icons = {
   grid: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
   lift: '<svg viewBox="0 0 24 24"><path d="M4 20h16M7 17h10M9 17v-4l3-2 3 2v4M12 11V7M9 7h6M6 4h12"/></svg>',
@@ -619,3 +621,4 @@ document.getElementById('globalSearch').addEventListener('keydown',e=>{if(e.key=
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();document.getElementById('globalSearch').focus();}});
 window.addEventListener('hashchange',render);
 hydrateIcons(); initializeApp();
+
