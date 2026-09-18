@@ -1,5 +1,5 @@
-window.addEventListener('error', function(e) { document.getElementById('app').innerHTML = '<div style="padding: 20px; color: red;"><h2>Global Error</h2><p>' + e.message + '</p><pre>' + e.filename + ':' + e.lineno + '</pre></div>'; });
-window.addEventListener('unhandledrejection', function(e) { document.getElementById('app').innerHTML = '<div style="padding: 20px; color: red;"><h2>Unhandled Promise</h2><p>' + e.reason + '</p></div>'; });
+window.addEventListener('error', function(e) { console.error('Global error caught:', e.message, e.filename, e.lineno, e.error); });
+window.addEventListener('unhandledrejection', function(e) { console.warn('Unhandled promise rejection caught:', e.reason); });
 const icons = {
   grid: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
   lift: '<svg viewBox="0 0 24 24"><path d="M4 20h16M7 17h10M9 17v-4l3-2 3 2v4M12 11V7M9 7h6M6 4h12"/></svg>',
@@ -181,12 +181,51 @@ const inspectionLegend = [
 const supabaseUrl = 'https://qjopbdkobxotynyrqsgk.supabase.co';
 const supabaseKey = 'sb_publishable_jN3kq2T7E7Dl26Kux3mXbg_3Dx4P7Zq';
 let supabase = null;
-try {
-  if (typeof window !== 'undefined' && window.supabase && typeof window.supabase.createClient === 'function') {
-    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+const externalScriptLoads = new Map();
+
+function loadExternalScript(src, id) {
+  if (externalScriptLoads.has(id)) return externalScriptLoads.get(id);
+  const promise = new Promise((resolve, reject) => {
+    const existing = document.getElementById(id);
+    if (existing?.dataset.loaded === 'true') return resolve();
+    const script = existing || document.createElement('script');
+    script.id = id;
+    script.src = src;
+    script.async = true;
+    script.onload = () => {
+      script.dataset.loaded = 'true';
+      resolve();
+    };
+    script.onerror = () => reject(new Error(`Falha ao carregar ${id}`));
+    if (!existing) document.head.appendChild(script);
+  }).catch(error => {
+    externalScriptLoads.delete(id);
+    throw error;
+  });
+  externalScriptLoads.set(id, promise);
+  return promise;
+}
+
+async function ensureExcelLibrary() {
+  if (window.XLSX) return true;
+  try {
+    await loadExternalScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', 'xlsx-library');
+    return !!window.XLSX;
+  } catch (error) {
+    console.warn('Leitor de Excel indisponível:', error);
+    return false;
   }
-} catch (e) {
-  console.warn('Erro ao inicializar Supabase:', e);
+}
+
+async function ensureQrCodeLibrary() {
+  if (window.QRCode) return true;
+  try {
+    await loadExternalScript('https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js', 'qrcode-library');
+    return !!window.QRCode;
+  } catch (error) {
+    console.warn('Gerador de QR indisponível:', error);
+    return false;
+  }
 }
 
 let equipments = [];
@@ -293,21 +332,6 @@ function getSupabase() {
 function sanitizeEquipment(item) {
   const codeUpper = (item.code || item.id || '').toUpperCase();
   const seed = seedEquipments.find(s => s.code.toUpperCase() === codeUpper);
-  if (seed) {
-    return {
-      ...item,
-      code: seed.code,
-      name: seed.name,
-      model: seed.model,
-      serial: seed.serial,
-      productCode: seed.productCode,
-      invoice: seed.invoice,
-      emissionDate: seed.emissionDate,
-      battery: seed.battery,
-      afNumber: seed.afNumber,
-      contractor: seed.contractor
-    };
-  }
   let af = (item.afNumber !== undefined && item.afNumber !== null) ? String(item.afNumber).trim() : '';
   let contractor = (item.contractor !== undefined && item.contractor !== null) ? String(item.contractor).trim() : '';
   if (/^AF-\d+/i.test(af)) af = '';
@@ -316,10 +340,29 @@ function sanitizeEquipment(item) {
     af = contractor;
     contractor = tmp;
   }
-  return {
+  if (seed) {
+    const merged = {
+      ...seed,
+      ...item,
+      afNumber: af || seed.afNumber || '',
+      contractor: contractor || seed.contractor || ''
+    };
+    return { ...merged, usage: normalizeEquipmentUsage(merged.usage) };
+  }
+  const sanitized = {
     ...item,
     afNumber: af,
     contractor: contractor
+  };
+  return { ...sanitized, usage: normalizeEquipmentUsage(sanitized.usage) };
+}
+
+function normalizeEquipmentUsage(usage) {
+  if (!usage) return null;
+  return {
+    ...usage,
+    // Registros antigos usavam "person". Todas as telas atuais usam "responsible".
+    responsible: usage.responsible || usage.person || ''
   };
 }
 
@@ -330,10 +373,10 @@ function loadLocalStorageBackup() {
       const parsed = JSON.parse(localEq);
       if (Array.isArray(parsed) && parsed.length > 0) {
         const mergedMap = new Map();
-        seedEquipments.forEach(s => mergedMap.set(s.code.toUpperCase(), { ...s }));
+        seedEquipments.forEach(s => mergedMap.set(s.code.toUpperCase(), sanitizeEquipment(s)));
         parsed.forEach(item => {
           const sanitized = sanitizeEquipment(item);
-          const codeUpper = (sanitized.code || '').toUpperCase();
+          const codeUpper = (sanitized.code || item.id || '').toUpperCase();
           const seed = mergedMap.get(codeUpper);
           if (seed) {
             mergedMap.set(codeUpper, {
@@ -350,7 +393,12 @@ function loadLocalStorageBackup() {
     const localHs = localStorage.getItem('obraflow_history');
     if (localHs) {
       const parsed = JSON.parse(localHs);
-      if (Array.isArray(parsed) && parsed.length > 0) history = parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const hsMap = new Map();
+        seedHistory.forEach(h => hsMap.set(String(h.id), h));
+        parsed.forEach(h => hsMap.set(String(h.id), h));
+        history = Array.from(hsMap.values()).sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
+      }
     }
     const localWf = localStorage.getItem('obraflow_workforce');
     if (localWf) {
@@ -362,111 +410,258 @@ function loadLocalStorageBackup() {
   }
 }
 
-async function save() {
-  try {
-    localStorage.setItem('obraflow_equipments', JSON.stringify(equipments));
-    localStorage.setItem('obraflow_history', JSON.stringify(history));
-    localStorage.setItem('obraflow_workforce', JSON.stringify(workforce));
-  } catch(e) {}
+function saveLocalBackup() {
+  let saved = true;
+  const entries = [
+    ['obraflow_equipments', equipments],
+    ['obraflow_history', history],
+    ['obraflow_workforce', workforce]
+  ];
+  entries.forEach(([key, value]) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      saved = false;
+      console.warn(`Erro ao salvar ${key} no localStorage:`, e);
+    }
+  });
+  return saved;
+}
 
-  const client = getSupabase();
-  if (!client) return;
+let hasPendingRemoteSave = false;
+let localDataRevision = 0;
+let pendingFieldEvents = [];
+try {
+  const storedPendingEvents = JSON.parse(localStorage.getItem('obraflow_pending_events') || '[]');
+  if (Array.isArray(storedPendingEvents)) pendingFieldEvents = storedPendingEvents;
+} catch (error) {
+  console.warn('Fila local de sincronização inválida:', error);
+}
+
+function persistPendingFieldEvents() {
+  hasPendingRemoteSave = pendingFieldEvents.length > 0;
   try {
-    for (const eq of equipments) await client.from('equipments').upsert(eq, { onConflict: 'id' });
-    for (const h of history) await client.from('history').upsert(h, { onConflict: 'id' });
-  } catch(e) { console.warn('Erro ao salvar no Supabase:', e); }
+    localStorage.setItem('obraflow_pending_events', JSON.stringify(pendingFieldEvents));
+  } catch (error) {
+    console.warn('Não foi possível salvar a fila de sincronização:', error);
+  }
+}
+
+function queueFieldEvent(equipmentId, historyId) {
+  if (!equipmentId) return;
+  const equipment = equipments.find(item => item.id === equipmentId);
+  const movement = history.find(item => String(item.id) === String(historyId))
+    || history.find(item => item.equipmentId === equipmentId);
+  if (!equipment || !movement) return;
+  const payload = {
+    key: `${equipmentId}|${movement.id}`,
+    equipment: JSON.parse(JSON.stringify(equipment)),
+    history: JSON.parse(JSON.stringify(movement))
+  };
+  const existingIndex = pendingFieldEvents.findIndex(item => item.key === payload.key);
+  if (existingIndex >= 0) pendingFieldEvents[existingIndex] = payload;
+  else pendingFieldEvents.push(payload);
+  persistPendingFieldEvents();
+}
+
+async function flushPendingFieldEvents(client) {
+  while (pendingFieldEvents.length > 0) {
+    const event = pendingFieldEvents[0];
+    const equipment = event.equipment;
+    const { data: updatedEquipment, error: equipmentError } = await client
+      .from('equipments')
+      .update({
+        status: equipment.status,
+        usage: equipment.usage,
+        hourmeter: equipment.hourmeter == null ? null : String(equipment.hourmeter),
+        updatedAt: equipment.updatedAt || new Date().toISOString()
+      })
+      .eq('id', equipment.id)
+      .select('id')
+      .single();
+    if (equipmentError) throw equipmentError;
+    if (!updatedEquipment?.id) throw new Error('Equipamento não encontrado na base compartilhada.');
+
+    const { error: historyError } = await client
+      .from('history')
+      .upsert(event.history, { onConflict: 'id' });
+    if (historyError) throw historyError;
+    pendingFieldEvents.shift();
+    persistPendingFieldEvents();
+  }
+}
+
+async function save(equipmentId = '', historyId = '') {
+  const savedLocally = saveLocalBackup();
+  localDataRevision += 1;
+  queueFieldEvent(equipmentId, historyId);
+
+  // O backup local é imediato; a cópia compartilhada aguarda a biblioteca assíncrona carregar.
+  const client = getSupabase() || await waitForSupabaseClient();
+  if (!client) {
+    hasPendingRemoteSave = true;
+    return { local: savedLocally, remote: false };
+  }
+  try {
+    await flushPendingFieldEvents(client);
+  } catch(e) {
+    hasPendingRemoteSave = true;
+    console.warn('Erro ao salvar no Supabase:', e);
+    return { local: savedLocally, remote: false, error: e };
+  }
+  hasPendingRemoteSave = false;
+  return { local: savedLocally, remote: true };
+}
+
+async function waitForSupabaseClient(timeoutMs = 5000) {
+  const readyClient = getSupabase();
+  if (readyClient) return readyClient;
+  try {
+    await Promise.race([
+      loadExternalScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js', 'supabase-library'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Tempo limite do Supabase')), timeoutMs))
+    ]);
+  } catch (error) {
+    console.warn('Biblioteca do Supabase indisponível:', error);
+    return null;
+  }
+  return getSupabase();
 }
 
 async function loadSeedWorkforce() {
   try {
     const res = await fetch('assets/workforce-seed.json');
+    if (!res.ok) return;
     const data = await res.json();
-    workforce = data.people || [];
-    if (data.source) workforceMeta = { source: data.source, updatedAt: data.updatedAt || '' };
-    const client = getSupabase();
-    if (client) {
-      for (const p of workforce) {
-        if (!p.id) p.id = crypto.randomUUID();
-        await client.from('workforce').upsert(p, { onConflict: 'id' });
-      }
+    if (!workforce || workforce.length === 0) {
+      workforce = data.people || [];
+    }
+    if (data.source && !workforceMeta.source) {
+      workforceMeta = { source: data.source, updatedAt: data.updatedAt || '' };
     }
   } catch(e) {
     console.warn('Seed workforce falhou:', e);
-    workforce = [];
   }
 }
 
+function recordTimestamp(record) {
+  if (!record) return 0;
+  return Date.parse(record.updatedAt || record.date || record.inspection?.inspectedAt || '') || 0;
+}
+
+function latestEquipmentTimestamp(equipment, records) {
+  const equipmentId = String(equipment?.id || '');
+  return records.reduce((latest, record) => {
+    if (String(record?.equipmentId || '') !== equipmentId) return latest;
+    return Math.max(latest, recordTimestamp(record));
+  }, Date.parse(equipment?.updatedAt || '') || 0);
+}
+
+function chooseHistoryRecord(localRecord, remoteRecord) {
+  if (!localRecord) return remoteRecord;
+  if (!remoteRecord) return localRecord;
+  const localInspections = localRecord.inspections?.length || (localRecord.inspection ? 1 : 0);
+  const remoteInspections = remoteRecord.inspections?.length || (remoteRecord.inspection ? 1 : 0);
+  if (localInspections !== remoteInspections) return localInspections > remoteInspections ? localRecord : remoteRecord;
+  return recordTimestamp(localRecord) > recordTimestamp(remoteRecord) ? localRecord : remoteRecord;
+}
+
+let activeDataSync = null;
+function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
+  if (activeDataSync) return activeDataSync;
+  activeDataSync = (async () => {
+    const client = await waitForSupabaseClient();
+    if (!client) return { remote: false };
+
+    const revisionAtStart = localDataRevision;
+    const localEquipments = equipments.map(item => ({ ...item, usage: item.usage ? { ...item.usage } : null }));
+    const localHistory = [...history];
+    const [equipmentResult, historyResult] = await Promise.all([
+      client.from('equipments').select('id,code,status,usage,hourmeter,updatedAt'),
+      client.from('history').select('*')
+    ]);
+    const firstError = equipmentResult.error || historyResult.error;
+    if (firstError) throw firstError;
+
+    const remoteHistory = historyResult.data || [];
+    // Se o operador salvou algo enquanto a consulta estava em andamento, a versão
+    // ao vivo deste aparelho tem prioridade sobre a fotografia antiga da sincronização.
+    const currentLocalEquipments = localDataRevision === revisionAtStart
+      ? localEquipments
+      : equipments.map(item => ({ ...item, usage: item.usage ? { ...item.usage } : null }));
+    const currentLocalHistory = localDataRevision === revisionAtStart ? localHistory : [...history];
+    const historyIds = new Set([
+      ...seedHistory.map(item => String(item.id)),
+      ...currentLocalHistory.map(item => String(item.id)),
+      ...remoteHistory.map(item => String(item.id))
+    ]);
+    history = Array.from(historyIds).map(id => {
+      const seedRecord = seedHistory.find(item => String(item.id) === id);
+      const localRecord = currentLocalHistory.find(item => String(item.id) === id) || seedRecord;
+      const remoteRecord = remoteHistory.find(item => String(item.id) === id);
+      return chooseHistoryRecord(localRecord, remoteRecord);
+    }).filter(Boolean).sort((a,b) => recordTimestamp(b) - recordTimestamp(a));
+
+    const remoteEquipmentMap = new Map((equipmentResult.data || []).map(item => {
+      const sanitized = sanitizeEquipment(item);
+      return [String(sanitized.code || sanitized.id || '').toUpperCase(), sanitized];
+    }));
+    const localEquipmentMap = new Map(currentLocalEquipments.map(item => [String(item.code || item.id || '').toUpperCase(), item]));
+    const equipmentKeys = new Set([...localEquipmentMap.keys(), ...remoteEquipmentMap.keys()]);
+    equipments = Array.from(equipmentKeys).map(key => {
+      const localEquipment = localEquipmentMap.get(key);
+      const remoteEquipment = remoteEquipmentMap.get(key);
+      if (!localEquipment) return remoteEquipment;
+      if (!remoteEquipment) return localEquipment;
+      const localTimestamp = latestEquipmentTimestamp(localEquipment, currentLocalHistory);
+      const remoteTimestamp = latestEquipmentTimestamp(remoteEquipment, remoteHistory);
+      const chosen = localTimestamp > remoteTimestamp
+        ? { ...remoteEquipment, ...localEquipment }
+        : { ...localEquipment, ...remoteEquipment };
+      return sanitizeEquipment(chosen);
+    }).filter(Boolean);
+
+    saveLocalBackup();
+    const saveResult = pushAfter ? await save() : { local: true, remote: true };
+    // Nunca substitui um formulário que a pessoa já está preenchendo no celular.
+    if (renderAfter && !document.querySelector('#modalRoot form')) render();
+    return saveResult;
+  })().catch(error => {
+    console.warn('Sincronização com Supabase falhou; mantendo os dados locais:', error);
+    return { local: true, remote: false, error };
+  }).finally(() => {
+    activeDataSync = null;
+  });
+  return activeDataSync;
+}
+
 async function initializeApp() {
-  equipments = seedEquipments;
+  equipments = seedEquipments.map(sanitizeEquipment);
   history = seedHistory;
-  await loadSeedWorkforce();
+
+  // A cópia deste aparelho aparece imediatamente, sem aguardar nenhuma rede.
   loadLocalStorageBackup();
-  
   hydrateIcons();
   render();
 
-  setTimeout(async () => {
-    try {
-      const client = getSupabase();
-      if (client) {
-        const { data: eqData } = await client.from('equipments').select('*');
-        if (eqData && eqData.length > 0) {
-          const mergedMap = new Map();
-          equipments.forEach(e => mergedMap.set((e.code || e.id).toUpperCase(), { ...e }));
-          eqData.forEach(item => {
-            const sanitized = sanitizeEquipment(item);
-            const codeUpper = (sanitized.code || sanitized.id || '').toUpperCase();
-            const existing = mergedMap.get(codeUpper);
-            if (existing) {
-              mergedMap.set(codeUpper, {
-                ...existing,
-                ...sanitized
-              });
-            } else {
-              mergedMap.set(codeUpper, sanitized);
-            }
-          });
-          equipments = Array.from(mergedMap.values());
-        }
-
-        const { data: hsData } = await client.from('history').select('*');
-        if (hsData && hsData.length > 0) {
-          const mergedHsMap = new Map();
-          seedHistory.forEach(h => mergedHsMap.set(String(h.id), h));
-          hsData.forEach(h => mergedHsMap.set(String(h.id), h));
-          history = Array.from(mergedHsMap.values());
-        } else {
-          history = seedHistory;
-          for (const h of history) {
-            await client.from('history').upsert(h, { onConflict: 'id' });
-          }
-        }
-
-        const { data: wfData } = await client.from('workforce').select('*');
-        if (wfData && wfData.length > 0) workforce = wfData;
-
-        const { data: appMeta } = await client.from('app_metadata').select('*');
-        if (appMeta) {
-          const eqMeta = appMeta.find(m => m.key === 'equipment_import_meta');
-          if (eqMeta) equipmentImportMeta = eqMeta.value;
-          const wfMeta = appMeta.find(m => m.key === 'workforce_meta');
-          if (wfMeta) workforceMeta = wfMeta.value;
-        }
-        save();
-        render();
-      }
-    } catch(e) {
-      console.warn('Conexão Supabase em segundo plano não respondeu, mantendo dados locais:', e);
-    }
-  }, 50);
+  // Complementos e sincronização rodam em segundo plano e nunca zeram a tela.
+  loadSeedWorkforce().then(() => {
+    loadLocalStorageBackup();
+    if (!document.querySelector('#modalRoot form')) render();
+  });
+  setTimeout(() => syncFromSupabase(), 0);
 }
 function companyOptions(selected='') {
-  const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
+  const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))];
+  if (selected && !companies.includes(selected)) companies.push(selected);
+  companies.sort(safeSort);
   return `<option value="">Selecione a empresa...</option>${companies.map(company=>`<option value="${esc(company)}" ${company===selected?'selected':''}>${esc(company)}</option>`).join('')}`;
 }
 function responsibleOptions(company='',selected='') {
   const people=workforce.filter(person=>person && (!company||person.company===company)).sort((a,b)=>safeSort(a.name, b.name));
-  return `<option value="">Selecione o responsável...</option>${people.map(person=>`<option value="${esc(person.name)}" ${person.name===selected?'selected':''}>${esc(person.name)}${person.role?` — ${esc(person.role)}`:''}</option>`).join('')}`;
+  const selectedIsListed = people.some(person => person.name === selected);
+  const legacyOption = selected && !selectedIsListed ? `<option value="${esc(selected)}" selected>${esc(selected)} — responsável atual</option>` : '';
+  return `<option value="">Selecione o responsável...</option>${legacyOption}${people.map(person=>`<option value="${esc(person.name)}" ${person.name===selected?'selected':''}>${esc(person.name)}${person.role?` — ${esc(person.role)}`:''}</option>`).join('')}`;
 }
 function updateResponsibleOptions(companySelect) {
   const responsible=companySelect.closest('form').querySelector('select[name="responsible"]');
@@ -507,8 +702,8 @@ function inspectionFormHTML(eq, mode, preset = {}) {
     </header>
     <div class="inspection-identification">
       <label><span>Equipamento</span><input value="${esc(eq.code)} — ${esc(eq.name)}" readonly></label>
-      <label><span>Empresa</span>${isReturn?`<input name="company" required value="${esc(preset.company||'')}" readonly>`:`<select name="company" required onchange="updateResponsibleOptions(this)">${companyOptions(preset.company||'')}</select>`}</label>
-      <label><span>Nome do responsável</span>${isReturn?`<input name="responsible" required value="${esc(preset.responsible||'')}" readonly>`:`<select name="responsible" required onchange="fillPersonPhone(this)">${responsibleOptions(preset.company||'',preset.responsible||'')}</select>`}</label>
+      <label><span>${isReturn ? 'Empresa de quem está devolvendo' : 'Empresa'}</span><select name="company" required onchange="updateResponsibleOptions(this)">${companyOptions(preset.company||'')}</select></label>
+      <label><span>${isReturn ? 'Nome de quem está devolvendo' : 'Nome do responsável'}</span><select name="responsible" required onchange="fillPersonPhone(this)">${responsibleOptions(preset.company||'',preset.responsible||'')}</select></label>
       <label class="year-field"><span>Ano base</span><input value="${new Date().getFullYear()}" readonly></label>
     </div>
     <div class="inspection-strip"><strong>Inspeção obrigatória</strong><span>Selecione uma opção em cada item conforme a legenda do formulário original.</span></div>
@@ -521,7 +716,7 @@ function inspectionFormHTML(eq, mode, preset = {}) {
       <label class="operator-sign-field">
         <span>Visto / Rubrica do operador <em>*</em></span>
         <div class="sign-field-row">
-          <input type="hidden" name="operatorSign" id="operatorSignInput" required value="${esc(preset.operatorSign || '')}">
+          <input type="hidden" name="operatorSign" id="operatorSignInput" value="${esc(preset.operatorSign || '')}">
           <div id="signPreviewContainer" class="sign-preview-box" onclick="openSignatureModal()">
             ${preset.operatorSign ? `<img src="${esc(preset.operatorSign)}" class="sign-preview-img"><span class="sign-status-text">Rubrica confirmada (clique para alterar)</span>` : `<span class="sign-placeholder-text">✍️ Clique aqui para desenhar a rubrica com o dedo</span>`}
           </div>
@@ -670,6 +865,8 @@ function inspectionFromData(data, mode) {
     mode,
     inspectedAt: data.inspectionAt,
     hourmeter: data.hourmeter,
+    operatorName: data.responsible || '',
+    company: data.company || '',
     operatorSign: data.operatorSign,
     observations: data.inspectionNotes || '',
     physicalFiled: data.physicalCopy === 'on',
@@ -867,8 +1064,8 @@ function openEquipmentImportModal() {
   modal(`${modalHead('Atualizar PTAs por Excel','Utilize a planilha padrão OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · todas as abas serão verificadas</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source||'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt?`· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}`:''}</small></div></div><div class="import-columns"><span>NF</span><span>Data emissão</span><span>Código produto</span><span>Descrição</span><span>Patrimônio</span><span>Chassi</span><span>Horímetro</span><span>Unidade</span><span>Bateria</span><span>codigo AFF</span><span>Empreiteiro</span></div><div class="notice">${icon('alert')} A importação atualiza equipamentos pelo número de patrimônio e adiciona os novos. Status, responsável atual, localização e checklists são preservados. Equipamentos ausentes na planilha não são excluídos.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar planilha de PTAs atualizada</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-large');
 }
 
-function exportEquipmentsExcel() {
-  if(!window.XLSX) return toast('O gerador de Excel ainda está carregando. Tente novamente em alguns segundos.',true);
+async function exportEquipmentsExcel() {
+  if(!await ensureExcelLibrary()) return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.',true);
   
   const selectedEquipments = getReportFilteredEquipments();
   if(!selectedEquipments.length) return toast('Nenhum equipamento encontrado.',true);
@@ -961,7 +1158,7 @@ function equipmentTypeFromDescription(description) {
 }
 async function handleEquipmentUpload(event) {
   const file=event.target.files?.[0]; if(!file)return;
-  if(!window.XLSX){event.target.value='';return toast('O leitor de Excel ainda está carregando. Tente novamente em alguns segundos.',true);}
+  if(!await ensureExcelLibrary()){event.target.value='';return toast('Não foi possível carregar o leitor de Excel. Verifique a internet e tente novamente.',true);}
   try {
     const bytes=await file.arrayBuffer(); const workbook=XLSX.read(bytes,{type:'array',cellDates:true}); const imported=[]; const seen=new Set();
     workbook.SheetNames.forEach(sheetName=>{
@@ -1190,8 +1387,8 @@ function getFilteredInspections() {
   if(!rows.length)return getReportFilteredHistory(true);
   const visibleIds=rows.filter(row=>row.style.display!=='none').map(row=>Number(row.dataset.id)); return history.filter(item=>visibleIds.includes(item.id)&&item.inspection);
 }
-function exportChecklistExcel() {
-  if(!window.XLSX) return toast('O gerador de Excel ainda está carregando. Tente novamente em alguns segundos.',true);
+async function exportChecklistExcel() {
+  if(!await ensureExcelLibrary()) return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.',true);
   const records=getFilteredInspections(); if(!records.length)return toast('Nenhum checklist selecionado pelos filtros.',true);
   const headers=['Data','Tipo','Patrimônio','Modelo','Responsável','Empresa','Atividade','Data Hall','Local','Horímetro','Resultado','Via física arquivada',...checklistItems.map(item=>item.title),'Observações'];
   const rows=records.map(item=>{const eq=equipments.find(e=>e.id===item.equipmentId);return [fullDate(item.date),item.inspection.mode==='devolucao'?'Devolução':'Retirada',eq?.code||'',eq?.model||'',item.person,item.company,item.activity||'',item.dataHall||item.place||'',item.location||'',item.inspection.hourmeter,inspectionHasFailure(item.inspection)?'Reprovado':'Aprovado',item.inspection.physicalFiled?'Sim':'Não',...item.inspection.answers,item.inspection.observations||''];});
@@ -1218,11 +1415,11 @@ function openPersonModal(index=null) {
 function savePerson(event,index) {
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target)); Object.keys(data).forEach(key=>data[key]=String(data[key]).replace(/\s+/g,' ').trim());
   const duplicate=workforce.some((person,i)=>i!==index&&(person?.company||'').toLowerCase()===data.company.toLowerCase()&&(person?.name||'').toLowerCase()===data.name.toLowerCase()); if(duplicate)return toast('Esta pessoa já está cadastrada nesta empresa.',true);
-  if(index===null) { if(!data.id) data.id=crypto.randomUUID(); workforce.push(data); if(supabase) supabase.from('workforce').upsert(data); } else { workforce[index]={...workforce[index],...data}; if(supabase) supabase.from('workforce').upsert(workforce[index]); } workforce.sort((a,b)=>safeSort(a?.company,b?.company)||safeSort(a?.name,b?.name)); workforceMeta={source:'Cadastro manual',updatedAt:new Date().toISOString()}; if(supabase) supabase.from('app_metadata').upsert({key:'workforce_meta',value:workforceMeta}); closeModal(); renderCompanies(); toast(personMessage(index));
+  if(index===null) { if(!data.id) data.id=crypto.randomUUID(); workforce.push(data); if(supabase) supabase.from('workforce').upsert(data); } else { workforce[index]={...workforce[index],...data}; if(supabase) supabase.from('workforce').upsert(workforce[index]); } workforce.sort((a,b)=>safeSort(a?.company,b?.company)||safeSort(a?.name,b?.name)); workforceMeta={source:'Cadastro manual',updatedAt:new Date().toISOString()}; if(supabase) supabase.from('app_metadata').upsert({key:'workforce_meta',value:workforceMeta}); saveLocalBackup(); closeModal(); renderCompanies(); toast(personMessage(index));
 }
 function personMessage(index) { return index===null?'Pessoa adicionada ao efetivo.':'Cadastro atualizado.'; }
 function deletePerson(index) {
-  const person=workforce[index]; if(!person||!confirm(`Excluir ${person.name} da lista de efetivo?`))return; workforce.splice(index,1); if(supabase) supabase.from('workforce').delete().eq('id', person.id); renderCompanies(); toast('Pessoa removida da lista.');
+  const person=workforce[index]; if(!person||!confirm(`Excluir ${person.name} da lista de efetivo?`))return; workforce.splice(index,1); if(supabase) supabase.from('workforce').delete().eq('id', person.id); saveLocalBackup(); renderCompanies(); toast('Pessoa removida da lista.');
 }
 function openWorkforceModal() {
   const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
@@ -1230,7 +1427,7 @@ function openWorkforceModal() {
 }
 async function handleWorkforceUpload(event) {
   const file=event.target.files?.[0]; if(!file) return;
-  if(!window.XLSX) { event.target.value=''; return toast('Leitor de Excel ainda carregando. Tente novamente em alguns segundos.',true); }
+  if(!await ensureExcelLibrary()) { event.target.value=''; return toast('Não foi possível carregar o leitor de Excel. Verifique a internet e tente novamente.',true); }
   try {
     const bytes=await file.arrayBuffer(); const workbook=XLSX.read(bytes,{type:'array'}); const sheetName=workbook.SheetNames[workbook.SheetNames.length-1]; const rows=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName],{header:1,defval:''});
     const imported=[]; const seen=new Set();
@@ -1242,11 +1439,12 @@ async function handleWorkforceUpload(event) {
       client.from('app_metadata').upsert({key:'workforce_meta',value:workforceMeta});
       for(const p of workforce){ if(!p.id) p.id=crypto.randomUUID(); client.from('workforce').upsert(p); }
     }
+    saveLocalBackup();
     openWorkforceModal(); toast(`${workforce.length} pessoas importadas da aba ${sheetName}.`);
   } catch(error) { toast(error.message||'Não foi possível ler esta planilha.',true); }
 }
-function exportWorkforceExcel() {
-  if(!window.XLSX)return toast('O gerador de Excel ainda está carregando. Tente novamente em alguns segundos.',true);
+async function exportWorkforceExcel() {
+  if(!await ensureExcelLibrary())return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.',true);
   const selectedWorkforce=getReportFilteredWorkforce(); if(!selectedWorkforce.length)return toast('Nenhuma pessoa encontrada com os filtros selecionados.',true); const rows=[['ITEM','EMPRESA','NOME','FUNÇÃO AUXILIAR','VÍNCULO / STATUS','FUNÇÃO','TELEFONE'],...selectedWorkforce.map((person,index)=>[index+1,person.company||'',person.name||'','',person.status||'',person.role||'',person.phone||''])];
   const sheet=XLSX.utils.aoa_to_sheet(rows); sheet['!cols']=[{wch:8},{wch:32},{wch:36},{wch:18},{wch:20},{wch:28},{wch:18}];
   const book=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book,sheet,'Efetivo atualizado');
@@ -1354,7 +1552,29 @@ function modal(content, size = '') {
   document.getElementById('modalRoot').innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this)closeModal()"><div class="modal ${size}">${content}</div></div>`;
   document.body.style.overflow = 'hidden';
 }
-function closeModal() { document.getElementById('modalRoot').innerHTML = ''; document.body.style.overflow = ''; if(location.hash.startsWith('#scan/')) window.history.replaceState(null,'','#dashboard'); }
+let activeQrScanner = null;
+let qrScanHandled = false;
+async function waitForQrScannerLibrary(timeoutMs = 5000) {
+  if (window.Html5Qrcode) return true;
+  try {
+    await Promise.race([
+      loadExternalScript('assets/vendor/html5-qrcode.min.js', 'html5-qrcode-library'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Tempo limite do leitor QR')), timeoutMs))
+    ]);
+    return !!window.Html5Qrcode;
+  } catch (error) {
+    console.warn('Leitor QR indisponível:', error);
+    return false;
+  }
+}
+async function stopScanner() {
+  const scanner = activeQrScanner;
+  activeQrScanner = null;
+  if (!scanner) return;
+  try { await scanner.stop(); } catch(e) {}
+  try { scanner.clear(); } catch(e) {}
+}
+function closeModal() { stopScanner(); document.getElementById('modalRoot').innerHTML = ''; document.body.style.overflow = ''; if(location.hash.startsWith('#scan/')) window.history.replaceState(null,'','#dashboard'); }
 function modalHead(title, subtitle='') { return `<div class="modal-head"><div><h2>${title}</h2>${subtitle?`<p>${subtitle}</p>`:''}</div><button class="icon-button" onclick="closeModal()">${icon('close')}</button></div>`; }
 
 function openEquipmentModal(id = null) {
@@ -1369,6 +1589,8 @@ function saveEquipment(event, id) {
   } else {
     const newId = `${data.type.includes('Paleteira')?'pal':'pta'}-${Date.now()}`; equipments.unshift({ id:newId, ...data, usage:null });
   }
+  const changedEquipment = equipments.find(e => e.id === (id || equipments[0]?.id));
+  if (changedEquipment) changedEquipment.updatedAt = new Date().toISOString();
   save(); closeModal(); render(); toast(id?'Equipamento atualizado com sucesso.':'Equipamento cadastrado. QR Code pronto para impressão.');
 }
 
@@ -1398,6 +1620,12 @@ function submitDailyInspection(event, id) {
   const eq = equipments.find(e => e.id === id);
   if (!eq || !eq.usage) return;
 
+  if (!data.operatorSign) {
+    toast('Por favor, faça a sua rubrica no campo indicado antes de salvar.', true);
+    openSignatureModal();
+    return;
+  }
+
   const inspection = inspectionFromData(data, 'diaria');
   inspection.dataHall = data.dataHall;
   inspection.location = data.location;
@@ -1405,6 +1633,7 @@ function submitDailyInspection(event, id) {
 
   const hasFailure = inspectionHasFailure(inspection);
   eq.hourmeter = Number(data.hourmeter);
+  eq.updatedAt = new Date().toISOString();
 
   // Atualiza planejamento ao vivo
   if (data.phone) eq.usage.phone = data.phone;
@@ -1435,13 +1664,13 @@ function submitDailyInspection(event, id) {
   if (hasFailure) {
     eq.status = 'maintenance';
     eq.usage = null;
-    save();
+    save(id, activeMovement?.id);
     closeModal();
     render();
     return toast('Item reprovado na inspeção diária. Equipamento bloqueado para manutenção.', true);
   }
 
-  save();
+  save(id, activeMovement?.id);
   closeModal();
   render();
   const lineCount = activeMovement?.inspections?.length || 1;
@@ -1455,22 +1684,50 @@ function openCheckoutModal(id) {
 }
 function submitCheckout(event, id) {
   event.preventDefault(); const form = event.target; const data = Object.fromEntries(new FormData(form)); const eq = equipments.find(e=>e.id===id); const inspection = inspectionFromData(data,'retirada');
+  if (!data.operatorSign) {
+    toast('Por favor, faça a sua rubrica no campo indicado antes de salvar.', true);
+    openSignatureModal();
+    return;
+  }
   const hasFailure = inspectionHasFailure(inspection);
   eq.hourmeter=Number(data.hourmeter);
+  eq.updatedAt = new Date().toISOString();
   if (new Date(data.expectedAt) <= new Date(data.startedAt)) return toast('A devolução deve ser posterior ao início.', true);
   if (hasFailure) {
-    eq.status='maintenance'; eq.usage=null; history.unshift({id:Date.now(),equipmentId:id,action:'issue',person:data.responsible,company:data.company,place:data.dataHall,date:data.inspectionAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection,inspections:[inspection]}); save(); closeModal(); render(); return toast('Item reprovado. Formulário salvo e equipamento bloqueado.', true);
+    eq.status='maintenance'; eq.usage=null; const movement={id:Date.now(),equipmentId:id,action:'issue',person:data.responsible,company:data.company,place:data.dataHall,date:data.inspectionAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection,inspections:[inspection]}; history.unshift(movement); save(id, movement.id); closeModal(); render(); return toast('Item reprovado. Formulário salvo e equipamento bloqueado.', true);
   }
   eq.status='in-use'; eq.usage={ company:data.company, responsible:data.responsible, phone:data.phone, activity:data.activity, location:data.location, dataHall:data.dataHall, startedAt:data.startedAt, expectedAt:data.expectedAt };
-  history.unshift({id:Date.now(),equipmentId:id,action:'withdraw',person:data.responsible,company:data.company,place:data.dataHall,date:data.startedAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection,inspections:[inspection]}); save(); closeModal(); render(); toast(`${eq.code} liberado. Formulário de retirada salvo.`);
+  const movement={id:Date.now(),equipmentId:id,action:'withdraw',person:data.responsible,company:data.company,place:data.dataHall,date:data.startedAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection,inspections:[inspection]}; history.unshift(movement); save(id, movement.id); closeModal(); render(); toast(`${eq.code} liberado. Formulário de retirada salvo.`);
 }
 
 function openReturnModal(id) {
-  const eq=equipments.find(e=>e.id===id); if(!eq) return;
-  modal(`<form onsubmit="submitReturn(event,'${id}')">${modalHead('Inspeção de devolução / baixa','Preencha novamente o formulário FV-MAQ-ST')}<div class="modal-body">${inspectionFormHTML(eq,'devolucao',{company:eq.usage.company,responsible:eq.usage.responsible,inspectionAt:nowLocal()})}<div class="section-title"><span>${icon('return')}</span><div><h3>Dados da devolução</h3><small>Defina o local onde o equipamento será entregue</small></div></div><div class="form-grid"><div class="field"><label>Local de entrega <em>*</em></label><select name="place" required><option>Pátio de Equipamentos</option><option>Almoxarifado</option><option>Base da Manutenção</option></select></div><div class="field"><label>Data Hall de origem</label><input value="${esc(eq.usage.dataHall)}" readonly></div></div><label class="terms physical-term"><input type="checkbox" name="physicalCopy" required><span>Confirmo que a via física da devolução foi preenchida e será arquivada na pasta do colaborador.</span></label><label class="terms"><input type="checkbox" name="terms" required><span>Confirmo que realizei a inspeção de devolução. Se houver item reprovado, o equipamento será bloqueado automaticamente para manutenção.</span></label></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('return')} Concluir e devolver</button></div></form>`, 'modal-inspection');
+  const eq=equipments.find(e=>e.id===id); if(!eq || !eq.usage) return toast('Equipamento não está em uso.', true);
+  const responsible = eq.usage.responsible || eq.usage.person || '';
+  const currentHall=eq.usage.dataHall||'';
+  const startedAt=eq.usage.startedAt?.slice(0,16)||'';
+  const expectedAt=eq.usage.expectedAt?.slice(0,16)||'';
+  modal(`<form onsubmit="submitReturn(event,'${id}')">${modalHead('Inspeção de devolução / baixa','Identifique quem está devolvendo e confira todos os dados da utilização')}<div class="modal-body">${inspectionFormHTML(eq,'devolucao',{company:eq.usage.company,responsible,inspectionAt:nowLocal()})}<div class="section-title"><span>${icon('location')}</span><div><h3>Planejamento da utilização</h3><small>Confira e atualize os dados antes de concluir a devolução</small></div></div><div class="form-grid"><div class="field"><label>Telefone de quem está devolvendo</label><input name="phone" placeholder="(85) 99999-9999" value="${esc(eq.usage.phone||'')}"></div><div class="field"><label>Atividade executada <em>*</em></label><input name="activity" required placeholder="Ex.: Instalação de dutos no teto" value="${esc(eq.usage.activity||'')}"></div><div class="field"><label>Data Hall — DH <em>*</em></label><select name="dataHall" required><option value="">Selecione...</option>${Array.from({length:10},(_,i)=>`<option ${currentHall===`Data Hall ${String(i+1).padStart(2,'0')}`?'selected':''}>Data Hall ${String(i+1).padStart(2,'0')}</option>`).join('')}<option ${currentHall==='Área externa'?'selected':''}>Área externa</option><option ${currentHall==='Casa de máquinas'?'selected':''}>Casa de máquinas</option><option ${currentHall==='Almoxarifado'?'selected':''}>Almoxarifado</option></select></div><div class="field"><label>Local específico <em>*</em></label><input name="location" required placeholder="Ex.: Corredor B / Sala elétrica" value="${esc(eq.usage.location||'')}"></div><div class="field"><label>Início da utilização</label><input type="datetime-local" name="startedAt" value="${esc(startedAt)}" readonly></div><div class="field"><label>Devolução prevista</label><input type="datetime-local" name="expectedAt" value="${esc(expectedAt)}" readonly></div></div><div class="section-title"><span>${icon('return')}</span><div><h3>Dados da devolução</h3><small>Defina o local onde o equipamento será entregue</small></div></div><div class="form-grid"><div class="field"><label>Local de entrega <em>*</em></label><select name="place" required><option>Pátio de Equipamentos</option><option>Almoxarifado</option><option>Base da Manutenção</option></select></div><div class="field"><label>Devolução realizada em</label><input value="${esc(nowLocal())}" readonly></div></div><label class="terms physical-term"><input type="checkbox" name="physicalCopy" required><span>Confirmo que a via física da devolução foi preenchida e será arquivada na pasta do colaborador.</span></label><label class="terms"><input type="checkbox" name="terms" required><span>Confirmo que realizei a inspeção de devolução. Se houver item reprovado, o equipamento será bloqueado automaticamente para manutenção.</span></label></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('return')} Concluir e devolver</button></div></form>`, 'modal-inspection');
 }
-function submitReturn(event,id) {
-  event.preventDefault(); const data=Object.fromEntries(new FormData(event.target)); const eq=equipments.find(e=>e.id===id); const previous={...eq.usage}; const inspection=inspectionFromData(data,'devolucao'); const hasFailure=inspectionHasFailure(inspection); eq.hourmeter=Number(data.hourmeter); eq.status=hasFailure?'maintenance':'available'; eq.usage=null; history.unshift({id:Date.now(),equipmentId:id,action:hasFailure?'issue':'return',person:previous.responsible,company:previous.company,place:data.place,date:data.inspectionAt,notes:data.inspectionNotes,activity:previous.activity,location:previous.location,dataHall:previous.dataHall,inspection,inspections:[inspection]}); save(); closeModal(); render(); toast(hasFailure?'Devolução salva. Item reprovado: equipamento bloqueado.':`${eq.code} devolvido e disponível. Formulário salvo.`,hasFailure);
+async function submitReturn(event,id) {
+  event.preventDefault(); const data=Object.fromEntries(new FormData(event.target)); const eq=equipments.find(e=>e.id===id); if(!eq?.usage) return toast('Esta devolução já foi registrada.', true); const previous={...eq.usage}; const inspection=inspectionFromData(data,'devolucao');
+  if (!data.operatorSign) {
+    toast('Por favor, faça a sua rubrica no campo indicado antes de salvar.', true);
+    openSignatureModal();
+    return;
+  }
+  const hasFailure=inspectionHasFailure(inspection);
+  eq.hourmeter=Number(data.hourmeter);
+  eq.status=hasFailure?'maintenance':'available';
+  eq.usage=null;
+  eq.updatedAt=new Date().toISOString();
+  const movement={id:Date.now(),equipmentId:id,action:hasFailure?'issue':'return',person:data.responsible,company:data.company,place:data.place,date:data.inspectionAt,notes:data.inspectionNotes,activity:data.activity||previous.activity,location:data.location||previous.location,dataHall:data.dataHall||previous.dataHall,expectedAt:data.expectedAt||previous.expectedAt,inspection,inspections:[inspection]};
+  history.unshift(movement);
+  const syncPromise=save(id, movement.id);
+  closeModal();
+  render();
+  const result=await syncPromise;
+  if (!result.remote) return toast('Devolução salva neste aparelho, mas a sincronização está pendente. Mantenha a internet ativa e tente atualizar novamente.', true);
+  toast(hasFailure?'Devolução sincronizada. Item reprovado: equipamento bloqueado.':`${eq.code} devolvido por ${data.responsible} e sincronizado.`,hasFailure);
 }
 
 function openInspectionRecord(historyId) {
@@ -1480,21 +1737,26 @@ function openInspectionRecord(historyId) {
   document.querySelector('.modal-backdrop').classList.add('print-area','inspection-print-area');
 }
 
-function openQRModal(id) {
+async function openQRModal(id) {
   const eq=equipments.find(e=>e.id===id); if(!eq) return;
   const url=`${location.origin}${location.pathname}#scan/${eq.id}`;
   const contractor = eq.contractor || eq.brand || 'Tecnogera';
   const afVal = eq.afNumber || '—';
   modal(`${modalHead('QR Code do equipamento','Imprima e fixe esta etiqueta em local visível')}<div class="modal-body qr-layout"><img src="assets/heating-cooling-logo.jpg" class="qr-brand-logo" alt="Heating Cooling"><div class="qr-box" id="qrTarget"></div><h2>${esc(eq.name)}</h2><span class="qr-code-label">${esc(eq.code)}</span><p style="margin:5px 0 2px;font-weight:800;color:#206b49;font-size:13px;">Nº AF (Afonso França): ${esc(afVal)}</p><p style="margin:2px 0 2px;font-weight:700;color:#14201b;font-size:12px;">Empreiteiro: ${esc(contractor)}</p><p style="margin:2px 0;color:#67736d;font-size:11px;">${esc(eq.brand)} ${esc(eq.model)} · Série ${esc(eq.serial)}</p><p style="margin-top:6px;color:#67736d;font-size:10px;">Obra DataCenter Omnia · Escaneie para checklist / uso</p></div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir etiqueta</button></div>`, 'modal-small');
-  document.querySelector('.modal-backdrop').classList.add('print-area'); renderQRCode(document.getElementById('qrTarget'),url);
+  document.querySelector('.modal-backdrop').classList.add('print-area');
+  const target = document.getElementById('qrTarget');
+  if (target) target.innerHTML = '<div class="qr-fallback"><span>Gerando QR Code...</span></div>';
+  await ensureQrCodeLibrary();
+  renderQRCode(document.getElementById('qrTarget'),url);
 }
 function renderQRCode(target,url) {
   target.innerHTML='';
   if(window.QRCode) new QRCode(target,{text:url,width:190,height:190,colorDark:'#14201b',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
   else target.innerHTML=`<div class="qr-fallback"><span>Biblioteca de QR offline.<br>Conecte à internet e reabra.</span></div>`;
 }
-function printAllQRCodes() {
+async function printAllQRCodes() {
   if(!equipments.length) return toast('Nenhum equipamento cadastrado.',true);
+  if(!await ensureQrCodeLibrary()) return toast('Não foi possível carregar o gerador de QR Codes. Verifique a internet e tente novamente.',true);
   const pages=[]; for(let index=0;index<equipments.length;index+=4)pages.push(equipments.slice(index,index+4));
   const label=eq=>{
     const contractor = eq.contractor || eq.brand || 'Tecnogera';
@@ -1506,11 +1768,139 @@ function printAllQRCodes() {
   equipments.forEach(eq => renderQRCode(document.getElementById(`qr-${eq.id}`),`${location.origin}${location.pathname}#scan/${eq.id}`,135));
 }
 
-function openScanModal() {
-  modal(`${modalHead('Identificar equipamento','Use o código impresso abaixo do QR Code')}<div class="modal-body"><div class="section-title"><span>${icon('scan')}</span><div><h3>Leitura rápida</h3><small>Digite ou cole o código do ativo</small></div></div><form class="scan-input" onsubmit="findEquipment(event)"><input id="scanCode" required autofocus placeholder="Ex.: PTA-001"><button class="button button-green">Localizar</button></form><div class="notice">${icon('qr')} Em um celular, a câmera abre diretamente este sistema ao ler o QR Code impresso no equipamento.</div></div>`, 'modal-small'); setTimeout(()=>document.getElementById('scanCode')?.focus(),100);
+async function openScanModal() {
+  await stopScanner();
+  qrScanHandled = false;
+  modal(`${modalHead('Ler QR Code do Equipamento','Aponte a câmera para o QR Code impresso no equipamento')}<div class="modal-body"><div id="qrCameraContainer" style="width:100%;min-height:220px;background:#14201b;border-radius:12px;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;color:#fff;"><div id="reader" style="width:100%;"></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;"><button type="button" class="button button-outline" onclick="initQrCamera()">${icon('scan')} Ativar câmera</button><label class="button button-outline" style="cursor:pointer;justify-content:center;">${icon('qr')} Ler pela foto<input type="file" accept="image/*" capture="environment" hidden onchange="scanQrImage(event)"></label></div><div style="margin:14px 0 10px;text-align:center;color:#67736d;font-size:11px;font-weight:600;letter-spacing:0.5px;">OU DIGITE O CÓDIGO DO ATIVO</div><form class="scan-input" onsubmit="findEquipment(event)"><input id="scanCode" required autocomplete="off" placeholder="Ex.: TPTA00674, 686..."><button class="button button-green">Localizar</button></form><div class="notice">${icon('qr')} Autorize o uso da câmera quando o navegador solicitar.</div></div>`, 'modal-small');
+  setTimeout(initQrCamera, 100);
 }
-function findEquipment(event) { event.preventDefault(); const code=document.getElementById('scanCode').value.trim().toLowerCase(); const eq=equipments.find(e=>e.code.toLowerCase()===code); if(!eq)return toast('Equipamento não encontrado.',true); closeModal(); openScannedEquipment(eq.id); }
-function openScannedEquipment(id) { const eq=equipments.find(e=>e.id===id); if(!eq)return toast('Este equipamento não existe ou foi removido.',true); openPublicEquipmentModal(id); }
+
+function qrCameraMessage(title, detail) {
+  const container = document.getElementById('qrCameraContainer');
+  if (!container) return;
+  container.innerHTML = `<div style="padding:24px;text-align:center;color:#d6e2dc;"><span style="font-size:26px;display:block;margin-bottom:8px;">📷</span><strong>${esc(title)}</strong><br><small style="display:block;margin-top:6px;color:#a3b8af;line-height:1.45;">${esc(detail)}</small></div>`;
+}
+
+function qrCameraErrorMessage(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  if (message.includes('permission') || message.includes('notallowed') || message.includes('denied')) {
+    return ['Permissão da câmera negada', 'Libere a câmera nas configurações do navegador e toque em “Ativar câmera” novamente.'];
+  }
+  if (message.includes('notfound') || message.includes('no camera') || message.includes('requested device not found')) {
+    return ['Nenhuma câmera encontrada', 'Conecte uma câmera ou use a opção “Ler pela foto”.'];
+  }
+  if (message.includes('notreadable') || message.includes('could not start') || message.includes('trackstart')) {
+    return ['A câmera está ocupada', 'Feche outro aplicativo que esteja usando a câmera e tente novamente.'];
+  }
+  return ['Não foi possível iniciar a câmera', 'Tente novamente ou use a opção “Ler pela foto”.'];
+}
+
+async function initQrCamera() {
+  if (!document.getElementById('qrCameraContainer')) return;
+  await stopScanner();
+  qrScanHandled = false;
+
+  if (!await waitForQrScannerLibrary()) {
+    qrCameraMessage('Leitor QR não carregado', 'Recarregue a página. Você ainda pode localizar o ativo digitando o código.');
+    return;
+  }
+  const localHost = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+  if (!window.isSecureContext && !localHost) {
+    qrCameraMessage('Câmera bloqueada nesta conexão', 'O navegador exige HTTPS para vídeo ao vivo. Use “Ler pela foto” ou abra o sistema em uma URL HTTPS.');
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    qrCameraMessage('Câmera indisponível neste navegador', 'Use “Ler pela foto” ou abra a página em Chrome, Edge ou Safari atualizado.');
+    return;
+  }
+
+  const container = document.getElementById('qrCameraContainer');
+  if (!container) return;
+  container.innerHTML = '<div id="reader" style="width:100%;"></div>';
+  try {
+    const cameras = await window.Html5Qrcode.getCameras();
+    if (!cameras.length) throw new Error('No camera found');
+    const rearCamera = cameras.find(camera => /back|rear|environment|traseira/i.test(camera.label));
+    const cameraId = (rearCamera || cameras[0]).id;
+    const scanner = new window.Html5Qrcode('reader');
+    activeQrScanner = scanner;
+    await scanner.start(
+      cameraId,
+      { fps: 10, qrbox: { width: 200, height: 200 }, aspectRatio: 1 },
+      async decodedText => {
+        if (qrScanHandled) return;
+        qrScanHandled = true;
+        // Encerrar a câmera pode levar alguns segundos em certos celulares.
+        // A ficha é exibida imediatamente enquanto a câmera fecha em segundo plano.
+        closeModal();
+        openScannedEquipment(decodedText);
+      },
+      () => {}
+    );
+  } catch (error) {
+    console.warn('Erro ao inicializar leitor QR:', error);
+    await stopScanner();
+    const [title, detail] = qrCameraErrorMessage(error);
+    qrCameraMessage(title, detail);
+  }
+}
+
+async function scanQrImage(event) {
+  const input = event.target;
+  const file = input.files?.[0];
+  if (!file) return;
+  if (!await waitForQrScannerLibrary()) return toast('O leitor QR não foi carregado. Recarregue a página.', true);
+  await stopScanner();
+  const container = document.getElementById('qrCameraContainer');
+  if (!container) return;
+  container.innerHTML = '<div id="reader" style="width:100%;"></div>';
+  const scanner = new window.Html5Qrcode('reader');
+  activeQrScanner = scanner;
+  try {
+    const decodedText = await scanner.scanFile(file, true);
+    activeQrScanner = null;
+    try { scanner.clear(); } catch(e) {}
+    closeModal();
+    openScannedEquipment(decodedText);
+  } catch (error) {
+    console.warn('QR não encontrado na imagem:', error);
+    activeQrScanner = null;
+    try { scanner.clear(); } catch(e) {}
+    qrCameraMessage('QR Code não encontrado na foto', 'Tire outra foto com boa iluminação, foco e o código inteiro dentro da imagem.');
+  } finally {
+    input.value = '';
+  }
+}
+
+function findEquipment(event) {
+  event.preventDefault();
+  const code = document.getElementById('scanCode')?.value.trim();
+  if (!code) return;
+  stopScanner();
+  closeModal();
+  openScannedEquipment(code);
+}
+
+function openScannedEquipment(text) {
+  if (!text) return;
+  let target = String(text).trim();
+  if (target.includes('#scan/')) {
+    target = target.split('#scan/')[1];
+  } else if (target.includes('/')) {
+    target = target.split('/').pop();
+  }
+  target = target.split(/[?#]/)[0].toLowerCase().trim();
+
+  const eq = equipments.find(e => 
+    (e.id && e.id.toLowerCase() === target) || 
+    (e.code && e.code.toLowerCase() === target) ||
+    (e.afNumber && e.afNumber.toLowerCase() === target) ||
+    (e.serial && e.serial.toLowerCase() === target)
+  );
+
+  if (!eq) return toast(`Equipamento não encontrado para o código "${text}".`, true);
+  openPublicEquipmentModal(eq.id);
+}
 function openPublicEquipmentModal(id) {
   const eq=equipments.find(item=>item.id===id); if(!eq)return; const latest=history.find(item=>item.equipmentId===id&&item.inspection); const usage=eq.usage;
   const contractor = eq.contractor || eq.brand || 'Tecnogera';
@@ -1531,6 +1921,13 @@ document.getElementById('quickScanButton').addEventListener('click',openScanModa
 document.getElementById('globalSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){const q=e.target.value.toLowerCase();const eq=equipments.find(x=>`${x.code} ${x.name} ${x.usage?.responsible||''}`.toLowerCase().includes(q));eq?openEquipmentDetails(eq.id):toast('Nenhum equipamento encontrado.',true);}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();document.getElementById('globalSearch').focus();}});
 window.addEventListener('hashchange',render);
+window.addEventListener('focus',()=>syncFromSupabase({ pushAfter: hasPendingRemoteSave }));
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible') syncFromSupabase({ pushAfter: hasPendingRemoteSave });
+});
+setInterval(()=>{
+  if(document.visibilityState==='visible') syncFromSupabase({ pushAfter: hasPendingRemoteSave });
+},30000);
 hydrateIcons(); initializeApp();
 
 
