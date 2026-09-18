@@ -642,15 +642,17 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
       return [String(sanitized.code || sanitized.id || '').toUpperCase(), sanitized];
     }));
     const localEquipmentMap = new Map(currentLocalEquipments.map(item => [String(item.code || item.id || '').toUpperCase(), item]));
+    const pendingEquipmentIds = new Set(pendingFieldEvents.map(event => String(event.equipment?.id || '')));
     const equipmentKeys = new Set([...localEquipmentMap.keys(), ...remoteEquipmentMap.keys()]);
     equipments = Array.from(equipmentKeys).map(key => {
       const localEquipment = localEquipmentMap.get(key);
       const remoteEquipment = remoteEquipmentMap.get(key);
       if (!localEquipment) return remoteEquipment;
       if (!remoteEquipment) return localEquipment;
-      const localTimestamp = latestEquipmentTimestamp(localEquipment, currentLocalHistory);
-      const remoteTimestamp = latestEquipmentTimestamp(remoteEquipment, remoteHistory);
-      const chosen = localTimestamp > remoteTimestamp
+      // The database is authoritative across devices. Local operational data only wins
+      // while this device has a queued event that still needs to reach the database.
+      const hasPendingEvent = pendingEquipmentIds.has(String(localEquipment.id));
+      const chosen = hasPendingEvent
         ? { ...remoteEquipment, ...localEquipment }
         : { ...localEquipment, ...remoteEquipment };
       return sanitizeEquipment(chosen);
