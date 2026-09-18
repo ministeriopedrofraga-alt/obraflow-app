@@ -1,0 +1,26 @@
+{
+  "name": "DataCenter Omnia",
+  "short_name": "DataCenter Omnia",
+  "description": "Gestao de plataformas elevatorias e equipamentos da Heating Cooling no DataCenter Omnia.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f7f6",
+  "theme_color": "#12211b",
+  "icons": [
+    {
+      "src": "/assets/icons/datacenter-omnia-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icons/datacenter-omnia-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

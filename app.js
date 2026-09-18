@@ -615,6 +615,7 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
     const revisionAtStart = localDataRevision;
     const localEquipments = equipments.map(item => ({ ...item, usage: item.usage ? { ...item.usage } : null }));
     const localHistory = [...history];
+    const stateBeforeSync = JSON.stringify({ equipments: localEquipments, history: localHistory });
     const [remoteEquipments, remoteHistory] = await Promise.all([
       supabaseRestRequest('equipments?select=id,code,status,usage,hourmeter,updatedAt'),
       supabaseRestRequest('history?select=*')
@@ -658,10 +659,13 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
       return sanitizeEquipment(chosen);
     }).filter(Boolean);
 
-    saveLocalBackup();
-    const saveResult = pushAfter ? await save() : { local: true, remote: true };
+    const stateChanged = JSON.stringify({ equipments, history }) !== stateBeforeSync;
+    if (stateChanged) saveLocalBackup();
+    const saveResult = pushAfter && pendingFieldEvents.length > 0
+      ? await save()
+      : { local: true, remote: true };
     // Nunca substitui um formulário que a pessoa já está preenchendo no celular.
-    if (renderAfter && !document.querySelector('#modalRoot form')) render();
+    if (renderAfter && stateChanged && !document.querySelector('#modalRoot form')) render();
     return saveResult;
   })().catch(error => {
     console.warn('Sincronização com Supabase falhou; mantendo os dados locais:', error);
@@ -1990,6 +1994,52 @@ function exportCSV() {
 function toast(message,error=false) { const root=document.getElementById('toastRoot'); const el=document.createElement('div'); el.className=`toast ${error?'error':''}`; el.innerHTML=`<span>${icon(error?'alert':'check')}</span><p>${esc(message)}</p>`; root.appendChild(el); setTimeout(()=>el.remove(),3800); }
 function closeMobileMenu(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('mobileBackdrop').classList.remove('open'); }
 
+let deferredInstallPrompt = null;
+const installAppButton = document.getElementById('installAppButton');
+const isStandaloneApp = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+async function installDataCenterApp() {
+  if (deferredInstallPrompt) {
+    const promptEvent = deferredInstallPrompt;
+    deferredInstallPrompt = null;
+    await promptEvent.prompt();
+    const choice = await promptEvent.userChoice;
+    if (choice.outcome !== 'accepted' && installAppButton) installAppButton.hidden = false;
+    return;
+  }
+
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const instructions = isIos
+    ? 'No Safari, toque no botao Compartilhar e escolha Adicionar a Tela de Inicio.'
+    : 'Abra o menu do navegador e escolha Instalar aplicativo ou Adicionar a tela inicial.';
+  modal(`${modalHead('Instalar DataCenter Omnia','Acesso rapido no celular ou computador')}<div class="modal-body"><div class="public-availability">${icon('download')}<div><strong>${instructions}</strong><small>O atalho usara o icone da Heating Cooling com a plataforma elevatoria.</small></div></div></div><div class="modal-foot"><button class="button button-green" onclick="closeModal()">Entendi</button></div>`);
+}
+
+window.addEventListener('beforeinstallprompt', event => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  if (installAppButton && !isStandaloneApp()) installAppButton.hidden = false;
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  if (installAppButton) installAppButton.hidden = true;
+  toast('DataCenter Omnia instalado com sucesso.');
+});
+
+if (installAppButton && !isStandaloneApp()) {
+  installAppButton.hidden = false;
+  installAppButton.addEventListener('click', installDataCenterApp);
+}
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch(error => {
+      console.warn('Falha ao registrar o aplicativo instalavel:', error);
+    });
+  });
+}
+
 document.getElementById('menuButton').addEventListener('click',()=>{document.getElementById('sidebar').classList.toggle('open');document.getElementById('mobileBackdrop').classList.toggle('open');});
 document.getElementById('mobileBackdrop').addEventListener('click',closeMobileMenu);
 document.getElementById('quickScanButton').addEventListener('click',openScanModal);
@@ -1997,12 +2047,13 @@ document.getElementById('globalSearch').addEventListener('keydown',e=>{if(e.key=
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();document.getElementById('globalSearch').focus();}});
 window.addEventListener('hashchange',render);
 window.addEventListener('focus',()=>syncFromSupabase({ pushAfter: hasPendingRemoteSave }));
+window.addEventListener('online',()=>syncFromSupabase({ pushAfter: hasPendingRemoteSave }));
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible') syncFromSupabase({ pushAfter: hasPendingRemoteSave });
 });
 setInterval(()=>{
   if(document.visibilityState==='visible') syncFromSupabase({ pushAfter: hasPendingRemoteSave });
-},30000);
+},5000);
 hydrateIcons(); initializeApp();
 
 
