@@ -632,10 +632,17 @@ h3 { font-size: 14px; }
   .print-area .modal-body { overflow: visible; }
   .qr-box { border: 2px solid #111; }
   .qr-pages { display: block; padding: 0 !important; }
-  .qr-sheet { grid-template-columns: 1fr 1fr; grid-template-rows: repeat(2,88mm); gap: 4mm; }
+  .qr-sheet { grid-template-columns: 1fr 1fr; grid-template-rows: repeat(2,92mm); gap: 4mm; }
   .qr-print-page { width: 100%; break-after: page; page-break-after: always; }
   .qr-print-page:last-child { break-after: auto; page-break-after: auto; }
-  .qr-label { min-height: 0; height: 88mm; border: 1px dashed #555; }
+  .qr-label { align-content: start; min-height: 0; height: 92mm; overflow: hidden; padding: 4mm 5mm; border: 1px dashed #555; }
+  .qr-label .qr-brand-logo { max-height: 8mm; margin-bottom: 1mm; }
+  .qr-label .qr-box { width: 35mm; height: 35mm; min-height: 35mm; margin: 1mm 0 2mm; padding: 1mm; }
+  .qr-label .qr-box img, .qr-label .qr-box canvas { width: 33mm !important; height: 33mm !important; }
+  .qr-label h3 { max-width: 100%; margin: 0; font-size: 9pt; line-height: 1.15; overflow-wrap: anywhere; }
+  .qr-label .qr-code-label { margin: 1mm 0 !important; padding: .8mm 2mm; font-size: 7pt; }
+  .qr-label p { max-width: 100%; margin: .5mm 0 !important; font-size: 7pt !important; line-height: 1.15; overflow-wrap: anywhere; }
+  netlify-toolbar, netlify-drawer, #netlify-toolbar, [data-netlify-toolbar], iframe[src*="netlify"] { display: none !important; }
   .inspection-print-area { display: block; padding: 0; background: white; }
   .inspection-print-area .modal { width: 100%; max-width: none; max-height: none; overflow: visible; border-radius: 0; }
   .inspection-print-area .modal-body { padding: 0; }
