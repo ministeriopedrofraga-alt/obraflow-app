@@ -1048,6 +1048,7 @@ function renderDashboard() {
         <div class="future-module"><span>${icon('building')}</span><div><strong>Empreiteiros</strong><small>Equipes e documentos</small></div><b>Em breve</b></div>
       </aside>
     </section>
+    <section class="home-footer-card" id="dashboardInstallCard"><div><span>${icon('download')}</span><div><strong>Instalar DataCenter Omnia neste aparelho</strong><small>Crie um atalho com o icone da Heating Cooling e abra o sistema como aplicativo.</small></div></div><button class="button button-green compact" onclick="installDataCenterApp()">Instalar App ${icon('download')}</button></section>
     <section class="home-footer-card"><div><span>${icon('file')}</span><div><strong>${history.length} formulários registrados</strong><small>Consulte os registros digitais e imprima a via física PEMT.</small></div></div><button class="button button-outline compact" onclick="location.hash='pemt-checklists'">Checklists PEMT ${icon('arrow')}</button></section>`;
 }
 
@@ -2024,12 +2025,18 @@ window.addEventListener('beforeinstallprompt', event => {
 window.addEventListener('appinstalled', () => {
   deferredInstallPrompt = null;
   if (installAppButton) installAppButton.hidden = true;
+  document.getElementById('dashboardInstallCard')?.remove();
   toast('DataCenter Omnia instalado com sucesso.');
 });
 
-if (installAppButton && !isStandaloneApp()) {
-  installAppButton.hidden = false;
-  installAppButton.addEventListener('click', installDataCenterApp);
+if (installAppButton) {
+  if (isStandaloneApp()) {
+    installAppButton.hidden = true;
+    document.body.classList.add('app-standalone');
+  } else {
+    installAppButton.hidden = false;
+    installAppButton.addEventListener('click', installDataCenterApp);
+  }
 }
 
 if ('serviceWorker' in navigator) {
