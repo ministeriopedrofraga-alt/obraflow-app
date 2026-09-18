@@ -233,6 +233,7 @@ let history = [];
 let equipmentImportMeta = { source: 'Nenhuma base', updatedAt: '' };
 let workforce = [];
 let workforceMeta = { source: 'Nenhuma base', updatedAt: '' };
+let workforceReadyPromise = Promise.resolve();
 let currentPage = 'dashboard';
 let currentUser = null;
 try {
@@ -327,6 +328,49 @@ function getSupabase() {
     }
   }
   return supabase;
+}
+
+const supabaseRestHeaders = {
+  apikey: supabaseKey,
+  Authorization: `Bearer ${supabaseKey}`,
+  'Content-Type': 'application/json'
+};
+
+async function supabaseRestRequest(path, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
+      ...options,
+      headers: { ...supabaseRestHeaders, ...(options.headers || {}) },
+      signal: controller.signal
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      let detail = body;
+      try {
+        const parsed = JSON.parse(body);
+        detail = parsed.message || parsed.details || parsed.hint || body;
+      } catch(e) {}
+      throw new Error(`Supabase ${response.status}: ${detail || response.statusText}`);
+    }
+    return body ? JSON.parse(body) : null;
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('Tempo limite ao comunicar com o banco de dados.');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function historyDatabasePayload(record) {
+  const allowedFields = [
+    'id', 'equipmentId', 'equipmentCode', 'action', 'role', 'date', 'person', 'company',
+    'dataHall', 'location', 'place', 'notes', 'activity', 'expectedAt', 'inspection', 'inspections'
+  ];
+  return Object.fromEntries(allowedFields
+    .filter(field => record[field] !== undefined)
+    .map(field => [field, field === 'id' ? String(record[field]) : record[field]]));
 }
 
 function sanitizeEquipment(item) {
@@ -464,28 +508,31 @@ function queueFieldEvent(equipmentId, historyId) {
   persistPendingFieldEvents();
 }
 
-async function flushPendingFieldEvents(client) {
+async function flushPendingFieldEvents() {
   while (pendingFieldEvents.length > 0) {
     const event = pendingFieldEvents[0];
     const equipment = event.equipment;
-    const { data: updatedEquipment, error: equipmentError } = await client
-      .from('equipments')
-      .update({
-        status: equipment.status,
-        usage: equipment.usage,
-        hourmeter: equipment.hourmeter == null ? null : String(equipment.hourmeter),
-        updatedAt: equipment.updatedAt || new Date().toISOString()
-      })
-      .eq('id', equipment.id)
-      .select('id')
-      .single();
-    if (equipmentError) throw equipmentError;
+    let updatedEquipment = await supabaseRestRequest(
+      `equipments?id=eq.${encodeURIComponent(equipment.id)}&select=id`,
+      {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({
+          status: equipment.status,
+          usage: equipment.usage,
+          hourmeter: equipment.hourmeter == null ? null : String(equipment.hourmeter),
+          updatedAt: equipment.updatedAt || new Date().toISOString()
+        })
+      }
+    );
+    if (Array.isArray(updatedEquipment)) updatedEquipment = updatedEquipment[0];
     if (!updatedEquipment?.id) throw new Error('Equipamento não encontrado na base compartilhada.');
 
-    const { error: historyError } = await client
-      .from('history')
-      .upsert(event.history, { onConflict: 'id' });
-    if (historyError) throw historyError;
+    await supabaseRestRequest('history?on_conflict=id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(historyDatabasePayload(event.history))
+    });
     pendingFieldEvents.shift();
     persistPendingFieldEvents();
   }
@@ -496,14 +543,9 @@ async function save(equipmentId = '', historyId = '') {
   localDataRevision += 1;
   queueFieldEvent(equipmentId, historyId);
 
-  // O backup local é imediato; a cópia compartilhada aguarda a biblioteca assíncrona carregar.
-  const client = getSupabase() || await waitForSupabaseClient();
-  if (!client) {
-    hasPendingRemoteSave = true;
-    return { local: savedLocally, remote: false };
-  }
+  // O backup local e imediato; a copia compartilhada usa a API REST sem biblioteca externa.
   try {
-    await flushPendingFieldEvents(client);
+    await flushPendingFieldEvents();
   } catch(e) {
     hasPendingRemoteSave = true;
     console.warn('Erro ao salvar no Supabase:', e);
@@ -570,20 +612,13 @@ let activeDataSync = null;
 function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
   if (activeDataSync) return activeDataSync;
   activeDataSync = (async () => {
-    const client = await waitForSupabaseClient();
-    if (!client) return { remote: false };
-
     const revisionAtStart = localDataRevision;
     const localEquipments = equipments.map(item => ({ ...item, usage: item.usage ? { ...item.usage } : null }));
     const localHistory = [...history];
-    const [equipmentResult, historyResult] = await Promise.all([
-      client.from('equipments').select('id,code,status,usage,hourmeter,updatedAt'),
-      client.from('history').select('*')
+    const [remoteEquipments, remoteHistory] = await Promise.all([
+      supabaseRestRequest('equipments?select=id,code,status,usage,hourmeter,updatedAt'),
+      supabaseRestRequest('history?select=*')
     ]);
-    const firstError = equipmentResult.error || historyResult.error;
-    if (firstError) throw firstError;
-
-    const remoteHistory = historyResult.data || [];
     // Se o operador salvou algo enquanto a consulta estava em andamento, a versão
     // ao vivo deste aparelho tem prioridade sobre a fotografia antiga da sincronização.
     const currentLocalEquipments = localDataRevision === revisionAtStart
@@ -602,7 +637,7 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
       return chooseHistoryRecord(localRecord, remoteRecord);
     }).filter(Boolean).sort((a,b) => recordTimestamp(b) - recordTimestamp(a));
 
-    const remoteEquipmentMap = new Map((equipmentResult.data || []).map(item => {
+    const remoteEquipmentMap = new Map((remoteEquipments || []).map(item => {
       const sanitized = sanitizeEquipment(item);
       return [String(sanitized.code || sanitized.id || '').toUpperCase(), sanitized];
     }));
@@ -645,7 +680,7 @@ async function initializeApp() {
   render();
 
   // Complementos e sincronização rodam em segundo plano e nunca zeram a tela.
-  loadSeedWorkforce().then(() => {
+  workforceReadyPromise = loadSeedWorkforce().then(() => {
     loadLocalStorageBackup();
     if (!document.querySelector('#modalRoot form')) render();
   });
@@ -690,6 +725,10 @@ function fullDate(value) {
 }
 function nowLocal() {
   const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,16);
+}
+function openDateTimePicker(input) {
+  if (!input || input.readOnly || input.disabled) return;
+  try { input.showPicker?.(); } catch(e) {}
 }
 function inspectionFormHTML(eq, mode, preset = {}) {
   const isReturn = mode === 'devolucao';
@@ -1549,7 +1588,30 @@ function openReportPDF(type, filtered=false) {
 }
 
 function modal(content, size = '') {
-  document.getElementById('modalRoot').innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this)closeModal()"><div class="modal ${size}">${content}</div></div>`;
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this)closeModal()"><div class="modal ${size}">${content}</div></div>`;
+  const returnForm = modalRoot.querySelector('form[onsubmit*="submitReturn"]');
+  if (returnForm) {
+    const startedAt = returnForm.querySelector('input[name="startedAt"]');
+    const expectedAt = returnForm.querySelector('input[name="expectedAt"]');
+    [startedAt, expectedAt].forEach(input => {
+      if (!input) return;
+      input.readOnly = false;
+      input.required = true;
+    });
+    const returnGrids = returnForm.querySelectorAll('.section-title + .form-grid');
+    const returnedAt = returnGrids[1]?.querySelector('input');
+    if (returnedAt) {
+      returnedAt.type = 'datetime-local';
+      returnedAt.name = 'returnedAt';
+      returnedAt.value = nowLocal();
+      returnedAt.readOnly = false;
+      returnedAt.required = true;
+    }
+  }
+  modalRoot.querySelectorAll('input[type="datetime-local"]:not([readonly])').forEach(input => {
+    input.addEventListener('click', () => openDateTimePicker(input));
+  });
   document.body.style.overflow = 'hidden';
 }
 let activeQrScanner = null;
@@ -1716,11 +1778,12 @@ async function submitReturn(event,id) {
     return;
   }
   const hasFailure=inspectionHasFailure(inspection);
+  if (data.startedAt && data.returnedAt && new Date(data.returnedAt) < new Date(data.startedAt)) return toast('A devolu\u00e7\u00e3o realizada n\u00e3o pode ser anterior ao in\u00edcio da utiliza\u00e7\u00e3o.', true);
   eq.hourmeter=Number(data.hourmeter);
   eq.status=hasFailure?'maintenance':'available';
   eq.usage=null;
   eq.updatedAt=new Date().toISOString();
-  const movement={id:Date.now(),equipmentId:id,action:hasFailure?'issue':'return',person:data.responsible,company:data.company,place:data.place,date:data.inspectionAt,notes:data.inspectionNotes,activity:data.activity||previous.activity,location:data.location||previous.location,dataHall:data.dataHall||previous.dataHall,expectedAt:data.expectedAt||previous.expectedAt,inspection,inspections:[inspection]};
+  const movement={id:Date.now(),equipmentId:id,equipmentCode:eq.code,action:hasFailure?'issue':'return',person:data.responsible,company:data.company,place:data.place,date:data.returnedAt||data.inspectionAt,notes:data.inspectionNotes,activity:data.activity||previous.activity,location:data.location||previous.location,dataHall:data.dataHall||previous.dataHall,expectedAt:data.expectedAt||previous.expectedAt,inspection,inspections:[inspection]};
   history.unshift(movement);
   const syncPromise=save(id, movement.id);
   closeModal();
@@ -1881,8 +1944,10 @@ function findEquipment(event) {
   openScannedEquipment(code);
 }
 
-function openScannedEquipment(text) {
+let latestScanRequest = 0;
+async function openScannedEquipment(text) {
   if (!text) return;
+  const scanRequest = ++latestScanRequest;
   let target = String(text).trim();
   if (target.includes('#scan/')) {
     target = target.split('#scan/')[1];
@@ -1890,6 +1955,13 @@ function openScannedEquipment(text) {
     target = target.split('/').pop();
   }
   target = target.split(/[?#]/)[0].toLowerCase().trim();
+
+  // The actions depend on the latest shared status, not stale phone data.
+  const [syncResult] = await Promise.all([
+    syncFromSupabase({ renderAfter: false, pushAfter: hasPendingRemoteSave }),
+    workforceReadyPromise
+  ]);
+  if (scanRequest !== latestScanRequest) return;
 
   const eq = equipments.find(e => 
     (e.id && e.id.toLowerCase() === target) || 
@@ -1900,6 +1972,7 @@ function openScannedEquipment(text) {
 
   if (!eq) return toast(`Equipamento não encontrado para o código "${text}".`, true);
   openPublicEquipmentModal(eq.id);
+  if (!syncResult?.remote) toast('Ficha carregada da c\u00f3pia deste aparelho. Verifique a internet antes de registrar a opera\u00e7\u00e3o.', true);
 }
 function openPublicEquipmentModal(id) {
   const eq=equipments.find(item=>item.id===id); if(!eq)return; const latest=history.find(item=>item.equipmentId===id&&item.inspection); const usage=eq.usage;
