@@ -1106,11 +1106,15 @@ function filterAssets() {
   document.getElementById('noFilterResults').style.display=visible?'none':'block';
 }
 
-function openEquipmentImportModal() {
+function openEquipmentImportModalLegacy() {
   modal(`${modalHead('Atualizar PTAs por Excel','Utilize a planilha padrão OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · todas as abas serão verificadas</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source||'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt?`· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}`:''}</small></div></div><div class="import-columns"><span>NF</span><span>Data emissão</span><span>Código produto</span><span>Descrição</span><span>Patrimônio</span><span>Chassi</span><span>Horímetro</span><span>Unidade</span><span>Bateria</span><span>codigo AFF</span><span>Empreiteiro</span></div><div class="notice">${icon('alert')} A importação atualiza equipamentos pelo número de patrimônio e adiciona os novos. Status, responsável atual, localização e checklists são preservados. Equipamentos ausentes na planilha não são excluídos.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar planilha de PTAs atualizada</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-large');
 }
 
-async function exportEquipmentsExcel() {
+function openEquipmentImportModal() {
+  modal(`${modalHead('Atualizar PTAs por Excel','Utilize sempre o modelo oficial OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · título na linha 1 e cabeçalhos na linha 3</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source||'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt?`· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}`:''}</small></div></div><div class="import-columns"><span>NF</span><span>Data Emissão</span><span>Descrição do Equipamento</span><span>Nº Série/Patrimônio</span><span>codigo AFF</span><span>Empreiteiro</span></div><div class="notice">${icon('alert')} A importação atualiza os equipamentos pelo Nº Série/Patrimônio e adiciona os novos. Status, responsável atual, localização, dados técnicos e checklists são preservados. Equipamentos ausentes não são excluídos.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar modelo oficial atualizado</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-large');
+}
+
+async function exportEquipmentsExcelLegacy() {
   if(!await ensureExcelLibrary()) return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.',true);
   
   const selectedEquipments = getReportFilteredEquipments();
@@ -1194,10 +1198,68 @@ async function exportEquipmentsExcel() {
   XLSX.writeFile(book, `controle-ptas-omnia-${new Date().toISOString().slice(0,10)}.xlsx`);
   toast('Planilha de PTAs baixada com sucesso.');
 }
+
+async function exportEquipmentsExcel() {
+  if(!await ensureExcelLibrary()) return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.',true);
+
+  const selectedEquipments = [...getReportFilteredEquipments()].sort((a,b) =>
+    safeSort(a.name || a.model, b.name || b.model) || safeSort(a.code, b.code)
+  );
+  if(!selectedEquipments.length) return toast('Nenhum equipamento encontrado.',true);
+
+  const formatEmissionDate = value => {
+    if(!value) return '';
+    const normalized = spreadsheetDate(value);
+    return normalized ? normalized.split('-').reverse().join('/') : String(value);
+  };
+  const sheetData = [
+    ['Relação de Equipamentos - Notas Fiscais de Remessa para Locação (Tecnogera)'],
+    [],
+    ['NF','Data Emissão','Descrição do Equipamento','Nº Série/Patrimônio','codigo AFF','Empreiteiro'],
+    ...selectedEquipments.map(eq => [
+      eq.invoice || '',
+      formatEmissionDate(eq.emissionDate),
+      eq.name || eq.model || '',
+      eq.code || '',
+      eq.afNumber || '',
+      eq.contractor || ''
+    ])
+  ];
+
+  const sheet = XLSX.utils.aoa_to_sheet(sheetData);
+  sheet['!merges'] = [{ s:{ r:0, c:0 }, e:{ r:0, c:5 } }];
+  sheet['!cols'] = [{wch:12},{wch:16},{wch:48},{wch:26},{wch:18},{wch:24}];
+  sheet['!rows'] = [{hpt:22},{hpt:8},{hpt:21}];
+  sheet['!autofilter'] = { ref:`A3:F${sheetData.length}` };
+
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, 'Equipamentos');
+  XLSX.writeFile(book, `controle-ptas-omnia-${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('Planilha de PTAs baixada no modelo oficial.');
+}
+
 function spreadsheetDate(value) {
   if(!value)return ''; if(value instanceof Date&&!isNaN(value))return value.toISOString().slice(0,10);
   if(typeof value==='number'){const date=new Date(Math.round((value-25569)*86400*1000));return isNaN(date)?'':date.toISOString().slice(0,10);}
   const text=String(value).trim(); const match=text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/); if(match){const year=match[3].length===2?`20${match[3]}`:match[3];return `${year}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;} return /^\d{4}-\d{2}-\d{2}/.test(text)?text.slice(0,10):'';
+}
+function normalizeSpreadsheetHeader(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+function officialEquipmentColumn(header) {
+  const value = normalizeSpreadsheetHeader(header);
+  if(value === 'nf' || value.includes('nota fiscal')) return 'invoice';
+  if(value.includes('data') && value.includes('emissao')) return 'emissionDate';
+  if(value.includes('descricao') && value.includes('equipamento')) return 'description';
+  if(value.includes('patrimonio') || (value.includes('serie') && !value.includes('descricao'))) return 'code';
+  if((value.includes('codigo') && (value.includes('aff') || value.includes('af'))) || value === 'aff' || value === 'af') return 'afNumber';
+  if(value.includes('empreiteiro') || value === 'empresa') return 'contractor';
+  return '';
 }
 function equipmentTypeFromDescription(description) {
   if(/paleteira/i.test(description))return 'Paleteira Elétrica'; if(/articulada/i.test(description))return 'PTA Articulada'; if(/mastro/i.test(description))return 'PTA Mastro'; return 'PTA Tesoura';
@@ -1209,7 +1271,22 @@ async function handleEquipmentUpload(event) {
     const bytes=await file.arrayBuffer(); const workbook=XLSX.read(bytes,{type:'array',cellDates:true}); const imported=[]; const seen=new Set();
     workbook.SheetNames.forEach(sheetName=>{
       const rows=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName],{header:1,defval:'',raw:true});
-      let colMap = { invoice:0, emissionDate:1, productCode:2, description:3, code:4, serial:5, hourmeter:6, battery:8, afNumber:9, contractor:10 };
+      let colMap = { invoice:-1, emissionDate:-1, description:-1, code:-1, afNumber:-1, contractor:-1, productCode:-1, serial:-1, hourmeter:-1, battery:-1 };
+      let headerRowIndex = -1;
+      for(let r=0; r<Math.min(15, rows.length); r++) {
+        const candidate = {};
+        (rows[r] || []).forEach((cellVal, cIdx) => {
+          const field = officialEquipmentColumn(cellVal);
+          if(field && candidate[field] === undefined) candidate[field] = cIdx;
+        });
+        const required = ['invoice','emissionDate','description','code','afNumber','contractor'];
+        if(required.every(field => candidate[field] !== undefined)) {
+          colMap = { ...colMap, ...candidate };
+          headerRowIndex = r;
+          break;
+        }
+      }
+      if(headerRowIndex < 0) return;
       for(let r=0; r<Math.min(15, rows.length); r++) {
         const row = rows[r];
         if(Array.isArray(row)) {
@@ -1225,14 +1302,13 @@ async function handleEquipmentUpload(event) {
           });
         }
       }
-      rows.forEach(row=>{
+      rows.slice(headerRowIndex + 1).forEach(row=>{
         const description=String(row[colMap.description]||'').replace(/\s+/g,' ').trim();
         const code=String(row[colMap.code]||'').replace(/\s+/g,'').trim().toUpperCase();
         if(!description||!code||/descrição do equipamento/i.test(description)||/série|patrimônio/i.test(code)||/^total/i.test(description))return;
         const key=code.toUpperCase();
         if(seen.has(key))return;
         seen.add(key);
-        const hourText=String(row[colMap.hourmeter]??'').replace(',','.');
         const name=description;
         let afVal = String(row[colMap.afNumber]||'').trim();
         let contractorVal = String(row[colMap.contractor]||'').trim();
@@ -1247,18 +1323,15 @@ async function handleEquipmentUpload(event) {
           type:equipmentTypeFromDescription(description),
           brand:'Tecnogera',
           model:description.replace(/^Plataforma\s+/i,''),
-          serial:String(row[colMap.serial]||'').trim(),
-          productCode:String(row[colMap.productCode]||'').trim(),
           invoice:String(row[colMap.invoice]||'').trim(),
           emissionDate:spreadsheetDate(row[colMap.emissionDate]),
-          hourmeter:Number.isFinite(Number(hourText))?Number(hourText):0,
-          battery:String(row[colMap.battery]||'').trim(),
           afNumber:afVal,
           contractor:contractorVal
         };
         imported.push(sanitizeEquipment(itemObj));
       });
     });
+    if(!imported.length) throw new Error('Planilha sem equipamentos válidos. Use o modelo oficial com os seis cabeçalhos na linha 3.');
     let added = 0;
     let updated = 0;
     imported.forEach(item => {
@@ -1286,7 +1359,8 @@ async function handleEquipmentUpload(event) {
     equipmentImportMeta={source:file.name,updatedAt:new Date().toISOString(),total:imported.length};
     const client = getSupabase();
     if (client) client.from('app_metadata').upsert({key:'equipment_import_meta',value:equipmentImportMeta});
-    save(); closeModal(); renderEquipments();
+    save();
+    closeModal(); renderEquipments();
     const navCount = document.getElementById('navEquipmentCount');
     if (navCount) navCount.textContent = equipments.length;
     toast(`${updated} equipamento(s) atualizado(s) e ${added} novo(s) importado(s).`);
