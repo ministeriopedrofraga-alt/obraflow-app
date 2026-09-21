@@ -719,7 +719,7 @@ function hydrateIcons(root = document) {
   root.querySelectorAll('[data-icon]').forEach(el => { el.innerHTML = icon(el.dataset.icon); });
 }
 function equipmentIcon(eq) { return eq.type.includes('Paleteira') ? icon('pallet') : icon('lift'); }
-function statusLabel(status) { return ({ available: 'Disponível', 'in-use': 'Em uso', maintenance: 'Manutenção' })[status]; }
+function statusLabel(status) { return ({ available: 'Disponível', 'in-use': 'Em uso', maintenance: 'Indisponível' })[status]; }
 function statusBadge(status) { return `<span class="status ${status}">${statusLabel(status)}</span>`; }
 function dateTime(value) {
   if (!value) return '—';
@@ -1038,7 +1038,7 @@ function renderDashboard() {
       <article class="module-feature">
         <div class="module-feature-top"><span class="module-big-icon">${icon('lift')}</span><span class="module-active">Módulo ativo</span></div>
         <div><p class="eyebrow">EQUIPAMENTOS DE ELEVAÇÃO</p><h2>Controle de PTAs e paleteiras</h2><p class="module-description">Disponibilidade, localização, responsável, previsão de devolução e checklist pelo QR Code.</p></div>
-        <div class="module-stats"><span><strong>${equipments.length}</strong><small>Cadastradas</small></span><span><strong>${available}</strong><small>Disponíveis</small></span><span><strong>${inUse}</strong><small>Em uso</small></span><span><strong>${maintenance}</strong><small>Manutenção</small></span></div>
+        <div class="module-stats"><span><strong>${equipments.length}</strong><small>Cadastradas</small></span><span><strong>${available}</strong><small>Disponíveis</small></span><span><strong>${inUse}</strong><small>Em uso</small></span><span><strong>${maintenance}</strong><small>Indisponíveis</small></span></div>
         <div class="module-actions"><button class="button button-green" onclick="location.hash='equipamentos'">Abrir controle ${icon('arrow')}</button><button class="button button-outline" onclick="openScanModal()">${icon('scan')} Ler QR Code</button></div>
       </article>
       <aside class="future-modules panel">
@@ -1073,7 +1073,7 @@ function renderEquipments() {
       <label class="filter-field"><span>Data</span><input type="date" id="dateFilter" onchange="filterAssets()"></label>
       <label class="filter-field"><span>Modelo</span><select id="modelFilter" onchange="filterAssets()"><option value="">Todos</option>${models.map(model=>`<option>${esc(model)}</option>`).join('')}</select></label>
       <label class="filter-field"><span>Tipo</span><select id="typeFilter" onchange="filterAssets()"><option value="">Todos</option><option>PTA Tesoura</option><option>PTA Articulada</option><option>PTA Mastro</option><option>Paleteira Elétrica</option></select></label>
-      <label class="filter-field"><span>Status</span><select id="statusFilter" onchange="filterAssets()"><option value="">Todos</option><option value="available">Disponível</option><option value="in-use">Em uso</option><option value="maintenance">Manutenção</option></select></label>
+      <label class="filter-field"><span>Status</span><select id="statusFilter" onchange="filterAssets()"><option value="">Todos</option><option value="available">Disponível</option><option value="in-use">Em uso</option><option value="maintenance">Indisponível</option></select></label>
     </div>
     <article class="panel compact-equipment-panel"><div class="table-wrap"><table class="data-table equipment-control-table"><thead><tr><th>Equipamento</th><th>codigo AFF</th><th>Empreiteiro</th><th>Modelo</th><th>Status</th><th>Em uso por</th><th>Local</th><th>Previsão de devolução</th><th>Checklist</th><th></th></tr></thead><tbody id="equipmentControlBody">${equipments.map(equipmentControlRow).join('')}</tbody></table></div><div class="no-filter-results" id="noFilterResults">Nenhum equipamento encontrado com estes filtros.</div></article>`;
 }
@@ -1111,7 +1111,7 @@ function openEquipmentImportModalLegacy() {
 }
 
 function openEquipmentImportModal() {
-  modal(`${modalHead('Atualizar PTAs por Excel','Utilize sempre o modelo oficial OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · título na linha 1 e cabeçalhos na linha 3</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source||'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt?`· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}`:''}</small></div></div><div class="import-columns"><span>NF</span><span>Data Emissão</span><span>Descrição do Equipamento</span><span>Nº Série/Patrimônio</span><span>codigo AFF</span><span>Empreiteiro</span></div><div class="notice">${icon('alert')} A importação atualiza os equipamentos pelo Nº Série/Patrimônio e adiciona os novos. Status, responsável atual, localização, dados técnicos e checklists são preservados. Equipamentos ausentes não são excluídos.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar modelo oficial atualizado</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-large');
+  modal(`${modalHead('Atualizar PTAs por Excel','Utilize sempre o modelo oficial OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · título na linha 1 e cabeçalhos na linha 3</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source||'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt?`· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}`:''}</small></div></div><div class="import-columns"><span>NF</span><span>Data Emissão</span><span>Descrição do Equipamento</span><span>Nº Série/Patrimônio</span><span>codigo AFF</span><span>Empreiteiro</span><span>Status</span></div><div class="notice">${icon('alert')} A importação atualiza os equipamentos pelo Nº Série/Patrimônio e adiciona os novos. Uma retirada ativa sempre prevalece como Em uso; nos demais casos, a planilha define Disponível ou Indisponível. Responsável, localização, dados técnicos e checklists são preservados.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar modelo oficial atualizado</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-large');
 }
 
 async function exportEquipmentsExcelLegacy() {
@@ -1215,22 +1215,23 @@ async function exportEquipmentsExcel() {
   const sheetData = [
     ['Relação de Equipamentos - Notas Fiscais de Remessa para Locação (Tecnogera)'],
     [],
-    ['NF','Data Emissão','Descrição do Equipamento','Nº Série/Patrimônio','codigo AFF','Empreiteiro'],
+    ['NF','Data Emissão','Descrição do Equipamento','Nº Série/Patrimônio','codigo AFF','Empreiteiro','Status'],
     ...selectedEquipments.map(eq => [
       eq.invoice || '',
       formatEmissionDate(eq.emissionDate),
       eq.name || eq.model || '',
       eq.code || '',
       eq.afNumber || '',
-      eq.contractor || ''
+      eq.contractor || '',
+      equipmentSpreadsheetStatus(eq)
     ])
   ];
 
   const sheet = XLSX.utils.aoa_to_sheet(sheetData);
-  sheet['!merges'] = [{ s:{ r:0, c:0 }, e:{ r:0, c:5 } }];
-  sheet['!cols'] = [{wch:12},{wch:16},{wch:48},{wch:26},{wch:18},{wch:24}];
+  sheet['!merges'] = [{ s:{ r:0, c:0 }, e:{ r:0, c:6 } }];
+  sheet['!cols'] = [{wch:12},{wch:16},{wch:48},{wch:26},{wch:18},{wch:24},{wch:18}];
   sheet['!rows'] = [{hpt:22},{hpt:8},{hpt:21}];
-  sheet['!autofilter'] = { ref:`A3:F${sheetData.length}` };
+  sheet['!autofilter'] = { ref:`A3:G${sheetData.length}` };
 
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, 'Equipamentos');
@@ -1259,7 +1260,18 @@ function officialEquipmentColumn(header) {
   if(value.includes('patrimonio') || (value.includes('serie') && !value.includes('descricao'))) return 'code';
   if((value.includes('codigo') && (value.includes('aff') || value.includes('af'))) || value === 'aff' || value === 'af') return 'afNumber';
   if(value.includes('empreiteiro') || value === 'empresa') return 'contractor';
+  if(value === 'status' || value === 'situacao') return 'status';
   return '';
+}
+function spreadsheetEquipmentStatus(value) {
+  const status = normalizeSpreadsheetHeader(value);
+  if(status.includes('indisponivel') || status.includes('manutencao') || status.includes('bloqueado')) return 'maintenance';
+  if(status.includes('em uso') || status === 'uso') return 'in-use';
+  return 'available';
+}
+function equipmentSpreadsheetStatus(equipment) {
+  if(equipment?.usage || equipment?.status === 'in-use') return 'EM USO';
+  return equipment?.status === 'maintenance' ? 'INDISPONÍVEL' : 'DISPONÍVEL';
 }
 function equipmentTypeFromDescription(description) {
   if(/paleteira/i.test(description))return 'Paleteira Elétrica'; if(/articulada/i.test(description))return 'PTA Articulada'; if(/mastro/i.test(description))return 'PTA Mastro'; return 'PTA Tesoura';
@@ -1271,7 +1283,7 @@ async function handleEquipmentUpload(event) {
     const bytes=await file.arrayBuffer(); const workbook=XLSX.read(bytes,{type:'array',cellDates:true}); const imported=[]; const seen=new Set();
     workbook.SheetNames.forEach(sheetName=>{
       const rows=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName],{header:1,defval:'',raw:true});
-      let colMap = { invoice:-1, emissionDate:-1, description:-1, code:-1, afNumber:-1, contractor:-1, productCode:-1, serial:-1, hourmeter:-1, battery:-1 };
+      let colMap = { invoice:-1, emissionDate:-1, description:-1, code:-1, afNumber:-1, contractor:-1, status:-1, productCode:-1, serial:-1, hourmeter:-1, battery:-1 };
       let headerRowIndex = -1;
       for(let r=0; r<Math.min(15, rows.length); r++) {
         const candidate = {};
@@ -1279,7 +1291,7 @@ async function handleEquipmentUpload(event) {
           const field = officialEquipmentColumn(cellVal);
           if(field && candidate[field] === undefined) candidate[field] = cIdx;
         });
-        const required = ['invoice','emissionDate','description','code','afNumber','contractor'];
+        const required = ['invoice','emissionDate','description','code','afNumber','contractor','status'];
         if(required.every(field => candidate[field] !== undefined)) {
           colMap = { ...colMap, ...candidate };
           headerRowIndex = r;
@@ -1326,12 +1338,13 @@ async function handleEquipmentUpload(event) {
           invoice:String(row[colMap.invoice]||'').trim(),
           emissionDate:spreadsheetDate(row[colMap.emissionDate]),
           afNumber:afVal,
-          contractor:contractorVal
+          contractor:contractorVal,
+          status:spreadsheetEquipmentStatus(row[colMap.status])
         };
         imported.push(sanitizeEquipment(itemObj));
       });
     });
-    if(!imported.length) throw new Error('Planilha sem equipamentos válidos. Use o modelo oficial com os seis cabeçalhos na linha 3.');
+    if(!imported.length) throw new Error('Planilha sem equipamentos válidos. Use o modelo oficial com os sete cabeçalhos na linha 3, incluindo Status.');
     let added = 0;
     let updated = 0;
     imported.forEach(item => {
@@ -1342,13 +1355,13 @@ async function handleEquipmentUpload(event) {
           ...item,
           afNumber: item.afNumber || equipments[existingIndex].afNumber || '',
           contractor: item.contractor || equipments[existingIndex].contractor || '',
-          status: equipments[existingIndex].status,
+          status: equipments[existingIndex].usage ? 'in-use' : (item.status === 'maintenance' ? 'maintenance' : 'available'),
           usage: equipments[existingIndex].usage
         };
         updated++;
       } else {
         item.id = `pta-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-        item.status = 'available';
+        item.status = item.status === 'maintenance' ? 'maintenance' : 'available';
         item.usage = null;
         equipments.push(item);
         added++;
@@ -1588,7 +1601,7 @@ function reportFiltersHTML() {
   const types=unique(equipments.map(eq=>eq.type));
   const halls=unique([...history.map(item=>item.dataHall||item.place),...equipments.map(eq=>eq.usage?.dataHall)]);
   const options=items=>items.map(item=>`<option value="${esc(item)}">${esc(item)}</option>`).join('');
-  return `<section class="report-filter-panel"><div class="report-filter-head"><div><span>${icon('search')}</span><div><h2>Filtrar antes de baixar</h2><p>Os filtros abaixo serão aplicados aos PDFs e às planilhas.</p></div></div><button class="button button-outline compact" onclick="clearReportFilters()">Limpar filtros</button></div><div class="report-filter-grid"><label class="filter-field"><span>Empresa</span><select id="reportCompany" onchange="updateReportFilterSummary()"><option value="">Todas</option>${options(companies)}</select></label><label class="filter-field"><span>Pessoa / responsável</span><select id="reportPerson" onchange="updateReportFilterSummary()"><option value="">Todas</option>${options(people)}</select></label><label class="filter-field"><span>Equipamento</span><select id="reportEquipment" onchange="updateReportFilterSummary()"><option value="">Todos</option>${equipments.map(eq=>`<option value="${eq.id}">${esc(eq.code)} — ${esc(eq.model||eq.name)}</option>`).join('')}</select></label><label class="filter-field"><span>Status atual</span><select id="reportStatus" onchange="updateReportFilterSummary()"><option value="">Todos</option><option value="in-use">Em uso</option><option value="available">Disponível</option><option value="maintenance">Em manutenção</option></select></label><label class="filter-field"><span>Tipo de equipamento</span><select id="reportType" onchange="updateReportFilterSummary()"><option value="">Todos</option>${options(types)}</select></label><label class="filter-field"><span>Data Hall / área</span><select id="reportHall" onchange="updateReportFilterSummary()"><option value="">Todos</option>${options(halls)}</select></label><label class="filter-field"><span>Resultado do checklist</span><select id="reportResult" onchange="updateReportFilterSummary()"><option value="">Todos</option><option value="approved">Aprovado</option><option value="failed">Reprovado</option></select></label><label class="filter-field"><span>Data inicial</span><input id="reportStart" type="date" onchange="updateReportFilterSummary()"></label><label class="filter-field"><span>Data final</span><input id="reportEnd" type="date" onchange="updateReportFilterSummary()"></label></div><div class="report-filter-summary" id="reportFilterSummary"></div></section>`;
+  return `<section class="report-filter-panel"><div class="report-filter-head"><div><span>${icon('search')}</span><div><h2>Filtrar antes de baixar</h2><p>Os filtros abaixo serão aplicados aos PDFs e às planilhas.</p></div></div><button class="button button-outline compact" onclick="clearReportFilters()">Limpar filtros</button></div><div class="report-filter-grid"><label class="filter-field"><span>Empresa</span><select id="reportCompany" onchange="updateReportFilterSummary()"><option value="">Todas</option>${options(companies)}</select></label><label class="filter-field"><span>Pessoa / responsável</span><select id="reportPerson" onchange="updateReportFilterSummary()"><option value="">Todas</option>${options(people)}</select></label><label class="filter-field"><span>Equipamento</span><select id="reportEquipment" onchange="updateReportFilterSummary()"><option value="">Todos</option>${equipments.map(eq=>`<option value="${eq.id}">${esc(eq.code)} — ${esc(eq.model||eq.name)}</option>`).join('')}</select></label><label class="filter-field"><span>Status atual</span><select id="reportStatus" onchange="updateReportFilterSummary()"><option value="">Todos</option><option value="in-use">Em uso</option><option value="available">Disponível</option><option value="maintenance">Indisponível</option></select></label><label class="filter-field"><span>Tipo de equipamento</span><select id="reportType" onchange="updateReportFilterSummary()"><option value="">Todos</option>${options(types)}</select></label><label class="filter-field"><span>Data Hall / área</span><select id="reportHall" onchange="updateReportFilterSummary()"><option value="">Todos</option>${options(halls)}</select></label><label class="filter-field"><span>Resultado do checklist</span><select id="reportResult" onchange="updateReportFilterSummary()"><option value="">Todos</option><option value="approved">Aprovado</option><option value="failed">Reprovado</option></select></label><label class="filter-field"><span>Data inicial</span><input id="reportStart" type="date" onchange="updateReportFilterSummary()"></label><label class="filter-field"><span>Data final</span><input id="reportEnd" type="date" onchange="updateReportFilterSummary()"></label></div><div class="report-filter-summary" id="reportFilterSummary"></div></section>`;
 }
 function reportFilterValues() {
   const value=id=>document.getElementById(id)?.value||'';
@@ -1624,7 +1637,7 @@ function clearReportFilters() {
 }
 
 function reportStatus(eq) {
-  return eq.status==='in-use'?'EM USO':eq.status==='maintenance'?'MANUTENÇÃO':'DISPONÍVEL';
+  return eq.status==='in-use'?'EM USO':eq.status==='maintenance'?'INDISPONÍVEL':'DISPONÍVEL';
 }
 function reportAction(action) {
   return action==='withdraw'?'RETIRADA':action==='return'?'DEVOLUÇÃO':'OCORRÊNCIA / AVARIA';
@@ -1655,7 +1668,7 @@ function openReportPDF(type, filtered=false) {
   } else if(type==='equipment') {
     title='Cadastro de PTAs e paleteiras'; subtitle='Inventário atualizado de equipamentos';
     const selectedEquipments=getReportFilteredEquipments(); const rows=selectedEquipments.map(eq=>[eq.code,eq.type||'—',eq.model||eq.name,eq.serial||'—',eq.hourmeter??'—',eq.battery||'—',eq.contractor||'—',eq.invoice||'—',reportStatus(eq)]);
-    summary=`<span><b>${selectedEquipments.length}</b> equipamentos</span><span><b>${selectedEquipments.filter(e=>e.status==='available').length}</b> disponíveis</span><span><b>${selectedEquipments.filter(e=>e.status==='in-use').length}</b> em uso</span><span><b>${selectedEquipments.filter(e=>e.status==='maintenance').length}</b> em manutenção</span>`;
+    summary=`<span><b>${selectedEquipments.length}</b> equipamentos</span><span><b>${selectedEquipments.filter(e=>e.status==='available').length}</b> disponíveis</span><span><b>${selectedEquipments.filter(e=>e.status==='in-use').length}</b> em uso</span><span><b>${selectedEquipments.filter(e=>e.status==='maintenance').length}</b> indisponíveis</span>`;
     content=`<section class="report-section"><h2>Inventário da frota</h2>${reportTable(['Patrimônio','Tipo','Modelo / descrição','Chassi','Horímetro','Bateria','Empreiteiro','NF','Status'],rows)}</section>`;
   } else if(type==='workforce') {
     title='Empresas e efetivo'; subtitle='Relação atualizada de colaboradores da obra';
@@ -1722,7 +1735,7 @@ function modalHead(title, subtitle='') { return `<div class="modal-head"><div><h
 
 function openEquipmentModal(id = null) {
   const eq = id ? equipments.find(e=>e.id===id) : null;
-  modal(`<form id="equipmentForm" onsubmit="saveEquipment(event,'${id||''}')">${modalHead(eq?'Editar equipamento':'Novo equipamento',eq?'Atualize os dados do ativo':'Cadastre um ativo e gere seu QR Code')}<div class="modal-body"><div class="form-grid"><div class="field"><label>Tipo de equipamento <em>*</em></label><select name="type" required><option value="">Selecione...</option>${['PTA Tesoura','PTA Articulada','PTA Mastro','Paleteira Elétrica'].map(v=>`<option ${eq?.type===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Código de identificação (Patrimônio) <em>*</em></label><input name="code" required placeholder="Ex.: TPTA00674" value="${esc(eq?.code||'')}"></div><div class="field"><label>Nº AF (Afonso França)</label><input name="afNumber" placeholder="Ex.: AF-001" value="${esc(eq?.afNumber||'')}"></div><div class="field full"><label>Nome do equipamento <em>*</em></label><input name="name" required placeholder="Ex.: Plataforma Tesoura 10m" value="${esc(eq?.name||'')}"></div><div class="field"><label>Fabricante <em>*</em></label><input name="brand" required placeholder="Ex.: JLG" value="${esc(eq?.brand||'')}"></div><div class="field"><label>Modelo <em>*</em></label><input name="model" required placeholder="Ex.: 2646ES" value="${esc(eq?.model||'')}"></div><div class="field"><label>Número de série</label><input name="serial" placeholder="Número do fabricante" value="${esc(eq?.serial||'')}"></div><div class="field"><label>Capacidade</label><input name="capacity" placeholder="Ex.: 450 kg" value="${esc(eq?.capacity||'')}"></div><div class="field"><label>Status inicial</label><select name="status"><option value="available" ${!eq||eq.status==='available'?'selected':''}>Disponível</option><option value="maintenance" ${eq?.status==='maintenance'?'selected':''}>Em manutenção</option></select></div><div class="field"><label>Data da última inspeção</label><input name="inspection" type="date" value="${eq?.inspection||new Date().toISOString().slice(0,10)}"></div></div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} ${eq?'Salvar alterações':'Cadastrar equipamento'}</button></div></form>`, 'modal-large');
+  modal(`<form id="equipmentForm" onsubmit="saveEquipment(event,'${id||''}')">${modalHead(eq?'Editar equipamento':'Novo equipamento',eq?'Atualize os dados do ativo':'Cadastre um ativo e gere seu QR Code')}<div class="modal-body"><div class="form-grid"><div class="field"><label>Tipo de equipamento <em>*</em></label><select name="type" required><option value="">Selecione...</option>${['PTA Tesoura','PTA Articulada','PTA Mastro','Paleteira Elétrica'].map(v=>`<option ${eq?.type===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Código de identificação (Patrimônio) <em>*</em></label><input name="code" required placeholder="Ex.: TPTA00674" value="${esc(eq?.code||'')}"></div><div class="field"><label>Nº AF (Afonso França)</label><input name="afNumber" placeholder="Ex.: AF-001" value="${esc(eq?.afNumber||'')}"></div><div class="field full"><label>Nome do equipamento <em>*</em></label><input name="name" required placeholder="Ex.: Plataforma Tesoura 10m" value="${esc(eq?.name||'')}"></div><div class="field"><label>Fabricante <em>*</em></label><input name="brand" required placeholder="Ex.: JLG" value="${esc(eq?.brand||'')}"></div><div class="field"><label>Modelo <em>*</em></label><input name="model" required placeholder="Ex.: 2646ES" value="${esc(eq?.model||'')}"></div><div class="field"><label>Número de série</label><input name="serial" placeholder="Número do fabricante" value="${esc(eq?.serial||'')}"></div><div class="field"><label>Capacidade</label><input name="capacity" placeholder="Ex.: 450 kg" value="${esc(eq?.capacity||'')}"></div><div class="field"><label>Status inicial</label><select name="status"><option value="available" ${!eq||eq.status==='available'?'selected':''}>Disponível</option><option value="maintenance" ${eq?.status==='maintenance'?'selected':''}>Indisponível</option></select></div><div class="field"><label>Data da última inspeção</label><input name="inspection" type="date" value="${eq?.inspection||new Date().toISOString().slice(0,10)}"></div></div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} ${eq?'Salvar alterações':'Cadastrar equipamento'}</button></div></form>`, 'modal-large');
 }
 function saveEquipment(event, id) {
   event.preventDefault(); const data = Object.fromEntries(new FormData(event.target));

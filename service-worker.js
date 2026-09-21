@@ -1,9 +1,9 @@
-const CACHE_NAME = 'datacenter-omnia-v5';
+const CACHE_NAME = 'datacenter-omnia-v6';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/styles.css?v=20260918_4',
-  '/app.js?v=20260921_30',
+  '/app.js?v=20260921_31',
   '/manifest.webmanifest',
   '/assets/heating-cooling-logo.png',
   '/assets/heating-cooling-logo.jpg',
