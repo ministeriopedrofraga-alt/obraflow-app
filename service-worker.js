@@ -1,13 +1,14 @@
-const CACHE_NAME = 'datacenter-omnia-v6';
+const CACHE_NAME = 'datacenter-omnia-v11';
 const APP_SHELL = [
   '/',
   '/index.html',
-  '/styles.css?v=20260918_4',
-  '/app.js?v=20260921_31',
+  '/styles.css?v=20260921_6',
+  '/app.js?v=20260921_36',
   '/manifest.webmanifest',
   '/assets/heating-cooling-logo.png',
   '/assets/heating-cooling-logo.jpg',
   '/assets/afonso-franca-logo.png',
+  '/assets/formularios/FOR-ALM-5.1-check-list-de-equipamentos-rev01.xlsx',
   '/assets/workforce-seed.json',
   '/assets/vendor/html5-qrcode.min.js',
   '/assets/icons/datacenter-omnia-192.png',

@@ -32,32 +32,48 @@ const icons = {
   trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 14H7L6 7m4 4v6m4-6v6"/></svg>',
   file: '<svg viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6zM14 2v5h5M9 13h6m-6 4h6"/></svg>',
   location: '<svg viewBox="0 0 24 24"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>'
+  ,truck: '<svg viewBox="0 0 24 24"><path d="M3 6h11v11H3zM14 10h4l3 4v3h-7zM7 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>'
+  ,clipboard: '<svg viewBox="0 0 24 24"><path d="M9 5H6a2 2 0 0 0-2 2v14h16V7a2 2 0 0 0-2-2h-3M9 3h6v4H9zM8 12h8m-8 4h6"/></svg>'
 };
 
 const seedEquipments = [
   // 08M
-  { id:'tpta00674', code:'TPTA00674', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023A00135', productCode:'931-000235', invoice:'2623', emissionDate:'2026-09-10', hourmeter:170, battery:'Chumbo', contractor:'', status:'in-use', inspection:'', usage:{ person:'BRUNO DOS SANTOS SILVA', company:'HEATING COOLING', role:'Encanador', phone:'', dataHall:'Data Hall 04', location:'corredor a forca a', activity:'Instalação Hidráulica', expectedAt:'2026-09-16T22:27:00' } },
-  { id:'tpta00845', code:'TPTA00845', afNumber:'686', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701N010208', productCode:'931-000233', invoice:'2533', emissionDate:'2026-08-12', hourmeter:101, battery:'Lítio', contractor:'LA', status:'in-use', inspection:'', usage:{ person:'JOSE VERAS CARVALHO', company:'LA', role:'Eletricista', phone:'', dataHall:'Data Hall 06', location:'corredor a', activity:'Instalação Elétrica', expectedAt:'2026-09-16T22:56:00' } },
-  { id:'tpta02796', code:'TPTA02796', afNumber:'626', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04867', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'AIRTEC', status:'available', inspection:'', usage:null },
+  { id:'tpta00674', code:'TPTA00674', afNumber:'948', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023A00135', productCode:'931-000235', invoice:'2623', emissionDate:'2026-09-10', hourmeter:170, battery:'Chumbo', contractor:'', status:'in-use', inspection:'', usage:{ person:'BRUNO DOS SANTOS SILVA', company:'HEATING COOLING', role:'Encanador', phone:'', dataHall:'Data Hall 04', location:'corredor a forca a', activity:'Instalação Hidráulica', expectedAt:'2026-09-16T22:27:00' } },
+  { id:'tpta00845', code:'TPTA00845', afNumber:'626', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701N010208', productCode:'931-000233', invoice:'2533', emissionDate:'2026-08-12', hourmeter:101, battery:'Lítio', contractor:'LA', status:'in-use', inspection:'', usage:{ person:'JOSE VERAS CARVALHO', company:'LA', role:'Eletricista', phone:'', dataHall:'Data Hall 06', location:'corredor a', activity:'Instalação Elétrica', expectedAt:'2026-09-16T22:56:00' } },
+  { id:'tpta02796', code:'TPTA02796', afNumber:'686', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04867', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'AIRTEC', status:'available', inspection:'', usage:null },
   { id:'tpta02797', code:'TPTA02797', afNumber:'687', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04855', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'SIP', status:'available', inspection:'', usage:null },
   { id:'tpta02798', code:'TPTA02798', afNumber:'683', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04865', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'SIP', status:'available', inspection:'', usage:null },
   { id:'tpta02799', code:'TPTA02799', afNumber:'685', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04874', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'SIP', status:'available', inspection:'', usage:null },
   { id:'tpta01333', code:'TPTA01333', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701N010217', productCode:'931-000233', invoice:'2650', emissionDate:'2026-09-15', hourmeter:118.5, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
   { id:'tpta01604', code:'TPTA01604', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701P010467', productCode:'931-000233', invoice:'2650', emissionDate:'2026-09-15', hourmeter:158, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
   { id:'tpta01605', code:'TPTA01605', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701P010468', productCode:'931-000233', invoice:'2650', emissionDate:'2026-09-15', hourmeter:196.5, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
-  { id:'tpta00389', code:'TPTA00389', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC022K02449', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:172.8, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta00389', code:'TPTA00389', afNumber:'955', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC022K02449', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:172.8, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
   { id:'tpta00408', code:'TPTA00408', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC022K02453', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:215.3, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
-  { id:'tpta00664', code:'TPTA00664', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023A00124', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:201, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
-  { id:'tpta00823', code:'TPTA00823', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023B00418', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:203, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta00664', code:'TPTA00664', afNumber:'953', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023A00124', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:201, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta00823', code:'TPTA00823', afNumber:'954', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023B00418', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:203, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
   // 10M
-  { id:'tpta02019', code:'TPTA02019', afNumber:'', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501P010468', productCode:'931-000236', invoice:'2623', emissionDate:'2026-09-10', hourmeter:156.7, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
+  { id:'tpta02019', code:'TPTA02019', afNumber:'947', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501P010468', productCode:'931-000236', invoice:'2623', emissionDate:'2026-09-10', hourmeter:156.7, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
   { id:'tpta00254', code:'TPTA00254', afNumber:'615', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'JPAC022K02485', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:206.7, battery:'Lítio', contractor:'A.LA', status:'available', inspection:'', usage:null },
   { id:'tpta01868', code:'TPTA01868', afNumber:'618', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'JPAC023K05802', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:82.6, battery:'Lítio', contractor:'AIRTEC', status:'available', inspection:'', usage:null },
   { id:'tpta02162', code:'TPTA02162', afNumber:'617', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501S010034', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:111.5, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
   { id:'tpta00984', code:'TPTA00984', afNumber:'659', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501N010148', productCode:'931-000236', invoice:'2571', emissionDate:'2026-08-25', hourmeter:131, battery:'Lítio', contractor:'A.LA', status:'available', inspection:'', usage:null },
   // 12M
-  { id:'tpta01095', code:'TPTA01095', afNumber:'', name:'Plataforma Tesoura 12m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 12m 4x2 Li', serial:'0775500500N010105', productCode:'931-000238', invoice:'2623', emissionDate:'2026-09-10', hourmeter:112.4, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null }
+  { id:'tpta01095', code:'TPTA01095', afNumber:'949', name:'Plataforma Tesoura 12m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 12m 4x2 Li', serial:'0775500500N010105', productCode:'931-000238', invoice:'2623', emissionDate:'2026-09-10', hourmeter:112.4, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
+  // 14M
+  { id:'tpta01667', code:'TPTA01667', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', invoice:'2669', emissionDate:'2026-09-19', battery:'Lítio', contractor:'', status:'maintenance', inspection:'', usage:null },
+  { id:'tpta02240', code:'TPTA02240', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', invoice:'2669', emissionDate:'2026-09-19', battery:'Lítio', contractor:'', status:'maintenance', inspection:'', usage:null },
+  { id:'tpta02230', code:'TPTA02230', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', invoice:'2669', emissionDate:'2026-09-19', battery:'Lítio', contractor:'', status:'maintenance', inspection:'', usage:null },
+  { id:'tpta02233', code:'TPTA02233', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', invoice:'2669', emissionDate:'2026-09-19', battery:'Lítio', contractor:'', status:'maintenance', inspection:'', usage:null },
+  { id:'tpta01122', code:'TPTA01122', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', invoice:'2669', emissionDate:'2026-09-19', battery:'Lítio', contractor:'', status:'maintenance', inspection:'', usage:null },
+  { id:'tpta02664', code:'TPTA02664', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', invoice:'2669', emissionDate:'2026-09-19', battery:'Lítio', contractor:'', status:'maintenance', inspection:'', usage:null }
 ];
+
+const equipmentCatalogRevision = '2026-09-21-aff-1';
+const verifiedAfNumbers = {
+  TPTA00845:'626', TPTA02796:'686', TPTA02797:'687', TPTA02798:'683', TPTA02799:'685',
+  TPTA00389:'955', TPTA00664:'953', TPTA00674:'948', TPTA00823:'954', TPTA00254:'615',
+  TPTA00984:'659', TPTA01868:'618', TPTA02019:'947', TPTA02162:'617', TPTA01095:'949'
+};
 
 const seedHistory = [
   {
@@ -178,6 +194,31 @@ const inspectionLegend = [
   { value: 'NA', label: 'Não aplicável' }
 ];
 
+const equipmentReceivingChecklistItems = [
+  { group: 'Sistema elétrico', title: 'Cabo de energia' },
+  { group: 'Sistema elétrico', title: 'Display' },
+  { group: 'Sistema elétrico', title: 'Sonda de corrente flexível iFl' },
+  { group: 'Sistema elétrico', title: 'Terminais de teste' },
+  { group: 'Sistema elétrico', title: 'Termopar Tipo K' },
+  { group: 'Sistema elétrico', title: 'Bateria' },
+  { group: 'Sistema hidráulico', title: 'Mangueiras' },
+  { group: 'Sistema hidráulico', title: 'Vazamento de óleo' },
+  { group: 'Sistema hidráulico', title: 'Tubo flexível sanfonado' },
+  { group: 'Sistema hidráulico', title: 'Tubeira de aço inox' },
+  { group: 'Sistema hidráulico', title: 'Pistola' },
+  { group: 'Sistema hidráulico', title: 'Venture' },
+  { group: 'Estrutura mecânica', title: 'Apresenta trincas' },
+  { group: 'Estrutura mecânica', title: 'Apresenta deformação na estrutura' },
+  { group: 'Motor', title: 'Vazamento no motor' },
+  { group: 'Motor', title: 'Funcionamento do motor' }
+];
+
+const formLibrary = [
+  { id: 'for-alm-5-1', code: 'FOR.ALM-5-1', revision: '01', issuedAt: '17/06/2026', category: 'Almoxarifado', title: 'Check List de Equipamentos', description: 'Vistoria de equipamento recebido, enviado ou retornado à obra.', format: 'XLSX', file: 'assets/formularios/FOR-ALM-5.1-check-list-de-equipamentos-rev01.xlsx', digital: 'recebimento' },
+  { id: 'romaneio-materiais', code: 'ROM-OBRA', revision: 'Digital', issuedAt: '', category: 'Almoxarifado', title: 'Romaneio de Materiais', description: 'Controle dos materiais expedidos pelo almoxarifado para a obra.', format: 'DIGITAL', digital: 'romaneio' },
+  { id: 'fv-maq-st', code: 'FV-MAQ-ST', revision: '00', issuedAt: '', category: 'Equipamentos', title: 'Inspeção PEMT', description: 'Verificação de retirada, uso diário e devolução de plataforma elevatória.', format: 'DIGITAL', digital: 'pemt' }
+];
+
 const supabaseUrl = 'https://qjopbdkobxotynyrqsgk.supabase.co';
 const supabaseKey = 'sb_publishable_jN3kq2T7E7Dl26Kux3mXbg_3Dx4P7Zq';
 let supabase = null;
@@ -230,6 +271,8 @@ async function ensureQrCodeLibrary() {
 
 let equipments = [];
 let history = [];
+let packingSlips = [];
+let receivingInspections = [];
 let equipmentImportMeta = { source: 'Nenhuma base', updatedAt: '' };
 let workforce = [];
 let workforceMeta = { source: 'Nenhuma base', updatedAt: '' };
@@ -373,6 +416,106 @@ function historyDatabasePayload(record) {
     .map(field => [field, field === 'id' ? String(record[field]) : record[field]]));
 }
 
+const equipmentCatalogFields = [
+  'name', 'model', 'chassis', 'serial', 'patrimony', 'battery', 'contractor',
+  'issuedate', 'inspection', 'type', 'brand', 'productCode', 'invoice',
+  'emissionDate', 'afNumber', 'capacity'
+];
+
+function equipmentDatabasePayload(record, { catalogOnly = false } = {}) {
+  const fields = catalogOnly
+    ? ['id', 'code', ...equipmentCatalogFields, 'updatedAt']
+    : ['id', 'code', ...equipmentCatalogFields, 'hourmeter', 'status', 'usage', 'updatedAt'];
+  return Object.fromEntries(fields
+    .filter(field => record[field] !== undefined)
+    .map(field => [field,
+      field === 'id' ? String(record[field])
+        : field === 'hourmeter' && record[field] !== null ? String(record[field])
+          : record[field]
+    ]));
+}
+
+async function persistEquipmentRecords(records, options = {}) {
+  if (!records?.length) return;
+  await Promise.all(records.map(async record => {
+    const payload = equipmentDatabasePayload(record, options);
+    const updatePayload = { ...payload };
+    delete updatePayload.id;
+    const updated = await supabaseRestRequest(
+      `equipments?id=eq.${encodeURIComponent(payload.id)}&select=id`,
+      {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify(updatePayload),
+        timeoutMs: 30000
+      }
+    );
+    if (Array.isArray(updated) && updated.length > 0) return;
+
+    const inserted = await supabaseRestRequest('equipments?on_conflict=id&select=id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify(payload),
+      timeoutMs: 30000
+    });
+    if (!Array.isArray(inserted) || inserted.length === 0) {
+      throw new Error(`O banco não confirmou a gravação do equipamento ${record.code || record.id}.`);
+    }
+  }));
+}
+
+async function persistEquipmentCatalog(records) {
+  await Promise.all((records || []).map(record => {
+    const payload = equipmentDatabasePayload(record, { catalogOnly: true });
+    delete payload.id;
+    return supabaseRestRequest(`equipments?id=eq.${encodeURIComponent(record.id)}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify(payload),
+      timeoutMs: 30000
+    });
+  }));
+}
+
+function remoteEquipmentRecord(record) {
+  const nullableFields = new Set(['usage', 'inspection']);
+  return Object.fromEntries(Object.entries(record || {}).filter(([field, value]) =>
+    value !== undefined && (value !== null || nullableFields.has(field))
+  ));
+}
+
+function mergeEquipmentSnapshots(localRecord, remoteRecord, localWins = false) {
+  const remoteDefined = remoteEquipmentRecord(remoteRecord);
+  if (!localRecord) return sanitizeEquipment(remoteDefined);
+  if (!remoteRecord) return sanitizeEquipment(localRecord);
+  const chosen = localWins
+    ? { ...sanitizeEquipment(remoteDefined), ...localRecord }
+    : { ...localRecord, ...remoteDefined };
+  return sanitizeEquipment(chosen);
+}
+
+async function backfillLocalEquipmentCatalog(localRecords, remoteRecords) {
+  const remoteByCode = new Map((remoteRecords || []).map(record => [String(record.code || record.id || '').toUpperCase(), record]));
+  const localOnly = [];
+  const missingCatalog = [];
+  localRecords.forEach(local => {
+    const remote = remoteByCode.get(String(local.code || local.id || '').toUpperCase());
+    if (!remote) {
+      localOnly.push(local);
+      return;
+    }
+    const hasMissingRemoteData = equipmentCatalogFields.some(field =>
+      (remote[field] === null || remote[field] === undefined || remote[field] === '') &&
+      local[field] !== null && local[field] !== undefined && local[field] !== ''
+    );
+    if (hasMissingRemoteData) {
+      missingCatalog.push({ ...local, id: remote.id || local.id, code: remote.code || local.code, updatedAt: new Date().toISOString() });
+    }
+  });
+  if (missingCatalog.length) await persistEquipmentCatalog(missingCatalog);
+  if (localOnly.length) await persistEquipmentRecords(localOnly);
+}
+
 function sanitizeEquipment(item) {
   const codeUpper = (item.code || item.id || '').toUpperCase();
   const seed = seedEquipments.find(s => s.code.toUpperCase() === codeUpper);
@@ -408,6 +551,19 @@ function normalizeEquipmentUsage(usage) {
     // Registros antigos usavam "person". Todas as telas atuais usam "responsible".
     responsible: usage.responsible || usage.person || ''
   };
+}
+
+function migrateVerifiedEquipmentCatalog() {
+  if (localStorage.getItem('obraflow_equipment_catalog_revision') === equipmentCatalogRevision) return false;
+  let changed = false;
+  equipments = equipments.map(equipment => {
+    const afNumber = verifiedAfNumbers[String(equipment.code || '').toUpperCase()];
+    if (!afNumber || String(equipment.afNumber || '') === afNumber) return equipment;
+    changed = true;
+    return { ...equipment, afNumber };
+  });
+  localStorage.setItem('obraflow_equipment_catalog_revision', equipmentCatalogRevision);
+  return changed;
 }
 
 function loadLocalStorageBackup() {
@@ -449,9 +605,20 @@ function loadLocalStorageBackup() {
       const parsed = JSON.parse(localWf);
       if (Array.isArray(parsed) && parsed.length > 0) workforce = parsed;
     }
+    const localPackingSlips = localStorage.getItem('obraflow_packing_slips');
+    if (localPackingSlips) {
+      const parsed = JSON.parse(localPackingSlips);
+      if (Array.isArray(parsed)) packingSlips = parsed;
+    }
+    const localReceivingInspections = localStorage.getItem('obraflow_receiving_inspections');
+    if (localReceivingInspections) {
+      const parsed = JSON.parse(localReceivingInspections);
+      if (Array.isArray(parsed)) receivingInspections = parsed;
+    }
   } catch (e) {
     console.warn('Erro ao carregar do localStorage:', e);
   }
+  if (migrateVerifiedEquipmentCatalog()) saveLocalBackup();
 }
 
 function saveLocalBackup() {
@@ -459,7 +626,9 @@ function saveLocalBackup() {
   const entries = [
     ['obraflow_equipments', equipments],
     ['obraflow_history', history],
-    ['obraflow_workforce', workforce]
+    ['obraflow_workforce', workforce],
+    ['obraflow_packing_slips', packingSlips],
+    ['obraflow_receiving_inspections', receivingInspections]
   ];
   entries.forEach(([key, value]) => {
     try {
@@ -555,6 +724,81 @@ async function save(equipmentId = '', historyId = '') {
   return { local: savedLocally, remote: true };
 }
 
+let packingSlipRemoteAvailable = null;
+async function syncPackingSlipsFromSupabase() {
+  try {
+    const rows = await supabaseRestRequest('packing_slips?select=id,data,updated_at&order=updated_at.desc');
+    const merged = new Map(packingSlips.map(item => [String(item.id), item]));
+    (rows || []).forEach(row => {
+      const remote = row.data && typeof row.data === 'object' ? row.data : null;
+      if (!remote) return;
+      const local = merged.get(String(remote.id));
+      if (!local || Date.parse(remote.updatedAt || row.updated_at || 0) >= Date.parse(local.updatedAt || 0)) {
+        merged.set(String(remote.id), remote);
+      }
+    });
+    packingSlips = Array.from(merged.values()).sort((a,b) => Date.parse(b.issuedAt || b.createdAt || 0) - Date.parse(a.issuedAt || a.createdAt || 0));
+    packingSlipRemoteAvailable = true;
+    saveLocalBackup();
+    if (['romaneios','formularios'].includes(currentPage) && !document.querySelector('#modalRoot form')) render();
+  } catch (error) {
+    packingSlipRemoteAvailable = false;
+    console.warn('Sincronização de romaneios indisponível; mantendo os dados locais:', error);
+  }
+}
+
+async function persistPackingSlip(slip) {
+  slip.updatedAt = new Date().toISOString();
+  saveLocalBackup();
+  try {
+    await supabaseRestRequest('packing_slips?on_conflict=id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ id: String(slip.id), number: slip.number, data: slip, updated_at: slip.updatedAt })
+    });
+    packingSlipRemoteAvailable = true;
+    return true;
+  } catch (error) {
+    packingSlipRemoteAvailable = false;
+    console.warn('Romaneio salvo somente neste aparelho:', error);
+    return false;
+  }
+}
+
+async function syncReceivingInspectionsFromSupabase() {
+  try {
+    const rows = await supabaseRestRequest('receiving_inspections?select=id,data,updated_at&order=updated_at.desc');
+    const merged = new Map(receivingInspections.map(item => [String(item.id), item]));
+    (rows || []).forEach(row => {
+      const remote = row.data && typeof row.data === 'object' ? row.data : null;
+      if (!remote) return;
+      const local = merged.get(String(remote.id));
+      if (!local || Date.parse(remote.updatedAt || row.updated_at || 0) >= Date.parse(local.updatedAt || 0)) merged.set(String(remote.id), remote);
+    });
+    receivingInspections = Array.from(merged.values()).sort((a,b) => Date.parse(b.inspectedAt || 0) - Date.parse(a.inspectedAt || 0));
+    saveLocalBackup();
+    if (currentPage === 'formularios' && !document.querySelector('#modalRoot form')) render();
+  } catch (error) {
+    console.warn('Sincronização dos checklists de recebimento indisponível; mantendo os dados locais:', error);
+  }
+}
+
+async function persistReceivingInspection(record) {
+  record.updatedAt = new Date().toISOString();
+  saveLocalBackup();
+  try {
+    await supabaseRestRequest('receiving_inspections?on_conflict=id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ id: String(record.id), number: record.number, data: record, updated_at: record.updatedAt })
+    });
+    return true;
+  } catch (error) {
+    console.warn('Checklist de recebimento salvo somente neste aparelho:', error);
+    return false;
+  }
+}
+
 async function waitForSupabaseClient(timeoutMs = 5000) {
   const readyClient = getSupabase();
   if (readyClient) return readyClient;
@@ -617,7 +861,7 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
     const localHistory = [...history];
     const stateBeforeSync = JSON.stringify({ equipments: localEquipments, history: localHistory });
     const [remoteEquipments, remoteHistory] = await Promise.all([
-      supabaseRestRequest('equipments?select=id,code,status,usage,hourmeter,updatedAt'),
+      supabaseRestRequest('equipments?select=*'),
       supabaseRestRequest('history?select=*')
     ]);
     // Se o operador salvou algo enquanto a consulta estava em andamento, a versão
@@ -638,25 +882,26 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
       return chooseHistoryRecord(localRecord, remoteRecord);
     }).filter(Boolean).sort((a,b) => recordTimestamp(b) - recordTimestamp(a));
 
-    const remoteEquipmentMap = new Map((remoteEquipments || []).map(item => {
-      const sanitized = sanitizeEquipment(item);
-      return [String(sanitized.code || sanitized.id || '').toUpperCase(), sanitized];
-    }));
+    try {
+      await backfillLocalEquipmentCatalog(currentLocalEquipments, remoteEquipments || []);
+    } catch (error) {
+      console.warn('Não foi possível recuperar o cadastro local de equipamentos na base compartilhada:', error);
+    }
+
+    const remoteEquipmentMap = new Map((remoteEquipments || []).map(item => [
+      String(item.code || item.id || '').toUpperCase(),
+      item
+    ]));
     const localEquipmentMap = new Map(currentLocalEquipments.map(item => [String(item.code || item.id || '').toUpperCase(), item]));
     const pendingEquipmentIds = new Set(pendingFieldEvents.map(event => String(event.equipment?.id || '')));
     const equipmentKeys = new Set([...localEquipmentMap.keys(), ...remoteEquipmentMap.keys()]);
     equipments = Array.from(equipmentKeys).map(key => {
       const localEquipment = localEquipmentMap.get(key);
       const remoteEquipment = remoteEquipmentMap.get(key);
-      if (!localEquipment) return remoteEquipment;
-      if (!remoteEquipment) return localEquipment;
       // The database is authoritative across devices. Local operational data only wins
       // while this device has a queued event that still needs to reach the database.
-      const hasPendingEvent = pendingEquipmentIds.has(String(localEquipment.id));
-      const chosen = hasPendingEvent
-        ? { ...remoteEquipment, ...localEquipment }
-        : { ...localEquipment, ...remoteEquipment };
-      return sanitizeEquipment(chosen);
+      const hasPendingEvent = localEquipment && pendingEquipmentIds.has(String(localEquipment.id));
+      return mergeEquipmentSnapshots(localEquipment, remoteEquipment, hasPendingEvent);
     }).filter(Boolean);
 
     const stateChanged = JSON.stringify({ equipments, history }) !== stateBeforeSync;
@@ -679,6 +924,8 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
 async function initializeApp() {
   equipments = seedEquipments.map(sanitizeEquipment);
   history = seedHistory;
+  packingSlips = [];
+  receivingInspections = [];
 
   // A cópia deste aparelho aparece imediatamente, sem aguardar nenhuma rede.
   loadLocalStorageBackup();
@@ -691,6 +938,8 @@ async function initializeApp() {
     if (!document.querySelector('#modalRoot form')) render();
   });
   setTimeout(() => syncFromSupabase(), 0);
+  setTimeout(() => syncPackingSlipsFromSupabase(), 100);
+  setTimeout(() => syncReceivingInspectionsFromSupabase(), 200);
 }
 function companyOptions(selected='') {
   const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))];
@@ -779,14 +1028,16 @@ let isDrawing = false;
 let hasDrawnSignature = false;
 
 function openSignatureModal() {
-  const currentSign = document.getElementById('operatorSignInput')?.value || '';
+  const signatureInput = document.getElementById('operatorSignInput');
+  const currentSign = signatureInput?.value || '';
+  const signatureLabel = signatureInput?.dataset.signatureLabel || 'Operador';
   const modalHtml = `
     <div class="signature-modal-backdrop" id="signatureModalBackdrop" onclick="if(event.target===this)closeSignatureModal()">
       <div class="signature-modal-card">
         <header class="signature-modal-head">
           <div>
-            <h3>Rubrica do Operador</h3>
-            <p>Desenhe a sua assinatura ou rubrica com o dedo na área abaixo</p>
+            <h3>Assinatura — ${esc(signatureLabel)}</h3>
+            <p>Desenhe a assinatura ou rubrica com o dedo na área abaixo</p>
           </div>
           <button type="button" class="icon-button" onclick="closeSignatureModal()">${icon('close')}</button>
         </header>
@@ -994,7 +1245,7 @@ function render() {
     updateAppShellAccess();
     const hash = location.hash.replace('#','') || 'dashboard';
 
-    if (!isAdmin() && ['dashboard', 'empresas', 'relatorios'].includes(hash) && !hash.startsWith('scan/')) {
+    if (!isAdmin() && ['dashboard', 'empresas', 'relatorios', 'romaneios', 'formularios'].includes(hash) && !hash.startsWith('scan/')) {
       currentPage = 'equipamentos';
       renderEquipments();
     } else if (hash.startsWith('scan/')) {
@@ -1006,14 +1257,16 @@ function render() {
       currentPage = 'equipamentos';
       renderMovements();
     } else {
-      currentPage = ['dashboard','equipamentos','empresas','relatorios'].includes(hash) ? hash : 'equipamentos';
-      const views = { dashboard: renderDashboard, equipamentos: renderEquipments, empresas: renderCompanies, relatorios: renderReports };
+      currentPage = ['dashboard','equipamentos','romaneios','formularios','empresas','relatorios'].includes(hash) ? hash : 'equipamentos';
+      const views = { dashboard: renderDashboard, equipamentos: renderEquipments, romaneios: renderPackingSlips, formularios: renderFormsHub, empresas: renderCompanies, relatorios: renderReports };
       (views[currentPage] || renderEquipments)();
     }
 
     document.querySelectorAll('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.page === currentPage));
     const navCount = document.getElementById('navEquipmentCount');
     if (navCount) navCount.textContent = equipments.length;
+    const packingSlipCount = document.getElementById('navPackingSlipCount');
+    if (packingSlipCount) packingSlipCount.textContent = packingSlips.length;
     closeMobileMenu();
     hydrateIcons();
   } catch (err) {
@@ -1043,13 +1296,14 @@ function renderDashboard() {
       </article>
       <aside class="future-modules panel">
         <div class="panel-head"><div><h2>Outros módulos</h2><p>A estrutura está pronta para crescer</p></div></div>
-        <div class="future-module"><span>${icon('file')}</span><div><strong>Diário de obra</strong><small>RDO, atividades e evidências</small></div><b>Em breve</b></div>
+        <button class="future-module module-link" onclick="location.hash='romaneios'"><span>${icon('truck')}</span><div><strong>Romaneios</strong><small>Materiais enviados à obra</small></div><b>${packingSlips.length} emitidos</b></button>
+        <button class="future-module module-link" onclick="location.hash='formularios'"><span>${icon('clipboard')}</span><div><strong>Formulários</strong><small>Central de documentos da obra</small></div><b>Abrir</b></button>
         <div class="future-module"><span>${icon('shield')}</span><div><strong>Segurança</strong><small>Inspeções e permissões</small></div><b>Em breve</b></div>
         <div class="future-module"><span>${icon('building')}</span><div><strong>Empreiteiros</strong><small>Equipes e documentos</small></div><b>Em breve</b></div>
       </aside>
     </section>
     <section class="home-footer-card" id="dashboardInstallCard"><div><span>${icon('download')}</span><div><strong>Instalar DataCenter Omnia neste aparelho</strong><small>Crie um atalho com o icone da Heating Cooling e abra o sistema como aplicativo.</small></div></div><button class="button button-green compact" onclick="installDataCenterApp()">Instalar App ${icon('download')}</button></section>
-    <section class="home-footer-card"><div><span>${icon('file')}</span><div><strong>${history.length} formulários registrados</strong><small>Consulte os registros digitais e imprima a via física PEMT.</small></div></div><button class="button button-outline compact" onclick="location.hash='pemt-checklists'">Checklists PEMT ${icon('arrow')}</button></section>`;
+    <section class="home-footer-card"><div><span>${icon('file')}</span><div><strong>${formsHubRecords().length} formulários registrados</strong><small>Acesse os modelos oficiais, revisões e registros preenchidos.</small></div></div><button class="button button-outline compact" onclick="location.hash='formularios'">Abrir biblioteca ${icon('arrow')}</button></section>`;
 }
 
 function equipmentRow(eq) {
@@ -1347,6 +1601,8 @@ async function handleEquipmentUpload(event) {
     if(!imported.length) throw new Error('Planilha sem equipamentos válidos. Use o modelo oficial com os sete cabeçalhos na linha 3, incluindo Status.');
     let added = 0;
     let updated = 0;
+    const importedAt = new Date().toISOString();
+    const changedEquipments = [];
     imported.forEach(item => {
       const existingIndex = equipments.findIndex(e => e.code.toUpperCase() === item.code.toUpperCase());
       if (existingIndex >= 0) {
@@ -1356,27 +1612,42 @@ async function handleEquipmentUpload(event) {
           afNumber: item.afNumber || equipments[existingIndex].afNumber || '',
           contractor: item.contractor || equipments[existingIndex].contractor || '',
           status: equipments[existingIndex].usage ? 'in-use' : (item.status === 'maintenance' ? 'maintenance' : 'available'),
-          usage: equipments[existingIndex].usage
+          usage: equipments[existingIndex].usage,
+          updatedAt: importedAt
         };
+        changedEquipments.push(equipments[existingIndex]);
         updated++;
       } else {
         item.id = `pta-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
         item.status = item.status === 'maintenance' ? 'maintenance' : 'available';
         item.usage = null;
+        item.updatedAt = importedAt;
         equipments.push(item);
+        changedEquipments.push(item);
         added++;
       }
     });
 
     equipments.sort((a,b)=>safeSort(a.model||a.name, b.model||b.name)||safeSort(a.code, b.code));
     equipmentImportMeta={source:file.name,updatedAt:new Date().toISOString(),total:imported.length};
-    const client = getSupabase();
-    if (client) client.from('app_metadata').upsert({key:'equipment_import_meta',value:equipmentImportMeta});
-    save();
+    saveLocalBackup();
+    localDataRevision += 1;
+    let shared = true;
+    try {
+      await persistEquipmentRecords(changedEquipments);
+      const client = getSupabase();
+      if (client) client.from('app_metadata').upsert({key:'equipment_import_meta',value:equipmentImportMeta});
+    } catch (error) {
+      shared = false;
+      console.warn('A planilha foi salva localmente, mas não chegou à base compartilhada:', error);
+    }
     closeModal(); renderEquipments();
     const navCount = document.getElementById('navEquipmentCount');
     if (navCount) navCount.textContent = equipments.length;
-    toast(`${updated} equipamento(s) atualizado(s) e ${added} novo(s) importado(s).`);
+    toast(shared
+      ? `${updated} equipamento(s) atualizado(s) e ${added} novo(s) importado(s) em todos os aparelhos.`
+      : `${updated} equipamento(s) atualizado(s) e ${added} novo(s) salvos somente neste aparelho. Verifique a internet e importe novamente.`,
+      !shared);
   } catch(error){toast(error.message||'Não foi possível ler a planilha de equipamentos.',true);}
 }
 
@@ -1530,6 +1801,325 @@ async function exportChecklistExcel() {
 function openBlankInspectionTemplate() {
   const eq={code:'',name:'',model:'',serial:''}; const movement={company:'',person:'',activity:'',dataHall:'',location:'',inspection:{mode:'retirada',inspectedAt:'',hourmeter:'',operatorSign:'',observations:'',answers:Array(checklistItems.length).fill('')}};
   modal(`${modalHead('Modelo do formulário de verificação','FV-MAQ-ST · modelo em branco')}<div class="modal-body inspection-record">${printableInspection(eq,movement)}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('download')} Imprimir / salvar PDF</button></div>`,'modal-paper'); document.querySelector('.modal-backdrop').classList.add('print-area','inspection-print-area');
+}
+
+function packingSlipStatus(status) {
+  const labels = { sent: 'Enviado', received: 'Arquivado', divergence: 'Cancelado' };
+  const classes = { sent: 'in-use', received: 'available', divergence: 'maintenance' };
+  return `<span class="status ${classes[status] || 'in-use'}">${labels[status] || 'Em trânsito'}</span>`;
+}
+
+function nextPackingSlipNumber() {
+  const year = new Date().getFullYear();
+  const highest = packingSlips.reduce((max, item) => {
+    const match = String(item.number || '').match(/ROM-\d{4}-(\d+)/);
+    return Math.max(max, match ? Number(match[1]) : 0);
+  }, 0);
+  return `ROM-${year}-${String(highest + 1).padStart(4, '0')}`;
+}
+
+function packingItemFields(item = {}, index = 0) {
+  return `<div class="packing-item-row">
+    <span class="packing-item-index">${String(index + 1).padStart(2, '0')}</span>
+    <label><span>Código</span><input name="itemCode" placeholder="Ex.: MAT-001" value="${esc(item.code || '')}"></label>
+    <label class="packing-description"><span>Descrição do material <em>*</em></span><input name="itemDescription" required placeholder="Ex.: Tubo aço carbono 2 pol." value="${esc(item.description || '')}"></label>
+    <label><span>Unidade</span><select name="itemUnit">${['un','pç','m','kg','cx','kit','rolo'].map(unit => `<option ${item.unit===unit?'selected':''}>${unit}</option>`).join('')}</select></label>
+    <label><span>Quantidade <em>*</em></span><input name="itemQuantity" type="number" inputmode="decimal" min="0.01" step="0.01" required value="${esc(item.quantity || 1)}"></label>
+    <label class="packing-observation"><span>Observação</span><input name="itemObservation" placeholder="Lote, marca ou referência" value="${esc(item.observation || '')}"></label>
+    <button type="button" class="icon-button packing-remove" title="Remover item" onclick="removePackingItem(this)">${icon('trash')}</button>
+  </div>`;
+}
+
+function addPackingItem(item = {}) {
+  const list = document.getElementById('packingItems');
+  if (!list) return;
+  list.insertAdjacentHTML('beforeend', packingItemFields(item, list.children.length));
+  renumberPackingItems();
+}
+
+function removePackingItem(button) {
+  const list = document.getElementById('packingItems');
+  if (!list || list.children.length <= 1) return toast('O romaneio precisa ter pelo menos um material.', true);
+  button.closest('.packing-item-row')?.remove();
+  renumberPackingItems();
+}
+
+function renumberPackingItems() {
+  document.querySelectorAll('#packingItems .packing-item-index').forEach((element, index) => element.textContent = String(index + 1).padStart(2, '0'));
+}
+
+function openPackingSlipModal() {
+  modal(`<form onsubmit="submitPackingSlip(event)">${modalHead('Novo romaneio de materiais','Registre o que está saindo do almoxarifado para a obra')}
+    <div class="modal-body">
+      <div class="section-title"><span>${icon('truck')}</span><div><h3>Identificação e transporte</h3><small>Dados de emissão e destino da carga</small></div></div>
+      <div class="form-grid packing-header-grid">
+        <div class="field"><label>Número do romaneio</label><input name="number" value="${nextPackingSlipNumber()}" readonly></div>
+        <div class="field"><label>Data e hora da saída <em>*</em></label><input name="issuedAt" type="datetime-local" required value="${nowLocal()}"></div>
+        <div class="field"><label>Origem <em>*</em></label><input name="origin" required value="Almoxarifado"></div>
+        <div class="field"><label>Destino / frente de serviço <em>*</em></label><input name="destination" required placeholder="Ex.: Data Hall 04 — Sala técnica"></div>
+        <div class="field"><label>Responsável pelo envio <em>*</em></label><input name="sentBy" required value="${esc(currentUser?.name || '')}" placeholder="Nome do almoxarife"></div>
+        <div class="field"><label>Solicitante / responsável na obra <em>*</em></label><input name="requestedBy" required placeholder="Quem solicitou ou receberá"></div>
+        <div class="field"><label>Transportadora / motorista</label><input name="carrier" placeholder="Nome ou empresa"></div>
+        <div class="field"><label>Veículo / placa</label><input name="vehicle" placeholder="Ex.: Hilux ABC1D23"></div>
+      </div>
+      <div class="section-title packing-items-title"><span>${icon('pallet')}</span><div><h3>Materiais enviados</h3><small>Inclua todos os volumes e quantidades desta remessa</small></div><button type="button" class="button button-outline compact" onclick="addPackingItem()">${icon('plus')} Adicionar item</button></div>
+      <div id="packingItems" class="packing-items">${packingItemFields({}, 0)}</div>
+      <div class="field full packing-notes"><label>Observações gerais</label><textarea name="notes" placeholder="Informações sobre acondicionamento, urgência ou instruções para recebimento..."></textarea></div>
+    </div>
+    <div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Emitir romaneio</button></div>
+  </form>`, 'modal-inspection');
+}
+
+async function submitPackingSlip(event) {
+  event.preventDefault();
+  const form = event.target;
+  const data = new FormData(form);
+  const descriptions = data.getAll('itemDescription');
+  const codes = data.getAll('itemCode');
+  const units = data.getAll('itemUnit');
+  const quantities = data.getAll('itemQuantity');
+  const observations = data.getAll('itemObservation');
+  const items = descriptions.map((description, index) => ({
+    code: codes[index] || '', description: String(description).trim(), unit: units[index] || 'un',
+    quantity: Number(quantities[index]), observation: observations[index] || ''
+  })).filter(item => item.description && item.quantity > 0);
+  if (!items.length) return toast('Adicione pelo menos um material ao romaneio.', true);
+  const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rom-${Date.now()}`;
+  const slip = {
+    id, number: data.get('number'), issuedAt: data.get('issuedAt'), origin: data.get('origin'),
+    destination: data.get('destination'), sentBy: data.get('sentBy'), requestedBy: data.get('requestedBy'),
+    carrier: data.get('carrier') || '', vehicle: data.get('vehicle') || '', notes: data.get('notes') || '',
+    items, status: 'sent', createdAt: new Date().toISOString(), createdBy: currentUser?.name || ''
+  };
+  packingSlips.unshift(slip);
+  const synced = await persistPackingSlip(slip);
+  closeModal();
+  location.hash = 'romaneios';
+  render();
+  toast(synced ? `${slip.number} emitido e sincronizado.` : `${slip.number} emitido e salvo neste aparelho.`);
+}
+
+function renderPackingSlips() {
+  const totalItems = packingSlips.reduce((sum, slip) => sum + (slip.items?.length || 0), 0);
+  const month = new Date().toISOString().slice(0,7);
+  const thisMonth = packingSlips.filter(item => String(item.issuedAt || '').startsWith(month)).length;
+  const destinations = new Set(packingSlips.map(item => item.destination).filter(Boolean)).size;
+  document.getElementById('app').innerHTML = `
+    ${pageHeader('Controle de romaneios', 'Acompanhe os materiais enviados pelo almoxarifado até o recebimento na obra.', 'ALMOXARIFADO E LOGÍSTICA', `<button class="button button-green" onclick="openPackingSlipModal()">${icon('plus')} Novo romaneio</button>`)}
+    <section class="metrics-grid packing-metrics">${metric('ROMANEIOS', packingSlips.length, 'emitidos', 'blue', 'file', 100)}${metric('NESTE MÊS', thisMonth, 'remessas expedidas', 'amber', 'truck', packingSlips.length ? thisMonth/packingSlips.length*100 : 0)}${metric('ITENS ENVIADOS', totalItems, 'linhas de materiais', 'green', 'pallet', 100)}${metric('DESTINOS', destinations, 'frentes atendidas', 'blue', 'location', 100)}</section>
+    <div class="packing-filters">
+      <label class="search-box">${icon('search')}<input id="packingSearch" type="search" placeholder="Buscar número, material, destino ou responsável..." oninput="filterPackingSlips()"></label>
+      <label class="filter-field"><span>Status</span><select id="packingStatusFilter" onchange="filterPackingSlips()"><option value="">Todos</option><option value="sent">Enviados</option></select></label>
+      <label class="filter-field"><span>Data inicial</span><input id="packingStart" type="date" onchange="filterPackingSlips()"></label>
+      <label class="filter-field"><span>Data final</span><input id="packingEnd" type="date" onchange="filterPackingSlips()"></label>
+    </div>
+    <article class="panel packing-panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Romaneio</th><th>Data de saída</th><th>Origem → destino</th><th>Responsáveis</th><th>Materiais</th><th>Status</th><th></th></tr></thead><tbody>
+      ${packingSlips.map(slip => `<tr class="packing-record-row" data-status="${slip.status}" data-date="${String(slip.issuedAt || '').slice(0,10)}" data-search="${esc(`${slip.number} ${slip.origin} ${slip.destination} ${slip.sentBy} ${slip.requestedBy} ${(slip.items||[]).map(item=>`${item.code} ${item.description}`).join(' ')}`.toLowerCase())}"><td><strong class="document-number">${esc(slip.number)}</strong><small class="table-sub">${esc(slip.vehicle || slip.carrier || 'Transporte não informado')}</small></td><td>${fullDate(slip.issuedAt)}</td><td><strong>${esc(slip.origin)}</strong><small class="table-sub">${icon('arrow')} ${esc(slip.destination)}</small></td><td><strong>${esc(slip.sentBy)}</strong><small class="table-sub">Recebedor: ${esc(slip.requestedBy)}</small></td><td><strong>${slip.items?.length || 0} item(ns)</strong><small class="table-sub">${esc((slip.items || []).slice(0,2).map(item=>item.description).join(', '))}${slip.items?.length > 2 ? '…' : ''}</small></td><td>${packingSlipStatus(slip.status)}</td><td><button class="table-action" onclick="openPackingSlipRecord('${slip.id}')">${icon('file')} Abrir</button></td></tr>`).join('')}
+    </tbody></table></div>${packingSlips.length ? '' : `<div class="empty-state"><div><span>${icon('truck')}</span><h2>Nenhum romaneio emitido</h2><p>Crie o primeiro romaneio para registrar os materiais enviados pelo almoxarifado.</p><button class="button button-green" onclick="openPackingSlipModal()">${icon('plus')} Novo romaneio</button></div></div>`}<div class="no-filter-results" id="noPackingResults">Nenhum romaneio encontrado com estes filtros.</div></article>`;
+}
+
+function filterPackingSlips() {
+  const search = document.getElementById('packingSearch')?.value.toLowerCase() || '';
+  const status = document.getElementById('packingStatusFilter')?.value || '';
+  const start = document.getElementById('packingStart')?.value || '';
+  const end = document.getElementById('packingEnd')?.value || '';
+  let visible = 0;
+  document.querySelectorAll('.packing-record-row').forEach(row => {
+    const show = (!search || row.dataset.search.includes(search)) && (!status || row.dataset.status === status) && (!start || row.dataset.date >= start) && (!end || row.dataset.date <= end);
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  const empty = document.getElementById('noPackingResults');
+  if (empty) empty.style.display = document.querySelectorAll('.packing-record-row').length && !visible ? 'block' : 'none';
+}
+
+function printablePackingSlip(slip) {
+  return `<article class="packing-document">
+    <header class="packing-document-head"><div class="report-logos"><img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling"><img src="assets/afonso-franca-logo.png" alt="Afonso França Engenharia"></div><div><small>CONTROLE DE MATERIAIS · DC01</small><h1>ROMANEIO DE MATERIAIS</h1><p>Controle de expedição do almoxarifado para a obra</p></div><aside><strong>${esc(slip.number)}</strong><span>${packingSlipStatus(slip.status)}</span></aside></header>
+    <section class="packing-document-meta"><span><small>Saída</small><strong>${fullDate(slip.issuedAt)}</strong></span><span><small>Origem</small><strong>${esc(slip.origin)}</strong></span><span><small>Destino</small><strong>${esc(slip.destination)}</strong></span><span><small>Veículo / placa</small><strong>${esc(slip.vehicle || '—')}</strong></span><span><small>Responsável pelo envio</small><strong>${esc(slip.sentBy)}</strong></span><span><small>Solicitante / recebedor</small><strong>${esc(slip.requestedBy)}</strong></span><span><small>Transportadora / motorista</small><strong>${esc(slip.carrier || '—')}</strong></span><span><small>Emissor</small><strong>${esc(slip.createdBy || slip.sentBy)}</strong></span></section>
+    <table class="packing-document-table"><thead><tr><th>Item</th><th>Código</th><th>Descrição do material</th><th>Un.</th><th>Qtd. enviada</th><th>Observação</th></tr></thead><tbody>${(slip.items || []).map((item,index)=>`<tr><td>${index+1}</td><td>${esc(item.code||'—')}</td><td>${esc(item.description)}</td><td>${esc(item.unit)}</td><td>${esc(item.quantity)}</td><td>${esc(item.observation || '')}</td></tr>`).join('')}</tbody></table>
+    ${slip.notes ? `<div class="packing-document-notes"><strong>Observações do envio</strong><p>${esc(slip.notes)}</p></div>` : ''}
+    <section class="packing-signatures"><span>Responsável pelo envio<br><br>________________________________</span><span>Transportador<br><br>________________________________</span><span>Controle da obra<br><br>________________________________</span></section>
+    <footer class="report-footer">Documento gerado pelo ObraFlow · Gestão HVAC · ${fullDate(new Date().toISOString())}</footer>
+  </article>`;
+}
+
+function openPackingSlipRecord(id) {
+  const slip = packingSlips.find(item => String(item.id) === String(id));
+  if (!slip) return toast('Romaneio não encontrado.', true);
+  modal(`${modalHead(`Romaneio ${esc(slip.number)}`, `${slip.items?.length || 0} item(ns) · ${esc(slip.destination)}`)}<div class="modal-body report-preview">${printablePackingSlip(slip)}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir / salvar PDF</button></div>`, 'modal-paper');
+  document.querySelector('.modal-backdrop').classList.add('print-area','packing-slip-print-area');
+}
+
+function nextReceivingInspectionNumber() {
+  const year = new Date().getFullYear();
+  const highest = receivingInspections.reduce((max, item) => {
+    const match = String(item.number || '').match(/REC-\d{4}-(\d+)/);
+    return Math.max(max, match ? Number(match[1]) : 0);
+  }, 0);
+  return `REC-${year}-${String(highest + 1).padStart(4, '0')}`;
+}
+
+function equipmentChecklistRows(record = null, editable = true) {
+  let currentGroup = '';
+  return equipmentReceivingChecklistItems.map((item, index) => {
+    const answer = record?.answers?.[index] || {};
+    const groupRow = item.group !== currentGroup ? `<tr class="equipment-check-group"><th colspan="7">${esc(item.group)}</th></tr>` : '';
+    currentGroup = item.group;
+    const option = (value, label) => editable
+      ? `<label><input type="radio" name="equipmentCheck${index}" value="${value}" required><span>${label}</span></label>`
+      : (answer.result === value ? 'X' : '');
+    return `${groupRow}<tr><td>${index + 1}</td><td>${esc(item.title)}</td><td>${option('good','BOM')}</td><td>${option('repair_yes','SIM')}</td><td>${option('repair_no','NÃO')}</td><td>${option('na','N.A')}</td><td>${editable?`<input name="equipmentNote${index}" placeholder="Observação">`:esc(answer.observation || '')}</td></tr>`;
+  }).join('');
+}
+
+function openReceivingInspection() {
+  modal(`<form onsubmit="submitReceivingInspection(event)">${modalHead('Preencher formulário oficial','FOR.ALM-5-1 · Check List de Equipamentos · Revisão 01')}<div class="modal-body receiving-official-wrap">
+    <section class="equipment-receiving-sheet">
+      <header class="equipment-receiving-head"><img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling"><h2>CHECK LIST DE EQUIPAMENTOS</h2><div><strong>Doc: FOR.ALM-5-1</strong><span>Data: 17/06/2026</span><span>Revisão: 01</span><span>Página 1 de 1</span></div></header>
+      <div class="equipment-receiving-fields">
+        <label class="operation-field"><span>Operação</span><b><input type="radio" name="operation" value="envio" required> OBRA ENVIO</b><b><input type="radio" name="operation" value="retorno" required> OBRA RETORNO</b></label>
+        <label><span>Centro de custo</span><input name="costCenter" required></label>
+        <label><span>Controle</span><input name="control" required></label>
+        <label><span>Equipamento</span><input name="equipment" required></label>
+        <label class="wide-field"><span>Fabricante / modelo</span><input name="manufacturerModel" required></label>
+        <label><span>Data e hora</span><input type="datetime-local" name="inspectedAt" required value="${nowLocal()}"></label>
+        <label class="wide-field"><span>Inspecionado por</span><input name="inspectedBy" required value="${esc(currentUser?.name || '')}"></label>
+      </div>
+      <table class="equipment-check-table"><colgroup><col class="item-col"><col><col class="answer-col"><col class="answer-col"><col class="answer-col"><col class="answer-col"><col class="notes-col"></colgroup><thead><tr><th rowspan="2">Item</th><th rowspan="2">Itens vistoriados</th><th rowspan="2">Bom</th><th colspan="2">Reparo</th><th rowspan="2">N.A.</th><th rowspan="2">Observações</th></tr><tr><th>Sim</th><th>Não</th></tr></thead><tbody>${equipmentChecklistRows()}</tbody></table>
+      <label class="equipment-comments"><span>Comentários</span><textarea name="comments"></textarea></label>
+      <div class="equipment-receiving-footer">
+        <label><span>Responsável pelo equipamento</span><input name="equipmentResponsible" required></label>
+        <label class="conclusion-field"><span>Declaramos que o equipamento vistoriado encontra-se em:</span><b><input type="radio" name="conclusion" value="operational" required> Condições de operar sem risco</b><b><input type="radio" name="conclusion" value="blocked" required> Não tem condições de operar</b></label>
+        <label class="operator-sign-field"><span>Assinatura do inspetor <em>*</em></span><input type="hidden" name="operatorSign" id="operatorSignInput" data-signature-label="Inspetor"><div id="signPreviewContainer" class="sign-preview-box" onclick="openSignatureModal()"><span class="sign-placeholder-text">✍️ Clique aqui para desenhar a assinatura</span></div></label>
+        <label><span>Local</span><input name="location" required value="DataCenter Omnia — DC01"></label>
+      </div>
+    </section>
+  </div><div class="modal-foot"><a class="button button-outline" href="assets/formularios/FOR-ALM-5.1-check-list-de-equipamentos-rev01.xlsx" download>${icon('download')} Baixar original</a><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Salvar checklist</button></div></form>`, 'modal-inspection');
+}
+
+async function submitReceivingInspection(event) {
+  event.preventDefault();
+  const form = event.target;
+  const data = Object.fromEntries(new FormData(form));
+  if (!data.operatorSign) return toast('Registre a assinatura do inspetor.', true);
+  const answers = equipmentReceivingChecklistItems.map((item,index) => ({ title: item.title, group: item.group, result: data[`equipmentCheck${index}`], observation: data[`equipmentNote${index}`] || '' }));
+  const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rec-${Date.now()}`;
+  const record = {
+    id, number: nextReceivingInspectionNumber(), templateCode: 'FOR.ALM-5-1', templateRevision: '01', templateDate: '17/06/2026',
+    operation: data.operation, costCenter: data.costCenter, control: data.control, equipment: data.equipment,
+    manufacturerModel: data.manufacturerModel, inspectedAt: data.inspectedAt, inspectedBy: data.inspectedBy,
+    equipmentResponsible: data.equipmentResponsible, location: data.location, comments: data.comments || '',
+    conclusion: data.conclusion, inspectorSignature: data.operatorSign, answers, photos: [], createdAt: new Date().toISOString()
+  };
+  receivingInspections.unshift(record);
+  const synced = await persistReceivingInspection(record);
+  closeModal(); location.hash = 'formularios'; render();
+  toast(`${record.number} salvo${synced?' e sincronizado':' neste aparelho'}.`, record.conclusion === 'blocked');
+}
+
+function receivingResultLabel(value) {
+  return ({ good: 'Bom', repair_yes: 'Reparo — Sim', repair_no: 'Reparo — Não', na: 'N.A.' })[value] || '—';
+}
+
+function printableReceivingInspection(record) {
+  return `<article class="equipment-receiving-sheet printable-receiving">
+    <header class="equipment-receiving-head"><img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling"><h2>CHECK LIST DE EQUIPAMENTOS</h2><div><strong>Doc: ${esc(record.templateCode)}</strong><span>Data: ${esc(record.templateDate)}</span><span>Revisão: ${esc(record.templateRevision)}</span><span>Página 1 de 1</span></div></header>
+    <div class="equipment-receiving-fields record-fields"><span><small>Operação</small><strong>${record.operation==='retorno'?'OBRA RETORNO':'OBRA ENVIO'}</strong></span><span><small>Centro de custo</small><strong>${esc(record.costCenter)}</strong></span><span><small>Controle</small><strong>${esc(record.control)}</strong></span><span><small>Equipamento</small><strong>${esc(record.equipment)}</strong></span><span class="wide-field"><small>Fabricante / modelo</small><strong>${esc(record.manufacturerModel)}</strong></span><span><small>Data e hora</small><strong>${fullDate(record.inspectedAt)}</strong></span><span class="wide-field"><small>Inspecionado por</small><strong>${esc(record.inspectedBy)}</strong></span></div>
+    <table class="equipment-check-table"><colgroup><col class="item-col"><col><col class="answer-col"><col class="answer-col"><col class="answer-col"><col class="answer-col"><col class="notes-col"></colgroup><thead><tr><th rowspan="2">Item</th><th rowspan="2">Itens vistoriados</th><th rowspan="2">Bom</th><th colspan="2">Reparo</th><th rowspan="2">N.A.</th><th rowspan="2">Observações</th></tr><tr><th>Sim</th><th>Não</th></tr></thead><tbody>${record.answers.map((answer,index)=>`${index===0||record.answers[index-1].group!==answer.group?`<tr class="equipment-check-group"><th colspan="7">${esc(answer.group)}</th></tr>`:''}<tr><td>${index+1}</td><td>${esc(answer.title)}</td><td>${answer.result==='good'?'X':''}</td><td>${answer.result==='repair_yes'?'X':''}</td><td>${answer.result==='repair_no'?'X':''}</td><td>${answer.result==='na'?'X':''}</td><td>${esc(answer.observation || '')}</td></tr>`).join('')}</tbody></table>
+    <div class="equipment-comments record-comments"><strong>Comentários</strong><p>${esc(record.comments || '—')}</p></div>
+    <div class="receiving-record-footer"><span><small>Responsável pelo equipamento</small><strong>${esc(record.equipmentResponsible)}</strong></span><span><small>Condição final</small><strong>${record.conclusion==='operational'?'EM CONDIÇÕES DE OPERAR SEM RISCO':'NÃO TEM CONDIÇÕES DE OPERAR'}</strong></span><span><small>Local</small><strong>${esc(record.location)}</strong></span><span class="signature-record"><small>Assinatura do inspetor</small><img src="${record.inspectorSignature}" alt="Assinatura"></span></div>
+  </article>`;
+}
+
+function openReceivingInspectionRecord(id) {
+  const record = receivingInspections.find(item => String(item.id) === String(id));
+  if (!record) return toast('Checklist não encontrado.', true);
+  modal(`${modalHead(`${record.templateCode} · Revisão ${record.templateRevision}`, `${record.number} · ${esc(record.equipment)}`)}<div class="modal-body report-preview">${printableReceivingInspection(record)}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><a class="button button-outline" href="assets/formularios/FOR-ALM-5.1-check-list-de-equipamentos-rev01.xlsx" download>${icon('download')} Modelo original</a><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir / salvar PDF</button></div>`, 'modal-paper');
+  document.querySelector('.modal-backdrop').classList.add('print-area','receiving-print-area');
+}
+
+function formsHubRecords() {
+  const records = [];
+  packingSlips.forEach(slip => {
+    records.push({ type: 'romaneio', date: slip.issuedAt, number: slip.number, title: 'Romaneio de materiais', subtitle: `${slip.origin} → ${slip.destination}`, status: slip.status, id: slip.id });
+  });
+  receivingInspections.forEach(record => records.push({ type: 'recebimento', date: record.inspectedAt, number: record.number, title: `${record.templateCode} · Check List de Equipamentos`, subtitle: `${record.equipment} · ${record.inspectedBy}`, status: record.conclusion==='blocked'?'divergence':'received', id: record.id, revision: record.templateRevision }));
+  history.filter(item => item.inspection).forEach(item => {
+    const eq = equipments.find(equipment => equipment.id === item.equipmentId);
+    records.push({ type: 'pemt', date: item.inspection.inspectedAt || item.date, number: eq?.code || item.equipmentCode || 'PEMT', title: 'Inspeção PEMT', subtitle: `${item.person || 'Responsável'} · ${item.company || ''}`, status: inspectionHasFailure(item.inspection)?'divergence':'received', id: item.id });
+  });
+  return records.sort((a,b) => Date.parse(b.date || 0) - Date.parse(a.date || 0));
+}
+
+function formTemplateCard(template) {
+  const action = template.digital === 'recebimento'
+    ? `<button class="button button-green" onclick="openReceivingInspection()">${icon('edit')} Preencher no app</button>`
+    : template.digital === 'romaneio'
+      ? `<button class="button button-green" onclick="openPackingSlipModal()">${icon('plus')} Novo romaneio</button>`
+      : `<button class="button button-outline" onclick="openBlankInspectionTemplate()">${icon('print')} Imprimir modelo</button>`;
+  const download = template.file ? `<a class="button button-outline" href="${template.file}" download>${icon('download')} Baixar ${template.format}</a>` : '';
+  return `<article class="form-template-card" data-template-search="${esc(`${template.code} ${template.title} ${template.category}`.toLowerCase())}"><div class="form-template-top"><span>${icon(template.digital==='romaneio'?'truck':template.digital==='pemt'?'lift':'clipboard')}</span><b>${esc(template.category)}</b></div><div><small>${esc(template.code)}</small><h2>${esc(template.title)}</h2><p>${esc(template.description)}</p><div class="form-version"><span>Revisão <strong>${esc(template.revision)}</strong></span>${template.issuedAt?`<span>Emissão <strong>${esc(template.issuedAt)}</strong></span>`:''}<span>Formato <strong>${esc(template.format)}</strong></span></div></div><div class="form-template-actions">${action}${download}</div></article>`;
+}
+
+function formPhotoFieldHTML(name, label, { multiple = true, required = false } = {}) {
+  return `<section class="form-photo-field"><div><strong>${esc(label)}</strong><small>Use a câmera ou selecione ${multiple?'uma ou mais fotos':'uma foto'}.</small></div><label class="button button-outline">${icon('plus')} Adicionar foto<input type="file" name="${esc(name)}" accept="image/*" capture="environment" ${multiple?'multiple':''} ${required?'required':''} hidden onchange="prepareFormPhotos(this)"></label><input type="hidden" name="${esc(name)}Data"><div class="form-photo-preview"></div></section>`;
+}
+
+async function prepareFormPhotos(input) {
+  const files = Array.from(input.files || []);
+  const data = await Promise.all(files.map(file => compressFormPhoto(file)));
+  const hidden = input.closest('.form-photo-field')?.querySelector(`input[name="${CSS.escape(input.name)}Data"]`);
+  const preview = input.closest('.form-photo-field')?.querySelector('.form-photo-preview');
+  if (hidden) hidden.value = JSON.stringify(data);
+  if (preview) preview.innerHTML = data.map((source,index) => `<figure><img src="${source}" alt="Foto ${index+1}"><figcaption>Foto ${index+1}</figcaption></figure>`).join('');
+}
+
+function compressFormPhoto(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Não foi possível ler a foto.'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('Arquivo de imagem inválido.'));
+      image.onload = () => {
+        const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', .78));
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderFormsHub() {
+  const records = formsHubRecords();
+  document.getElementById('app').innerHTML = `
+    ${pageHeader('Biblioteca de formulários', 'Modelos oficiais com código, revisão, preenchimento digital e arquivo original.', 'DOCUMENTOS CONTROLADOS')}
+    <section class="library-guidance">${icon('shield')}<div><strong>Controle de revisão</strong><small>Cada modelo mantém o código e a revisão do documento oficial. Formulários com campo de foto permitem câmera ou arquivo durante o preenchimento.</small></div></section>
+    <section class="form-catalog">${formLibrary.map(formTemplateCard).join('')}</section>
+    <section class="forms-library-head"><div><h2>Formulários registrados</h2><p>${records.length} documento(s) disponíveis para consulta</p></div></section>
+    <div class="forms-filters"><label class="search-box">${icon('search')}<input id="formsSearch" type="search" placeholder="Buscar documento, número ou responsável..." oninput="filterFormsHub()"></label><label class="filter-field"><span>Tipo</span><select id="formsType" onchange="filterFormsHub()"><option value="">Todos</option><option value="romaneio">Romaneio</option><option value="recebimento">Inspeção de recebimento</option><option value="pemt">Inspeção PEMT</option></select></label><label class="filter-field"><span>Data inicial</span><input type="date" id="formsStart" onchange="filterFormsHub()"></label><label class="filter-field"><span>Data final</span><input type="date" id="formsEnd" onchange="filterFormsHub()"></label></div>
+    <article class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Data</th><th>Formulário</th><th>Documento / ativo</th><th>Referência</th><th>Resultado</th><th></th></tr></thead><tbody>${records.map(record=>`<tr class="form-record-row" data-type="${record.type}" data-date="${String(record.date||'').slice(0,10)}" data-search="${esc(`${record.title} ${record.number} ${record.subtitle}`.toLowerCase())}"><td>${fullDate(record.date)}</td><td><strong>${esc(record.title)}</strong><small class="table-sub">${record.revision?`Revisão ${esc(record.revision)} · `:''}${record.type==='pemt'?'Equipamentos':record.type==='recebimento'?'Almoxarifado · Recebimento':'Almoxarifado · Expedição'}</small></td><td><strong class="document-number">${esc(record.number)}</strong></td><td>${esc(record.subtitle)}</td><td>${record.type==='romaneio'?packingSlipStatus(record.status):`<span class="status ${record.status==='divergence'?'maintenance':'available'}">${record.status==='divergence'?'Não liberado':'Conforme'}</span>`}</td><td><button class="table-action" onclick="${record.type==='pemt'?`openInspectionRecord(${record.id})`:record.type==='recebimento'?`openReceivingInspectionRecord('${record.id}')`:`openPackingSlipRecord('${record.id}')`}">${icon('file')} Abrir</button></td></tr>`).join('')}</tbody></table></div>${records.length?'':`<div class="empty-state"><div><span>${icon('clipboard')}</span><h2>Nenhum formulário registrado</h2><p>Os documentos emitidos aparecerão aqui automaticamente.</p></div></div>`}<div class="no-filter-results" id="noFormsResults">Nenhum formulário encontrado com estes filtros.</div></article>`;
+}
+
+function filterFormsHub() {
+  const search = document.getElementById('formsSearch')?.value.toLowerCase() || '';
+  const type = document.getElementById('formsType')?.value || '';
+  const start = document.getElementById('formsStart')?.value || '';
+  const end = document.getElementById('formsEnd')?.value || '';
+  let visible = 0;
+  document.querySelectorAll('.form-record-row').forEach(row => {
+    const show = (!search || row.dataset.search.includes(search)) && (!type || row.dataset.type === type) && (!start || row.dataset.date >= start) && (!end || row.dataset.date <= end);
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  const empty = document.getElementById('noFormsResults');
+  if (empty) empty.style.display = document.querySelectorAll('.form-record-row').length && !visible ? 'block' : 'none';
 }
 
 function renderCompanies() {
@@ -1737,7 +2327,7 @@ function openEquipmentModal(id = null) {
   const eq = id ? equipments.find(e=>e.id===id) : null;
   modal(`<form id="equipmentForm" onsubmit="saveEquipment(event,'${id||''}')">${modalHead(eq?'Editar equipamento':'Novo equipamento',eq?'Atualize os dados do ativo':'Cadastre um ativo e gere seu QR Code')}<div class="modal-body"><div class="form-grid"><div class="field"><label>Tipo de equipamento <em>*</em></label><select name="type" required><option value="">Selecione...</option>${['PTA Tesoura','PTA Articulada','PTA Mastro','Paleteira Elétrica'].map(v=>`<option ${eq?.type===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Código de identificação (Patrimônio) <em>*</em></label><input name="code" required placeholder="Ex.: TPTA00674" value="${esc(eq?.code||'')}"></div><div class="field"><label>Nº AF (Afonso França)</label><input name="afNumber" placeholder="Ex.: AF-001" value="${esc(eq?.afNumber||'')}"></div><div class="field full"><label>Nome do equipamento <em>*</em></label><input name="name" required placeholder="Ex.: Plataforma Tesoura 10m" value="${esc(eq?.name||'')}"></div><div class="field"><label>Fabricante <em>*</em></label><input name="brand" required placeholder="Ex.: JLG" value="${esc(eq?.brand||'')}"></div><div class="field"><label>Modelo <em>*</em></label><input name="model" required placeholder="Ex.: 2646ES" value="${esc(eq?.model||'')}"></div><div class="field"><label>Número de série</label><input name="serial" placeholder="Número do fabricante" value="${esc(eq?.serial||'')}"></div><div class="field"><label>Capacidade</label><input name="capacity" placeholder="Ex.: 450 kg" value="${esc(eq?.capacity||'')}"></div><div class="field"><label>Status inicial</label><select name="status"><option value="available" ${!eq||eq.status==='available'?'selected':''}>Disponível</option><option value="maintenance" ${eq?.status==='maintenance'?'selected':''}>Indisponível</option></select></div><div class="field"><label>Data da última inspeção</label><input name="inspection" type="date" value="${eq?.inspection||new Date().toISOString().slice(0,10)}"></div></div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} ${eq?'Salvar alterações':'Cadastrar equipamento'}</button></div></form>`, 'modal-large');
 }
-function saveEquipment(event, id) {
+async function saveEquipment(event, id) {
   event.preventDefault(); const data = Object.fromEntries(new FormData(event.target));
   if (equipments.some(e => e.code.toLowerCase() === data.code.toLowerCase() && e.id !== id)) return toast('Este código já está cadastrado.', true);
   if (id) {
@@ -1747,7 +2337,20 @@ function saveEquipment(event, id) {
   }
   const changedEquipment = equipments.find(e => e.id === (id || equipments[0]?.id));
   if (changedEquipment) changedEquipment.updatedAt = new Date().toISOString();
-  save(); closeModal(); render(); toast(id?'Equipamento atualizado com sucesso.':'Equipamento cadastrado. QR Code pronto para impressão.');
+  saveLocalBackup();
+  localDataRevision += 1;
+  let shared = true;
+  try {
+    if (changedEquipment) await persistEquipmentRecords([changedEquipment]);
+  } catch (error) {
+    shared = false;
+    console.warn('Cadastro salvo somente neste aparelho:', error);
+  }
+  closeModal(); render();
+  toast(shared
+    ? (id?'Equipamento atualizado em todos os aparelhos.':'Equipamento cadastrado em todos os aparelhos. QR Code pronto para impressão.')
+    : 'Cadastro salvo somente neste aparelho. Verifique a internet e tente novamente.',
+    !shared);
 }
 
 function openEquipmentDetails(id) {
