@@ -1,0 +1,7 @@
+.chrome-test-profile/
+*.bak
+LocalServer.cs
+LocalServer.exe
+serve.ps1
+qr-scanner.js
+README.md

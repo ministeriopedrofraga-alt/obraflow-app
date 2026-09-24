@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#12211b" />
+    <meta name="application-name" content="DataCenter Omnia" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DataCenter Omnia" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icons/datacenter-omnia-192.png" />
+    <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png" />
+    <meta name="description" content="Gestão de equipamentos e plataformas elevatórias para obras de data center." />
+    <title>Obra DataCenter Omnia | Gestão HVAC & Equipamentos</title>
+    <link rel="stylesheet" href="styles.css?v=20260924_5" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <a class="brand" href="#dashboard" aria-label="Obra DataCenter Omnia - início">
+          <img src="assets/heating-cooling-logo.png" alt="Heating Cooling Logo" class="brand-logo-img" />
+          <span><strong>DataCenter</strong> Omnia<small>GESTÃO HVAC</small></span>
+        </a>
+
+        <nav class="main-nav" aria-label="Navegação principal">
+          <p class="nav-label">VISÃO GERAL</p>
+          <a href="#dashboard" class="nav-link active" data-page="dashboard"><span data-icon="grid"></span>Dashboard</a>
+          <p class="nav-label">MÓDULOS DA OBRA</p>
+          <a href="#equipamentos" class="nav-link" data-page="equipamentos"><span data-icon="lift"></span>Controle de PTAs <b id="navEquipmentCount">0</b></a>
+          <a href="#materiais" class="nav-link" data-page="materiais"><span data-icon="pallet"></span>Materiais e saídas <b id="navMaterialCount">0</b></a>
+          <a href="#radios" class="nav-link" data-page="radios"><span data-icon="radio"></span>Controle de rádios <b id="navRadioCount">0</b></a>
+          <a href="#formularios" class="nav-link" data-page="formularios"><span data-icon="clipboard"></span>Formulários</a>
+          <p class="nav-label">CADASTROS</p>
+          <a href="#empresas" class="nav-link" data-page="empresas"><span data-icon="building"></span>Empresas & Efetivo</a>
+          <a href="#usuarios" class="nav-link" data-page="usuarios"><span data-icon="user"></span>Usuários & Aprovações <b id="navPendingUsersCount" class="badge-pending" style="display:none; margin-left: auto; background: var(--warning, #f59e0b); color: #000; font-size: 11px; padding: 2px 6px; border-radius: 10px;">0</b></a>
+          <a href="#relatorios" class="nav-link" data-page="relatorios"><span data-icon="chart"></span>Relatórios</a>
+        </nav>
+
+        <div class="sidebar-help">
+          <span data-icon="shield"></span>
+          <div><strong>Gestão da obra</strong><small>Acesso seguro por e-mail e aprovação.</small></div>
+        </div>
+        <div class="sidebar-user" id="sidebarUserContainer">
+          <span class="avatar" id="sidebarUserAvatar">PA</span>
+          <div style="flex:1; overflow:hidden;"><strong id="sidebarUserName" style="display:block; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">Pedro Alves</strong><small id="sidebarUserRole">Administrador</small></div>
+          <button class="icon-button" id="userAuthActionButton" title="Opções de Acesso / Entrar"><span data-icon="more"></span></button>
+        </div>
+      </aside>
+
+      <div class="main-area">
+        <header class="topbar">
+          <button class="icon-button mobile-menu" id="menuButton" aria-label="Abrir menu"><span data-icon="menu"></span></button>
+          <div class="site-selector"><span class="status-dot"></span><div><small>OBRA ATIVA</small><strong>DataCenter Omnia (DC01)</strong></div><span data-icon="chevron"></span></div>
+          <div class="top-actions">
+            <button class="button button-green compact" id="installAppButton" title="Instalar DataCenter Omnia"><span data-icon="download"></span> Instalar App</button>
+            <label class="global-search"><span data-icon="search"></span><input id="globalSearch" type="search" placeholder="Buscar equipamento, responsável..." /><kbd>⌘ K</kbd></label>
+            <button class="icon-button notification-button" aria-label="Notificações"><span data-icon="bell"></span><i></i></button>
+            <button class="button button-dark compact" id="quickScanButton"><span data-icon="scan"></span> Ler QR Code</button>
+          </div>
+        </header>
+
+        <main id="app" tabindex="-1"></main>
+      </div>
+    </div>
+
+    <div class="mobile-backdrop" id="mobileBackdrop"></div>
+    <div id="modalRoot"></div>
+    <div id="toastRoot" class="toast-root" aria-live="polite"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <script src="inventory.js?v=20260924_5"></script>
+    <script src="cautelas.js?v=20260924_5"></script>
+    <script src="radios.js?v=20260924_5"></script>
+    <script src="app.js?v=20260924_5"></script>
+  </body>
+</html>
