@@ -1,9 +1,9 @@
-const CACHE_NAME = 'datacenter-omnia-v31';
+const CACHE_NAME = 'datacenter-omnia-v32';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/styles.css?v=20260925_4',
-  '/app.js?v=20260925_5',
+  '/app.js?v=20260925_6',
   '/inventory.js?v=20260924_5',
   '/cautelas.js?v=20260924_5',
   '/radios.js?v=20260925_1',
