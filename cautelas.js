@@ -186,7 +186,7 @@ function cautelaPeopleOptions() {
   const people = typeof workforce !== 'undefined' && Array.isArray(workforce) ? workforce : [];
   return [...new Map(people.filter(person => person?.name).map(person => [String(person.name).trim().toLocaleUpperCase('pt-BR'), person])).values()]
     .sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR'))
-    .map(person => `<option value="${esc(person.name)}">${person.company ? esc(person.company) : ''}</option>`).join('');
+    .map(person => `<option value="${esc(person.name)}">${esc(person.name)}${person.company ? ` — ${esc(person.company)}` : ''}</option>`).join('');
 }
 
 window.openNewCautelaModal = function(type = 'TOOL') {

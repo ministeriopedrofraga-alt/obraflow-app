@@ -5,6 +5,8 @@
 let radioAssets = [];
 let radioMovements = [];
 let radioRemoteAvailable = null;
+let radioSyncError = null;
+let activeRadioSync = null;
 let pendingRadioImport = null;
 
 function radioLoadLocalData() {
@@ -44,9 +46,61 @@ function radioMerge(records = []) {
   return Array.from(merged.values());
 }
 
+function radioAssetDatabasePayload(asset) {
+  const updatedAt = asset.updatedAt || asset.createdAt || new Date().toISOString();
+  return {
+    id: String(asset.id),
+    code: String(asset.code || '').trim(),
+    data: { ...asset, updatedAt },
+    updated_at: updatedAt
+  };
+}
+
+function radioMovementDatabasePayload(movement) {
+  const updatedAt = movement.updatedAt || movement.occurredAt || movement.createdAt || new Date().toISOString();
+  return {
+    id: String(movement.id),
+    radio_id: String(movement.radioId),
+    occurred_at: movement.occurredAt || movement.createdAt || updatedAt,
+    data: { ...movement, updatedAt },
+    updated_at: updatedAt
+  };
+}
+
+async function radioUpsertBatch(table, records, payloadFactory) {
+  if (!records.length) return;
+  await supabaseRestRequest(`${table}?on_conflict=id`, {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(records.map(payloadFactory))
+  });
+}
+
+async function radioBackfillLocalData(remoteAssets, remoteMovements) {
+  const remoteAssetMap = new Map(remoteAssets.map(item => [String(item.id), item]));
+  const remoteMovementMap = new Map(remoteMovements.map(item => [String(item.id), item]));
+  const assetsToUpload = radioAssets.filter(item => {
+    if (!item?.id || !String(item.code || '').trim()) return false;
+    const remote = remoteAssetMap.get(String(item.id));
+    return !remote || radioTimestamp(item) > radioTimestamp(remote);
+  });
+  const movementsToUpload = radioMovements.filter(item => {
+    if (!item?.id || !item?.radioId) return false;
+    const remote = remoteMovementMap.get(String(item.id));
+    return !remote || radioTimestamp(item) > radioTimestamp(remote);
+  });
+
+  // Os movimentos possuem chave estrangeira para os rádios; por isso os
+  // cadastros precisam chegar primeiro durante a migração do armazenamento local.
+  await radioUpsertBatch('radio_assets', assetsToUpload, radioAssetDatabasePayload);
+  await radioUpsertBatch('radio_movements', movementsToUpload, radioMovementDatabasePayload);
+  return { assets: assetsToUpload.length, movements: movementsToUpload.length };
+}
+
 async function syncRadiosFromSupabase() {
-  radioLoadLocalData();
-  try {
+  if (activeRadioSync) return activeRadioSync;
+  activeRadioSync = (async () => {
+    radioLoadLocalData();
     if (typeof supabaseRestRequest !== 'function') return false;
     const [assetRows, movementRows] = await Promise.all([
       supabaseRestRequest('radio_assets?select=id,data,updated_at&order=updated_at.desc'),
@@ -67,18 +121,33 @@ async function syncRadiosFromSupabase() {
       });
     }
 
+    const uploaded = await radioBackfillLocalData(remoteAssets, remoteMovements);
     radioRemoteAvailable = true;
+    radioSyncError = null;
     radioSaveLocalData();
     const count = document.getElementById('navRadioCount');
     if (count) count.textContent = radioAssets.length;
     if (typeof currentPage !== 'undefined' && currentPage === 'radios' && !document.querySelector('#modalRoot form')) renderRadios();
+    if ((uploaded.assets || uploaded.movements) && typeof toast === 'function') {
+      toast(`${uploaded.assets} rádio(s) e ${uploaded.movements} movimentação(ões) sincronizados com o site.`);
+    }
     return true;
-  } catch (error) {
-    radioRemoteAvailable = false;
-    console.warn('Sincronização dos rádios indisponível; mantendo a cópia local:', error);
-    return false;
-  }
+  })().catch(error => {
+      radioRemoteAvailable = false;
+      radioSyncError = error;
+      console.warn('Sincronização dos rádios indisponível; mantendo a cópia local:', error);
+      if (typeof currentPage !== 'undefined' && currentPage === 'radios' && !document.querySelector('#modalRoot form')) renderRadios();
+      return false;
+    }).finally(() => {
+      activeRadioSync = null;
+    });
+  return activeRadioSync;
 }
+
+window.retryRadioSync = async function() {
+  const synced = await syncRadiosFromSupabase();
+  if (!synced && typeof toast === 'function') toast('O banco de rádios ainda não está disponível.', true);
+};
 
 async function persistRadioAsset(asset) {
   asset.updatedAt = new Date().toISOString();
@@ -87,7 +156,7 @@ async function persistRadioAsset(asset) {
     await supabaseRestRequest('radio_assets?on_conflict=id', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ id: String(asset.id), code: asset.code, data: asset, updated_at: asset.updatedAt })
+      body: JSON.stringify(radioAssetDatabasePayload(asset))
     });
     radioRemoteAvailable = true;
     return true;
@@ -105,7 +174,7 @@ async function persistRadioMovement(movement) {
     await supabaseRestRequest('radio_movements?on_conflict=id', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ id: String(movement.id), radio_id: movement.radioId, occurred_at: movement.occurredAt, data: movement, updated_at: movement.updatedAt })
+      body: JSON.stringify(radioMovementDatabasePayload(movement))
     });
     return true;
   } catch (error) {
@@ -147,12 +216,157 @@ function radioStatusBadge(status) {
   return `<span class="status ${cssClass}">${radioStatusLabel(status)}</span>`;
 }
 
-function radioPeopleOptions() {
+function radioCompanyOptions(selectedCompany = '') {
   const people = typeof workforce !== 'undefined' && Array.isArray(workforce) ? workforce : [];
-  return [...new Map(people.filter(person => person?.name).map(person => [String(person.name).trim().toLocaleUpperCase('pt-BR'), person])).values()]
-    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR'))
-    .map(person => `<option value="${esc(person.name)}">${esc([person.company, person.role].filter(Boolean).join(' · '))}</option>`).join('');
+  const companies = [...new Set(people.map(p => p?.company).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return companies.map(c => `<option value="${esc(c)}" ${c === selectedCompany ? 'selected' : ''}>${esc(c)}</option>`).join('');
 }
+
+function radioPeopleOptions(selectedCompany = '', selectedPerson = '') {
+  const people = typeof workforce !== 'undefined' && Array.isArray(workforce) ? workforce : [];
+  let filtered = people.filter(p => p?.name && !p.name.startsWith('[CADASTRO EMPRESA'));
+  if (selectedCompany) {
+    filtered = filtered.filter(p => (p.company || '').trim().toLowerCase() === selectedCompany.trim().toLowerCase());
+  }
+  
+  const uniquePeople = [...new Map(filtered.map(p => [String(p.name).trim().toLowerCase(), p])).values()]
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
+
+  return uniquePeople.map(p => {
+    const isSelected = p.name === selectedPerson;
+    const details = [!selectedCompany ? p.company : '', p.role].filter(Boolean).join(' · ');
+    return `<option value="${esc(p.name)}" ${isSelected ? 'selected' : ''}>${esc(p.name)}${details ? ` (${esc(details)})` : ''}</option>`;
+  }).join('');
+}
+
+window.handleRadioCompanyChange = function(companyName, personSelectId) {
+  const personSelect = document.getElementById(personSelectId);
+  if (!personSelect) return;
+  const currentPerson = personSelect.value;
+  
+  const people = typeof workforce !== 'undefined' && Array.isArray(workforce) ? workforce : [];
+  let filtered = people.filter(p => p?.name && !p.name.startsWith('[CADASTRO EMPRESA'));
+  if (companyName) {
+    filtered = filtered.filter(p => (p.company || '').trim().toLowerCase() === companyName.trim().toLowerCase());
+  }
+
+  const uniquePeople = [...new Map(filtered.map(p => [String(p.name).trim().toLowerCase(), p])).values()]
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
+
+  personSelect.innerHTML = `<option value="">Selecione o funcionário (${uniquePeople.length})</option>` +
+    uniquePeople.map(p => {
+      const details = [!companyName ? p.company : '', p.role].filter(Boolean).join(' · ');
+      return `<option value="${esc(p.name)}">${esc(p.name)}${details ? ` (${esc(details)})` : ''}</option>`;
+    }).join('');
+
+  if (currentPerson) {
+    const match = uniquePeople.find(p => (p.name || '').trim().toLowerCase() === (currentPerson || '').trim().toLowerCase());
+    if (match) {
+      personSelect.value = match.name;
+    } else {
+      const existingOpt = [...personSelect.options].find(opt => (opt.value || '').trim().toLowerCase() === (currentPerson || '').trim().toLowerCase());
+      if (existingOpt) {
+        personSelect.value = existingOpt.value;
+      } else {
+        const opt = new Option(currentPerson, currentPerson, true, true);
+        personSelect.add(opt);
+        personSelect.value = currentPerson;
+      }
+    }
+  }
+};
+
+window.handleRadioPersonChange = function(personName, companySelectId) {
+  if (!personName) return;
+  const companySelect = document.getElementById(companySelectId);
+  if (!companySelect) return;
+
+  const people = typeof workforce !== 'undefined' && Array.isArray(workforce) ? workforce : [];
+  const person = people.find(p => (p.name || '').trim().toLowerCase() === personName.trim().toLowerCase());
+
+  if (person && person.company) {
+    const targetComp = person.company.trim();
+    let optionFound = [...companySelect.options].find(opt => opt.value.trim().toLowerCase() === targetComp.toLowerCase());
+
+    if (!optionFound) {
+      const opt = new Option(targetComp, targetComp, true, true);
+      companySelect.add(opt);
+      companySelect.value = targetComp;
+    } else {
+      companySelect.value = optionFound.value;
+    }
+
+    const personSelectId = companySelectId === 'radioCheckoutCompany' ? 'radioCheckoutCollaborator' : 'radioAssetCollaborator';
+    const personSelect = document.getElementById(personSelectId);
+    if (personSelect) {
+      handleRadioCompanyChange(targetComp, personSelectId);
+      personSelect.value = person.name;
+    }
+  }
+};
+
+window.openQuickAddCompanyModal = function(targetSelectId = 'radioCheckoutCompany') {
+  modal(`
+    <form onsubmit="submitQuickAddCompany(event, '${esc(targetSelectId)}')">
+      ${modalHead('Cadastrar nova empresa', 'Adicionar empreiteira ao cadastro da obra')}
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="field full">
+            <label>Nome da empresa <em>*</em></label>
+            <input name="companyName" required placeholder="Ex.: FORT MUNCK, AIR TEC, HEATING COOLING, etc." style="text-transform: uppercase;">
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button>
+        <button class="button button-green">${icon('plus')} Salvar empresa</button>
+      </div>
+    </form>
+  `, 'modal-small');
+};
+
+window.submitQuickAddCompany = function(event, targetSelectId) {
+  event.preventDefault();
+  const data = new FormData(event.target);
+  const companyName = String(data.get('companyName') || '').replace(/\s+/g, ' ').trim().toUpperCase();
+  if (!companyName) return toast('Digite o nome da empresa.', true);
+
+  if (typeof workforce !== 'undefined' && Array.isArray(workforce)) {
+    const exists = workforce.some(p => (p.company || '').trim().toUpperCase() === companyName);
+    if (!exists) {
+      workforce.push({
+        id: crypto.randomUUID?.() || `wf-comp-${Date.now()}`,
+        company: companyName,
+        name: `[CADASTRO EMPRESA ${companyName}]`,
+        role: 'Representante',
+        status: 'DIRETA'
+      });
+      if (typeof saveLocalBackup === 'function') saveLocalBackup();
+      if (typeof scheduleWorkforceRemoteSave === 'function') scheduleWorkforceRemoteSave(0);
+      if (typeof renderCompanies === 'function' && currentPage === 'empresas') renderCompanies();
+    }
+  }
+
+  closeModal();
+
+  const companySelect = document.getElementById(targetSelectId);
+  if (companySelect) {
+    let found = [...companySelect.options].find(opt => opt.value.trim().toUpperCase() === companyName);
+    if (!found) {
+      const opt = new Option(companyName, companyName, true, true);
+      companySelect.add(opt);
+    } else {
+      companySelect.value = found.value;
+    }
+
+    const personSelectId = targetSelectId === 'radioCheckoutCompany' ? 'radioCheckoutCollaborator' : 'radioAssetCollaborator';
+    if (typeof handleRadioCompanyChange === 'function') {
+      handleRadioCompanyChange(companyName, personSelectId);
+    }
+  }
+
+  toast(`Empresa ${companyName} cadastrada com sucesso.`);
+};
 
 function normalizedRadioHeader(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -512,6 +726,15 @@ window.setRadioTab = function(status) {
   filterRadios();
 };
 
+function radioSyncNotice() {
+  if (radioRemoteAvailable !== false) return '';
+  const missingTable = /PGRST205|radio_assets|schema cache/i.test(String(radioSyncError?.message || ''));
+  const detail = missingTable
+    ? 'As tabelas de rádios ainda não foram criadas no Supabase. Os dados abaixo estão salvos somente neste navegador.'
+    : 'Não foi possível acessar o banco agora. Os dados abaixo continuam protegidos neste navegador e uma nova tentativa pode ser feita.';
+  return `<section class="radio-sync-notice" role="status"><div><strong>Sincronização pendente</strong><small>${detail}</small></div><button class="button button-outline compact" onclick="retryRadioSync()">Tentar novamente</button></section>`;
+}
+
 function renderRadios() {
   radioLoadLocalData();
   
@@ -581,8 +804,24 @@ function renderRadios() {
         background: var(--primary, #0f172a);
         color: #fff;
       }
+      .radio-sync-notice {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin: 0 0 20px;
+        padding: 14px 16px;
+        border: 1px solid #f0b66b;
+        border-radius: 12px;
+        background: #fff8ed;
+        color: #70400b;
+      }
+      .radio-sync-notice strong,
+      .radio-sync-notice small { display: block; }
+      .radio-sync-notice small { margin-top: 3px; }
     </style>
     ${pageHeader('Controle de rádios', 'Cadastre os comunicadores e acompanhe cada entrega assinada, devolução e indisponibilidade.', 'COMUNICAÇÃO · ALMOXARIFADO', `<button class="button button-outline" onclick="downloadRadioSpreadsheetTemplate()">${icon('file')} Baixar modelo</button><label class="button button-outline radio-import-button">${icon('download')} Importar planilha<input type="file" accept=".xlsx,.xls,.xlsm,.csv" hidden onchange="handleRadioSpreadsheet(event)"></label><button class="button button-outline" onclick="exportRadiosExcel()">${icon('download')} Exportar Excel</button><button class="button button-outline" onclick="openRadioHistoryReport()">${icon('print')} Histórico</button><button class="button button-green" onclick="openRadioAssetModal()">${icon('plus')} Cadastrar rádio</button>`)}
+    ${radioSyncNotice()}
     
     <div class="radio-tabs-nav">
       <button class="radio-tab ${window.currentRadioTab === '' ? 'active' : ''}" data-status="" onclick="setRadioTab('')">Todos os cadastrados <span class="radio-tab-badge">${radioAssets.length}</span></button>
@@ -624,10 +863,27 @@ window.openRadioAssetModal = function(id = '') {
       <div class="field"><label>Modelo</label><input name="model" value="${esc(radio.model || '')}" placeholder="Ex.: DEP450"></div>
       <div class="field"><label>Número de série</label><input name="serial" value="${esc(radio.serial || '')}"></div>
       <div class="field"><label>Canal / frequência</label><input name="channel" value="${esc(radio.channel || '')}" placeholder="Ex.: Canal 03"></div>
-      <div class="field"><label>Situação <em>*</em></label><select name="status" required ${radio.status === 'in-use' ? 'disabled' : ''}><option value="available" ${(radio.status || 'available') === 'available' ? 'selected' : ''}>Disponível</option><option value="maintenance" ${radio.status === 'maintenance' ? 'selected' : ''}>Manutenção</option>${radio.status === 'in-use' ? '<option value="in-use" selected>Em uso</option>' : ''}</select></div>
+      
+      <div class="field">
+        <label>Empresa <button type="button" class="button-link-inline" onclick="openQuickAddCompanyModal('radioAssetCompany')">+ Cadastrar empresa</button></label>
+        <select id="radioAssetCompany" name="company" onchange="handleRadioCompanyChange(this.value, 'radioAssetCollaborator')">
+          <option value="">Selecione a empresa</option>
+          ${radioCompanyOptions(radio.usage?.company || '')}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Funcionário (Colaborador) <button type="button" class="button-link-inline" onclick="openPersonModal()">+ Nova pessoa</button></label>
+        <select id="radioAssetCollaborator" name="collaborator" onchange="handleRadioPersonChange(this.value, 'radioAssetCompany')">
+          <option value="">Selecione o funcionário</option>
+          ${radioPeopleOptions(radio.usage?.company || '', radio.usage?.collaborator || '')}
+        </select>
+      </div>
+
+      <div class="field full"><label>Situação <em>*</em></label><select name="status" required ${radio.status === 'in-use' ? 'disabled' : ''}><option value="available" ${(radio.status || 'available') === 'available' ? 'selected' : ''}>Disponível</option><option value="maintenance" ${radio.status === 'maintenance' ? 'selected' : ''}>Manutenção</option>${radio.status === 'in-use' ? '<option value="in-use" selected>Em uso</option>' : ''}</select></div>
       <div class="field full"><label>Observações</label><textarea name="notes" placeholder="Acessórios, condição, carregador ou outras informações...">${esc(radio.notes || '')}</textarea></div>
     </div></div>
-    <div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Salvar rádio</button></div></form>`, 'modal-inspection');
+    <div class="modal-foot">${id ? `<button type="button" class="button button-ghost" style="color:var(--danger,#ef4444);margin-right:auto;" onclick="deleteRadioAsset('${esc(id)}')">${icon('trash')} Excluir rádio</button>` : ''}<button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Salvar rádio</button></div></form>`, 'modal-inspection');
 };
 
 window.submitRadioAsset = async function(event, id = '') {
@@ -640,6 +896,17 @@ window.submitRadioAsset = async function(event, id = '') {
     radio = { id: crypto.randomUUID?.() || `radio-${Date.now()}`, createdAt: new Date().toISOString(), usage: null };
     radioAssets.push(radio);
   }
+
+  const comp = String(data.get('company') || '').trim();
+  const collab = String(data.get('collaborator') || '').trim();
+  if (collab || comp) {
+    radio.usage = {
+      ...(radio.usage || {}),
+      company: comp,
+      collaborator: collab
+    };
+  }
+
   Object.assign(radio, {
     code,
     assetNumber: String(data.get('assetNumber') || '').trim(),
@@ -660,10 +927,24 @@ window.openRadioCheckoutModal = function(id) {
   const radio = radioAssets.find(item => String(item.id) === String(id));
   if (!radio || radio.status !== 'available') return toast('Este rádio não está disponível para entrega.', true);
   modal(`<form onsubmit="submitRadioCheckout(event, '${esc(id)}')">${modalHead(`Entregar ${esc(radio.code)}`, 'A assinatura do recebedor é obrigatória em cada entrega')}
-    <div class="modal-body"><datalist id="radioPeopleList">${radioPeopleOptions()}</datalist>
+    <div class="modal-body">
       <div class="form-grid">
-        <div class="field"><label>Colaborador <em>*</em></label><input name="collaborator" list="radioPeopleList" required placeholder="Selecione ou digite o nome"></div>
-        <div class="field"><label>Empresa</label><input name="company" placeholder="Empresa do colaborador"></div>
+        <div class="field">
+          <label>Empresa <button type="button" class="button-link-inline" onclick="openQuickAddCompanyModal('radioCheckoutCompany')">+ Cadastrar empresa</button></label>
+          <select id="radioCheckoutCompany" name="company" onchange="handleRadioCompanyChange(this.value, 'radioCheckoutCollaborator')">
+            <option value="">Selecione ou todas as empresas</option>
+            ${radioCompanyOptions()}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Funcionário (Colaborador) <em>*</em> <button type="button" class="button-link-inline" onclick="openPersonModal()">+ Nova pessoa</button></label>
+          <select id="radioCheckoutCollaborator" name="collaborator" required onchange="handleRadioPersonChange(this.value, 'radioCheckoutCompany')">
+            <option value="">Selecione o funcionário</option>
+            ${radioPeopleOptions()}
+          </select>
+        </div>
+
         <div class="field"><label>Local / frente de serviço <em>*</em></label><input name="location" required placeholder="Ex.: Data Hall 04"></div>
         <div class="field"><label>Previsão de devolução</label><input name="expectedReturn" type="datetime-local"></div>
         <div class="field full"><label>Observações</label><textarea name="notes" placeholder="Condição, carregador, bateria ou acessórios entregues..."></textarea></div>
@@ -775,7 +1056,7 @@ window.openRadioDetails = function(id) {
     <div class="public-specs radio-specs"><span><small>Patrimônio</small><strong>${esc(radio.assetNumber || '—')}</strong></span><span><small>Canal</small><strong>${esc(radio.channel || '—')}</strong></span><span><small>Situação</small><strong>${radioStatusLabel(radio.status)}</strong></span><span><small>Observações</small><strong>${esc(radio.notes || '—')}</strong></span></div>
     <div class="section-title"><span>${icon('swap')}</span><div><h3>Histórico do rádio</h3><small>${movements.length} movimentação(ões)</small></div></div>
     <div class="table-wrap"><table class="data-table"><thead><tr><th>Data</th><th>Operação</th><th>Colaborador</th><th>Local / condição</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5">Nenhuma movimentação registrada.</td></tr>'}</tbody></table></div>
-  </div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-outline" onclick="openRadioAssetModal('${esc(id)}')">${icon('edit')} Editar</button>${radio.status === 'in-use' ? `<button class="button button-green" onclick="openRadioReturnModal('${esc(id)}')">${icon('return')} Registrar devolução</button>` : radio.status === 'available' ? `<button class="button button-green" onclick="openRadioCheckoutModal('${esc(id)}')">${icon('arrow')} Entregar rádio</button>` : ''}</div>`, 'modal-large');
+  </div><div class="modal-foot"><button class="button button-ghost" style="color:var(--danger,#ef4444);margin-right:auto;" onclick="deleteRadioAsset('${esc(id)}')">${icon('trash')} Excluir rádio</button><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-outline" onclick="openRadioAssetModal('${esc(id)}')">${icon('edit')} Editar</button>${radio.status === 'in-use' ? `<button class="button button-green" onclick="openRadioReturnModal('${esc(id)}')">${icon('return')} Registrar devolução</button>` : radio.status === 'available' ? `<button class="button button-green" onclick="openRadioCheckoutModal('${esc(id)}')">${icon('arrow')} Entregar rádio</button>` : ''}</div>`, 'modal-large');
 };
 
 window.openRadioHistoryReport = function() {

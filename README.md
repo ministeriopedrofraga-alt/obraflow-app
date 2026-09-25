@@ -42,7 +42,8 @@ Os modelos originais ficam em `assets/formularios/`. Ao incluir novos modelos na
 - Registro de empresa, responsável, telefone, local e Data Hall 1–10
 - Empresa e responsável selecionados a partir da planilha de efetivo
 - Importação de novas versões do relatório de efetivo em Excel
-- Exportação em Excel da base atual de empresas e efetivo
+- Controle mensal de presença no app com marcações `1`, `0` e `FOLGA`, totais por dia e resumo por empresa
+- Importação e exportação do mesmo modelo mensal de efetivo, com detecção automática dos cabeçalhos
 - Cadastro, edição e exclusão manual de pessoas e empresas
 - Ficha pública do equipamento ao ler o QR Code
 - Registro obrigatório de atividade, Data Hall e local específico

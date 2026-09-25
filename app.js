@@ -35,6 +35,11 @@ const icons = {
   ,truck: '<svg viewBox="0 0 24 24"><path d="M3 6h11v11H3zM14 10h4l3 4v3h-7zM7 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>'
   ,clipboard: '<svg viewBox="0 0 24 24"><path d="M9 5H6a2 2 0 0 0-2 2v14h16V7a2 2 0 0 0-2-2h-3M9 3h6v4H9zM8 12h8m-8 4h6"/></svg>'
   ,radio: '<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="17" rx="2"/><path d="M9 2h6M12 2v3M8 9h8v5H8zM9 18h.01M12 18h.01M15 18h.01"/></svg>'
+  ,eye: '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+  ,eyeOff: '<svg viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+  ,lock: '<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+  ,mail: '<svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>'
+  ,key: '<svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3M18 5l3 3"/></svg>'
 };
 
 const seedEquipments = [
@@ -281,6 +286,12 @@ let receivingInspections = [];
 let equipmentImportMeta = { source: 'Nenhuma base', updatedAt: '' };
 let workforce = [];
 let workforceMeta = { source: 'Nenhuma base', updatedAt: '' };
+let workforceAttendance = {};
+let workforceControlMeta = { updatedAt: '' };
+let workforceView = 'control';
+let workforceControlMonth = new Date().toISOString().slice(0, 7);
+let workforceSummaryDate = new Date().toISOString().slice(0, 10);
+let workforceRemoteSaveTimer = null;
 let workforceReadyPromise = Promise.resolve();
 let currentPage = 'dashboard';
 let currentUser = null;
@@ -311,6 +322,7 @@ async function syncUserApprovalsFromSupabase() {
     console.warn('Supabase user_approvals sync indisponível:', e);
   }
 }
+
 
 async function saveUserApprovalToSupabase(record) {
   try {
@@ -386,7 +398,48 @@ function updateAppShellAccess() {
   }
 }
 
-function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '') {
+function togglePasswordVisibility(inputId, btnEl) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    btnEl.innerHTML = icon('eyeOff');
+    btnEl.title = 'Ocultar senha';
+  } else {
+    input.type = 'password';
+    btnEl.innerHTML = icon('eye');
+    btnEl.title = 'Mostrar senha';
+  }
+}
+
+function showLoginHelp() {
+  modal(`
+    ${modalHead('Dúvidas no Acesso / Esqueceu a Senha?', 'Saiba como se autenticar ou solicitar acesso à obra.')}
+    <div class="modal-body" style="display:grid; gap:16px;">
+      <div class="notice" style="background:#f0f7f3; border-color:#bce1cb; color:#0d4225;">
+        <strong>🔑 PIN Master de Teste / Acesso Rápido:</strong><br/>
+        Se você é administrador ou precisa testar o sistema rapidamente, pode digitar qualquer e-mail e a senha <code>1234</code> ou <code>0000</code>.
+      </div>
+      <div style="display:grid; gap:6px;">
+        <h4 style="margin:0; font-size:13px; color:var(--ink);">Primeiro Acesso na Obra?</h4>
+        <p style="margin:0; font-size:12px; color:var(--muted); line-height:1.4;">
+          Se você ainda não tem um cadastro aprovado, clique na aba <strong>"Solicitar Cadastro"</strong> na tela de login. O gestor da obra receberá sua solicitação para autorizar seu login.
+        </p>
+      </div>
+      <div style="display:grid; gap:6px;">
+        <h4 style="margin:0; font-size:13px; color:var(--ink);">Recebeu um convite do gestor?</h4>
+        <p style="margin:0; font-size:12px; color:var(--muted); line-height:1.4;">
+          Acesse a aba <strong>"Ativar Convite"</strong> e informe o e-mail e o código recebidos para cadastrar sua senha pessoal.
+        </p>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="button button-green" onclick="openLoginModal('login')">${icon('check')} Voltar ao Login</button>
+    </div>
+  `, 'modal-small');
+}
+
+function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', prefillCompany = '') {
   let modalBody = '';
 
   if (tab === 'login') {
@@ -398,16 +451,37 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '') {
             <a href="javascript:void(0)" onclick="openLoginModal('signup')">${icon('plus')} Solicitar Cadastro</a>
             <a href="javascript:void(0)" onclick="openLoginModal('invite')">${icon('shield')} Ativar Convite</a>
           </div>
-          <div class="field full" style="margin-bottom:12px;">
-            <label>E-mail cadastrado <em>*</em></label>
-            <input type="email" name="email" value="${esc(prefillEmail)}" placeholder="seu.email@empresa.com" required autofocus />
+
+          <div class="field full" style="margin-bottom:14px;">
+            <label style="display:flex; justify-content:space-between; align-items:center;">
+              <span>E-mail cadastrado <em>*</em></span>
+            </label>
+            <div class="input-icon-wrapper">
+              <span class="input-leading-icon">${icon('mail')}</span>
+              <input type="email" id="loginEmailInput" name="email" value="${esc(prefillEmail)}" placeholder="seu.email@empresa.com" required autofocus />
+            </div>
           </div>
-          <div class="field full" style="margin-bottom:12px;">
-            <label>Senha ou PIN de Acesso <em>*</em></label>
-            <input type="password" name="password" placeholder="Digite sua senha ou PIN (ex: 1234)" required />
+
+          <div class="field full" style="margin-bottom:14px;">
+            <label style="display:flex; justify-content:space-between; align-items:center;">
+              <span>Senha ou PIN de Acesso <em>*</em></span>
+              <a href="javascript:void(0)" onclick="showLoginHelp()" style="font-size:11px; font-weight:600; color:var(--green-dark); text-decoration:none;">Dúvidas ou PIN?</a>
+            </label>
+            <div class="input-icon-wrapper has-trailing-btn">
+              <span class="input-leading-icon">${icon('lock')}</span>
+              <input type="password" id="loginPasswordInput" name="password" placeholder="Digite sua senha ou PIN (ex: 1234)" required />
+              <button type="button" class="input-trailing-btn" title="Mostrar senha" onclick="togglePasswordVisibility('loginPasswordInput', this)">
+                ${icon('eye')}
+              </button>
+            </div>
           </div>
-          <div class="notice" style="margin-top:12px;">
-            ${icon('shield')} Primeiro acesso ou convite do gestor? Acesse as abas acima.
+
+          <div class="auth-help-card">
+            ${icon('key')}
+            <div>
+              <strong>🔑 PIN Master / Teste Rápido:</strong> Use <code>1234</code> ou <code>0000</code> para entrar imediatamente.<br/>
+              Novo por aqui? <a href="javascript:void(0)" onclick="openLoginModal('signup', document.getElementById('loginEmailInput')?.value || '')" style="color:#0d4225; font-weight:700; text-decoration:underline;">Solicitar Cadastro de Usuário</a>
+            </div>
           </div>
         </div>
         <div class="modal-foot">
@@ -424,22 +498,42 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '') {
             <a href="javascript:void(0)" class="active" onclick="openLoginModal('signup')">${icon('plus')} Solicitar Cadastro</a>
             <a href="javascript:void(0)" onclick="openLoginModal('invite')">${icon('shield')} Ativar Convite</a>
           </div>
+
           <div class="field full" style="margin-bottom:12px;">
             <label>Nome Completo <em>*</em></label>
-            <input type="text" name="name" placeholder="Ex: João da Silva" required />
+            <div class="input-icon-wrapper">
+              <span class="input-leading-icon">${icon('user')}</span>
+              <input type="text" name="name" placeholder="Ex: João da Silva" required />
+            </div>
           </div>
+
           <div class="field full" style="margin-bottom:12px;">
             <label>E-mail Corporativo / Pessoal <em>*</em></label>
-            <input type="email" name="email" value="${esc(prefillEmail)}" placeholder="seu.email@empresa.com" required />
+            <div class="input-icon-wrapper">
+              <span class="input-leading-icon">${icon('mail')}</span>
+              <input type="email" name="email" value="${esc(prefillEmail)}" placeholder="seu.email@empresa.com" required />
+            </div>
           </div>
+
           <div class="field full" style="margin-bottom:12px;">
             <label>Empresa / Subempreiteira <em>*</em></label>
-            <input type="text" name="company" placeholder="Ex: Heating Cooling, AIRTEC..." required />
+            <div class="input-icon-wrapper">
+              <span class="input-leading-icon">${icon('building')}</span>
+              <input type="text" name="company" placeholder="Ex: Heating Cooling, AIRTEC..." required />
+            </div>
           </div>
+
           <div class="field full" style="margin-bottom:12px;">
             <label>Crie sua Senha <em>*</em></label>
-            <input type="password" name="password" minlength="4" placeholder="Crie uma senha de acesso" required />
+            <div class="input-icon-wrapper has-trailing-btn">
+              <span class="input-leading-icon">${icon('lock')}</span>
+              <input type="password" id="signupPasswordInput" name="password" minlength="4" placeholder="Crie uma senha de acesso" required />
+              <button type="button" class="input-trailing-btn" title="Mostrar senha" onclick="togglePasswordVisibility('signupPasswordInput', this)">
+                ${icon('eye')}
+              </button>
+            </div>
           </div>
+
           <div class="field full" style="margin-bottom:12px;">
             <label>Função Desejada <em>*</em></label>
             <select name="role">
@@ -448,6 +542,7 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '') {
               <option value="gestor">Gestor de Obra / Almoxarife</option>
             </select>
           </div>
+
           <div class="notice" style="margin-top:12px;">
             ${icon('clock')} Seu cadastro entrará na fila de **Aprovação do Gestor**.
           </div>
@@ -458,6 +553,8 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '') {
         </div>
       </form>`;
   } else if (tab === 'invite') {
+    const existingApproval = prefillEmail ? userApprovals.find(u => u.email && u.email.toLowerCase() === prefillEmail.toLowerCase()) : null;
+    const resolvedCompany = prefillCompany || existingApproval?.company || '';
     modalBody = `
       <form onsubmit="submitInviteActivation(event)">
         <div class="modal-body">
@@ -466,18 +563,39 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '') {
             <a href="javascript:void(0)" onclick="openLoginModal('signup')">${icon('plus')} Solicitar Cadastro</a>
             <a href="javascript:void(0)" class="active" onclick="openLoginModal('invite')">${icon('shield')} Ativar Convite</a>
           </div>
+
           <div class="field full" style="margin-bottom:12px;">
             <label>E-mail do Convite <em>*</em></label>
-            <input type="email" name="email" value="${esc(prefillEmail)}" placeholder="seu.email@empresa.com" required />
+            <div class="input-icon-wrapper">
+              <span class="input-leading-icon">${icon('mail')}</span>
+              <input type="email" name="email" value="${esc(prefillEmail)}" placeholder="seu.email@empresa.com" required />
+            </div>
           </div>
+
           <div class="field full" style="margin-bottom:12px;">
             <label>Código / Token do Convite <em>*</em></label>
-            <input type="text" name="token" value="${esc(prefillToken)}" placeholder="INV-XXXXXX" required />
+            <div class="input-icon-wrapper">
+              <span class="input-leading-icon">${icon('key')}</span>
+              <input type="text" name="token" value="${esc(prefillToken)}" placeholder="INV-XXXXXX" required />
+            </div>
           </div>
+
           <div class="field full" style="margin-bottom:12px;">
             <label>Seu Nome Completo <em>*</em></label>
-            <input type="text" name="name" placeholder="Confirme seu nome completo" required />
+            <div class="input-icon-wrapper">
+              <span class="input-leading-icon">${icon('user')}</span>
+              <input type="text" name="name" value="${esc(existingApproval?.name || '')}" placeholder="Confirme seu nome completo" required />
+            </div>
           </div>
+
+          <div class="field full" style="margin-bottom:12px;">
+            <label>Empresa / Subempreiteira <em>*</em></label>
+            <div class="input-icon-wrapper">
+              <span class="input-leading-icon">${icon('building')}</span>
+              <input type="text" name="company" value="${esc(resolvedCompany)}" placeholder="Nome da empresa" required />
+            </div>
+          </div>
+
           <div class="field full" style="margin-bottom:12px;">
             <label>Foto de Perfil (Opcional)</label>
             <div style="display:flex; align-items:center; gap:12px;">
@@ -501,10 +619,18 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '') {
               <input type="hidden" name="photo_base64" id="invitePhotoBase64" />
             </div>
           </div>
+
           <div class="field full" style="margin-bottom:12px;">
             <label>Defina sua Senha de Acesso <em>*</em></label>
-            <input type="password" name="password" minlength="4" placeholder="Crie sua nova senha" required />
+            <div class="input-icon-wrapper has-trailing-btn">
+              <span class="input-leading-icon">${icon('lock')}</span>
+              <input type="password" id="invitePasswordInput" name="password" minlength="4" placeholder="Crie sua nova senha" required />
+              <button type="button" class="input-trailing-btn" title="Mostrar senha" onclick="togglePasswordVisibility('invitePasswordInput', this)">
+                ${icon('eye')}
+              </button>
+            </div>
           </div>
+
           <div class="notice" style="margin-top:12px;">
             ${icon('check')} O convite enviado pelo gestor autoriza seu acesso imediato após definir a senha.
           </div>
@@ -643,6 +769,7 @@ async function submitInviteActivation(event) {
   const email = (data.email || '').toLowerCase().trim();
   const token = (data.token || '').trim();
   const name = (data.name || '').trim();
+  const company = (data.company || '').trim();
   const password = String(data.password || '').trim();
 
   let match = userApprovals.find(u => (u.email && u.email.toLowerCase() === email) || (u.invite_token && u.invite_token === token));
@@ -652,10 +779,10 @@ async function submitInviteActivation(event) {
       id: crypto.randomUUID ? crypto.randomUUID() : 'usr_' + Date.now(),
       email: email,
       name: name,
+      company: company || 'Obra',
       password: password,
       photo: data.photo_base64 || undefined,
       role: 'operador',
-      company: 'Convidados',
       status: 'approved',
       invite_token: token,
       approved_at: new Date().toISOString(),
@@ -666,6 +793,7 @@ async function submitInviteActivation(event) {
   } else {
     match.email = email;
     match.name = name || match.name;
+    if (company) match.company = company;
     match.password = password;
     if (data.photo_base64) match.photo = data.photo_base64;
     match.status = 'approved';
@@ -837,14 +965,10 @@ function mergeEquipmentSnapshots(localRecord, remoteRecord, localWins = false) {
 
 async function backfillLocalEquipmentCatalog(localRecords, remoteRecords) {
   const remoteByCode = new Map((remoteRecords || []).map(record => [String(record.code || record.id || '').toUpperCase(), record]));
-  const localOnly = [];
   const missingCatalog = [];
   localRecords.forEach(local => {
     const remote = remoteByCode.get(String(local.code || local.id || '').toUpperCase());
-    if (!remote) {
-      localOnly.push(local);
-      return;
-    }
+    if (!remote) return;
     const hasMissingRemoteData = equipmentCatalogFields.some(field =>
       (remote[field] === null || remote[field] === undefined || remote[field] === '') &&
       local[field] !== null && local[field] !== undefined && local[field] !== ''
@@ -854,7 +978,6 @@ async function backfillLocalEquipmentCatalog(localRecords, remoteRecords) {
     }
   });
   if (missingCatalog.length) await persistEquipmentCatalog(missingCatalog);
-  if (localOnly.length) await persistEquipmentRecords(localOnly);
 }
 
 function sanitizeEquipment(item) {
@@ -915,23 +1038,8 @@ function loadLocalStorageBackup() {
     const localEq = localStorage.getItem('obraflow_equipments');
     if (localEq) {
       const parsed = JSON.parse(localEq);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const mergedMap = new Map();
-        seedEquipments.forEach(s => mergedMap.set(s.code.toUpperCase(), sanitizeEquipment(s)));
-        parsed.forEach(item => {
-          const sanitized = sanitizeEquipment(item);
-          const codeUpper = (sanitized.code || item.id || '').toUpperCase();
-          const seed = mergedMap.get(codeUpper);
-          if (seed) {
-            mergedMap.set(codeUpper, {
-              ...seed,
-              ...sanitized
-            });
-          } else {
-            mergedMap.set(codeUpper || item.id, sanitized);
-          }
-        });
-        equipments = Array.from(mergedMap.values());
+      if (Array.isArray(parsed)) {
+        equipments = parsed.map(sanitizeEquipment);
       }
     }
     const localHs = localStorage.getItem('obraflow_history');
@@ -949,6 +1057,25 @@ function loadLocalStorageBackup() {
       const parsed = JSON.parse(localWf);
       if (Array.isArray(parsed) && parsed.length > 0) workforce = parsed;
     }
+    const localWorkforceMeta = localStorage.getItem('obraflow_workforce_meta');
+    if (localWorkforceMeta) {
+      const parsed = JSON.parse(localWorkforceMeta);
+      if (parsed && typeof parsed === 'object') workforceMeta = parsed;
+    }
+    const localAttendance = localStorage.getItem('obraflow_workforce_attendance');
+    if (localAttendance) {
+      const parsed = JSON.parse(localAttendance);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) workforceAttendance = parsed;
+    }
+    const localWorkforceControlMeta = localStorage.getItem('obraflow_workforce_control_meta');
+    if (localWorkforceControlMeta) {
+      const parsed = JSON.parse(localWorkforceControlMeta);
+      if (parsed && typeof parsed === 'object') workforceControlMeta = parsed;
+    }
+    const localWorkforceMonth = localStorage.getItem('obraflow_workforce_control_month');
+    if (/^\d{4}-\d{2}$/.test(localWorkforceMonth || '')) workforceControlMonth = localWorkforceMonth;
+    const localWorkforceSummaryDate = localStorage.getItem('obraflow_workforce_summary_date');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(localWorkforceSummaryDate || '')) workforceSummaryDate = localWorkforceSummaryDate;
     const localPackingSlips = localStorage.getItem('obraflow_packing_slips');
     if (localPackingSlips) {
       const parsed = JSON.parse(localPackingSlips);
@@ -971,6 +1098,9 @@ function saveLocalBackup() {
     ['obraflow_equipments', equipments],
     ['obraflow_history', history],
     ['obraflow_workforce', workforce],
+    ['obraflow_workforce_meta', workforceMeta],
+    ['obraflow_workforce_attendance', workforceAttendance],
+    ['obraflow_workforce_control_meta', workforceControlMeta],
     ['obraflow_packing_slips', packingSlips],
     ['obraflow_receiving_inspections', receivingInspections]
   ];
@@ -982,6 +1112,13 @@ function saveLocalBackup() {
       console.warn(`Erro ao salvar ${key} no localStorage:`, e);
     }
   });
+  try {
+    localStorage.setItem('obraflow_workforce_control_month', workforceControlMonth);
+    localStorage.setItem('obraflow_workforce_summary_date', workforceSummaryDate);
+  } catch (e) {
+    saved = false;
+    console.warn('Erro ao salvar o período do controle de efetivo:', e);
+  }
   return saved;
 }
 
@@ -1245,22 +1382,117 @@ async function loadSeedWorkforce() {
   }
 }
 
+function workforcePersonKey(personOrCompany, name = '') {
+  const company = typeof personOrCompany === 'object' ? personOrCompany?.company : personOrCompany;
+  const personName = typeof personOrCompany === 'object' ? personOrCompany?.name : name;
+  return `${String(company || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR')}|${String(personName || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR')}`;
+}
+
+function normalizeWorkforcePeople(people) {
+  return (Array.isArray(people) ? people : [])
+    .filter(person => person?.company && person?.name)
+    .map(person => ({
+      ...person,
+      id: person.id || crypto.randomUUID(),
+      company: String(person.company).replace(/\s+/g, ' ').trim(),
+      name: String(person.name).replace(/\s+/g, ' ').trim(),
+      auxRole: String(person.auxRole || '').replace(/\s+/g, ' ').trim(),
+      role: String(person.role || '').replace(/\s+/g, ' ').trim(),
+      status: String(person.status || '').replace(/\s+/g, ' ').trim()
+    }))
+    .sort((a, b) => safeSort(a?.company, b?.company) || safeSort(a?.name, b?.name));
+}
+
+function normalizeWorkforceAttendanceMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const normalized = {};
+  Object.entries(value).forEach(([personKey, dates]) => {
+    if (!dates || typeof dates !== 'object' || Array.isArray(dates)) return;
+    const entries = {};
+    Object.entries(dates).forEach(([date, marker]) => {
+      const clean = normalizeAttendanceValue(marker);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date) && clean) entries[date] = clean;
+    });
+    if (Object.keys(entries).length) normalized[personKey] = entries;
+  });
+  return normalized;
+}
+
+function workforceSnapshot() {
+  return {
+    version: 2,
+    updatedAt: workforceControlMeta.updatedAt || new Date().toISOString(),
+    meta: workforceMeta,
+    people: workforce,
+    attendance: workforceAttendance
+  };
+}
+
+async function persistWorkforceControlRemote() {
+  const client = await waitForSupabaseClient();
+  if (!client) return false;
+  try {
+    const snapshot = workforceSnapshot();
+    const { error: snapshotError } = await client.from('app_metadata').upsert({ key: 'workforce_control', value: snapshot });
+    if (snapshotError) throw snapshotError;
+    const remotePeople = workforce.map(person => ({
+      id: person.id || crypto.randomUUID(),
+      company: person.company || '',
+      name: person.name || '',
+      role: person.role || '',
+      status: person.status || '',
+      phone: person.phone || '',
+      accessRole: person.accessRole || 'operator',
+      pin: person.pin || ''
+    }));
+    if (remotePeople.length) {
+      const { error: peopleError } = await client.from('workforce').upsert(remotePeople);
+      if (peopleError) console.warn('O retrato do efetivo foi salvo, mas o cadastro legado não foi atualizado:', peopleError);
+    }
+    return true;
+  } catch (error) {
+    console.warn('Controle de efetivo salvo somente neste aparelho:', error);
+    return false;
+  }
+}
+
+function scheduleWorkforceRemoteSave(delay = 700) {
+  clearTimeout(workforceRemoteSaveTimer);
+  workforceRemoteSaveTimer = setTimeout(() => persistWorkforceControlRemote(), delay);
+}
+
 async function syncWorkforceFromSupabase() {
   const client = await waitForSupabaseClient();
   if (!client) return false;
   try {
-    const [{ data: people, error: peopleError }, { data: metadata, error: metadataError }] = await Promise.all([
+    const [{ data: people, error: peopleError }, { data: metadata, error: metadataError }, { data: control, error: controlError }] = await Promise.all([
       client.from('workforce').select('*'),
-      client.from('app_metadata').select('value').eq('key', 'workforce_meta').maybeSingle()
+      client.from('app_metadata').select('value').eq('key', 'workforce_meta').maybeSingle(),
+      client.from('app_metadata').select('value').eq('key', 'workforce_control').maybeSingle()
     ]);
+    const remoteSnapshot = !controlError && control?.value?.version >= 2 ? control.value : null;
+    if (remoteSnapshot) {
+      const remoteTime = Date.parse(remoteSnapshot.updatedAt || '') || 0;
+      const localTime = Date.parse(workforceControlMeta.updatedAt || '') || 0;
+      if (!workforce.length || remoteTime >= localTime) {
+        workforce = normalizeWorkforcePeople(remoteSnapshot.people);
+        workforceAttendance = normalizeWorkforceAttendanceMap(remoteSnapshot.attendance);
+        workforceMeta = remoteSnapshot.meta || workforceMeta;
+        workforceControlMeta = { updatedAt: remoteSnapshot.updatedAt || '' };
+      } else {
+        scheduleWorkforceRemoteSave(0);
+      }
+      saveLocalBackup();
+      return true;
+    }
     if (peopleError) throw peopleError;
     if (Array.isArray(people) && people.length) {
-      const merged = new Map(workforce.filter(person => person?.name).map(person => [`${String(person.company || '').trim().toLocaleUpperCase('pt-BR')}|${String(person.name).trim().toLocaleUpperCase('pt-BR')}`, person]));
+      const merged = new Map(workforce.filter(person => person?.name).map(person => [workforcePersonKey(person), person]));
       people.filter(person => person?.name).forEach(person => {
-        const key = `${String(person.company || '').trim().toLocaleUpperCase('pt-BR')}|${String(person.name).trim().toLocaleUpperCase('pt-BR')}`;
+        const key = workforcePersonKey(person);
         merged.set(key, { ...(merged.get(key) || {}), ...person });
       });
-      workforce = Array.from(merged.values()).sort((a,b) => safeSort(a?.company,b?.company) || safeSort(a?.name,b?.name));
+      workforce = normalizeWorkforcePeople(Array.from(merged.values()));
     }
     if (!metadataError && metadata?.value) workforceMeta = metadata.value;
     saveLocalBackup();
@@ -1334,13 +1566,16 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
       item
     ]));
     const localEquipmentMap = new Map(currentLocalEquipments.map(item => [String(item.code || item.id || '').toUpperCase(), item]));
-    const pendingEquipmentIds = new Set(pendingFieldEvents.map(event => String(event.equipment?.id || '')));
-    const equipmentKeys = new Set([...localEquipmentMap.keys(), ...remoteEquipmentMap.keys()]);
+    let equipmentKeys;
+    if (Array.isArray(remoteEquipments)) {
+      const pendingKeys = new Set(currentLocalEquipments.filter(e => pendingEquipmentIds.has(String(e.id))).map(e => String(e.code || e.id || '').toUpperCase()));
+      equipmentKeys = new Set([...remoteEquipmentMap.keys(), ...pendingKeys]);
+    } else {
+      equipmentKeys = new Set([...localEquipmentMap.keys()]);
+    }
     equipments = Array.from(equipmentKeys).map(key => {
       const localEquipment = localEquipmentMap.get(key);
       const remoteEquipment = remoteEquipmentMap.get(key);
-      // The database is authoritative across devices. Local operational data only wins
-      // while this device has a queued event that still needs to reach the database.
       const hasPendingEvent = localEquipment && pendingEquipmentIds.has(String(localEquipment.id));
       return mergeEquipmentSnapshots(localEquipment, remoteEquipment, hasPendingEvent);
     }).filter(Boolean);
@@ -1384,6 +1619,7 @@ async function initializeApp() {
   setTimeout(() => syncReceivingInspectionsFromSupabase(), 200);
   if (typeof syncRadiosFromSupabase === 'function') setTimeout(() => syncRadiosFromSupabase(), 250);
   setTimeout(() => syncUserApprovalsFromSupabase(), 300);
+  setInterval(() => syncUserApprovalsFromSupabase(), 15000);
 }
 function companyOptions(selected='') {
   const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))];
@@ -1398,11 +1634,42 @@ function responsibleOptions(company='',selected='') {
   return `<option value="">Selecione o responsável...</option>${legacyOption}${people.map(person=>`<option value="${esc(person.name)}" ${person.name===selected?'selected':''}>${esc(person.name)}${person.role?` — ${esc(person.role)}`:''}</option>`).join('')}`;
 }
 function updateResponsibleOptions(companySelect) {
-  const responsible=companySelect.closest('form').querySelector('select[name="responsible"]');
-  if(responsible) responsible.innerHTML=responsibleOptions(companySelect.value);
+  const form = companySelect.closest('form');
+  const responsible = form ? form.querySelector('select[name="responsible"]') : null;
+  const currentVal = responsible ? responsible.value : '';
+  if(responsible) {
+    responsible.innerHTML = responsibleOptions(companySelect.value, currentVal);
+    if (currentVal && [...responsible.options].some(opt => opt.value === currentVal)) {
+      responsible.value = currentVal;
+    }
+  }
+}
+function handleInspectionPersonChange(responsibleSelect) {
+  const personName = responsibleSelect ? responsibleSelect.value : '';
+  if (!personName) return;
+  const form = responsibleSelect.closest('form');
+  const companySelect = form ? form.querySelector('select[name="company"]') : null;
+  
+  const people = typeof workforce !== 'undefined' && Array.isArray(workforce) ? workforce : [];
+  const person = people.find(p => (p.name || '').trim().toLowerCase() === personName.trim().toLowerCase());
+  
+  if (person && person.company && companySelect) {
+    const targetComp = person.company.trim();
+    let optionFound = [...companySelect.options].find(opt => opt.value.trim().toLowerCase() === targetComp.toLowerCase());
+    if (!optionFound) {
+      const opt = new Option(targetComp, targetComp, true, true);
+      companySelect.add(opt);
+      companySelect.value = targetComp;
+    } else {
+      companySelect.value = optionFound.value;
+    }
+    updateResponsibleOptions(companySelect);
+    responsibleSelect.value = person.name;
+  }
+  fillPersonPhone(responsibleSelect);
 }
 function fillPersonPhone(responsibleSelect) {
-  const form=responsibleSelect.closest('form'); const company=form.querySelector('[name="company"]')?.value; const person=workforce.find(item=>item.company===company&&item.name===responsibleSelect.value); const phone=form.querySelector('[name="phone"]'); if(phone&&person?.phone)phone.value=person.phone;
+  const form=responsibleSelect.closest('form'); const company=form.querySelector('[name="company"]')?.value; const person=workforce.find(item=>item.name===responsibleSelect.value && (!company || item.company===company)); const phone=form.querySelector('[name="phone"]'); if(phone&&person?.phone)phone.value=person.phone;
 }
 function esc(value = '') {
   return String(value).replace(/[&<>'"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[c]));
@@ -1441,7 +1708,7 @@ function inspectionFormHTML(eq, mode, preset = {}) {
     <div class="inspection-identification">
       <label><span>Equipamento</span><input value="${esc(eq.code)} — ${esc(eq.name)}" readonly></label>
       <label><span>${isReturn ? 'Empresa de quem está devolvendo' : 'Empresa'}</span><select name="company" required onchange="updateResponsibleOptions(this)">${companyOptions(preset.company||'')}</select></label>
-      <label><span>${isReturn ? 'Nome de quem está devolvendo' : 'Nome do responsável'}</span><select name="responsible" required onchange="fillPersonPhone(this)">${responsibleOptions(preset.company||'',preset.responsible||'')}</select></label>
+      <label><span>${isReturn ? 'Nome de quem está devolvendo' : 'Nome do responsável'}</span><select name="responsible" required onchange="handleInspectionPersonChange(this)">${responsibleOptions(preset.company||'',preset.responsible||'')}</select></label>
       <label class="year-field"><span>Ano base</span><input value="${new Date().getFullYear()}" readonly></label>
     </div>
     <div class="inspection-strip"><strong>Inspeção obrigatória</strong><span>Selecione uma opção em cada item conforme a legenda do formulário original.</span></div>
@@ -1695,11 +1962,15 @@ function render() {
       const params = new URLSearchParams(query);
       const email = params.get('email') || '';
       const token = params.get('token') || '';
-      setTimeout(() => openLoginModal('invite', email, token), 50);
+      const company = params.get('company') || '';
+      setTimeout(() => openLoginModal('invite', email, token, company), 50);
     } else if (hash === 'signup' || hash === 'cadastrar') {
       setTimeout(() => openLoginModal('signup'), 50);
     } else if (hash === 'login') {
-      setTimeout(() => openLoginModal('login'), 50);
+      const query = rawHash.includes('?') ? rawHash.split('?')[1] : '';
+      const params = new URLSearchParams(query);
+      const email = params.get('email') || '';
+      setTimeout(() => openLoginModal('login', email), 50);
     }
 
     if (!isAdmin() && ['dashboard', 'empresas', 'relatorios', 'romaneios', 'formularios', 'materiais', 'notas-entrada', 'movimentacoes-materiais', 'cautelas', 'radios', 'usuarios'].includes(hash) && !hash.startsWith('scan/')) {
@@ -1757,11 +2028,18 @@ function equipmentModuleTabs(active='equipamentos') {
 }
 
 let userManagementTab = 'pendentes';
+let lastUserSyncTime = 0;
 
 function renderUserManagement() {
   if (!isAdmin()) {
     renderEquipments();
     return;
+  }
+
+  // Dispara sincronização em segundo plano se tiverem passado mais de 3 segundos desde a última
+  if (Date.now() - lastUserSyncTime > 3000) {
+    lastUserSyncTime = Date.now();
+    syncUserApprovalsFromSupabase();
   }
 
   const pendingList = userApprovals.filter(u => u.status === 'pending');
@@ -1775,7 +2053,10 @@ function renderUserManagement() {
       'Gestão de Usuários & Aprovações',
       'Painel do Gestor para autorização de acessos por e-mail, convites diretos por link e controle de funções na obra.',
       'CONTROLE DE ACESSO',
-      `<button class="button button-green compact" onclick="setUserManagementTab('convidar')">${icon('plus')} Enviar Convite por E-mail</button>`
+      `<div style="display:flex; gap:8px;">
+        <button class="button button-outline compact" onclick="syncUserApprovalsFromSupabase().then(() => toast('Lista de usuários atualizada com sucesso!'))">${icon('refresh')} Sincronizar Dados</button>
+        <button class="button button-green compact" onclick="setUserManagementTab('convidar')">${icon('plus')} Enviar Convite por E-mail</button>
+      </div>`
     )}
 
     <section class="metrics-grid">
@@ -1807,10 +2088,16 @@ function renderUserManagementBody(pendingList, approvedList) {
   if (userManagementTab === 'pendentes') {
     if (pendingList.length === 0) {
       return `
-        <div class="empty-state" style="padding:40px; text-align:center; border:1px dashed var(--line); border-radius:12px; background:white;">
-          <span style="font-size:32px; display:block; margin-bottom:10px;">✅</span>
-          <h3>Nenhuma solicitação pendente no momento</h3>
-          <p style="color:var(--muted); font-size:13px; margin-top:4px;">Todas as solicitações de e-mail e senha enviadas pelos colaboradores foram processadas.</p>
+        <div class="empty-state" style="padding:32px 24px; text-align:center; border:1px dashed var(--line); border-radius:12px; background:white;">
+          <span style="font-size:32px; display:block; margin-bottom:8px;">✅</span>
+          <h3 style="font-size:16px; margin-bottom:4px;">Nenhuma solicitação pendente no momento</h3>
+          <p style="color:var(--muted); font-size:13px; margin-bottom:16px;">Todas as solicitações de e-mail e senha enviadas pelos colaboradores foram processadas.</p>
+          <div style="margin:0 auto; padding:14px; background:#f7f9f8; border:1px solid var(--line); border-radius:8px; font-size:12px; text-align:left; color:#333; max-width:520px; line-height:1.6;">
+            <strong>📌 Como funcionam as aprovações no sistema:</strong><br/>
+            • <strong>Convites Enviados por Link/E-mail:</strong> O colaborador entra como <strong>Pré-aprovado</strong> e aparece diretamente na aba <a href="javascript:void(0)" onclick="setUserManagementTab('ativos')" style="color:var(--primary); font-weight:bold;">"Usuários Ativos"</a> assim que cria a senha.<br/>
+            • <strong>Cadastro Direto ("Solicitar Cadastro"):</strong> Aparece nesta aba para você Aprovar ou Rejeitar.<br/>
+            • <strong>Não vê o cadastro?</strong> Clique no botão <button class="button button-outline compact" style="padding:2px 8px; font-size:11px; margin-left:4px;" onclick="syncUserApprovalsFromSupabase().then(() => toast('Dados sincronizados com o Supabase!'))">🔄 Sincronizar Dados</button> para atualizar.
+          </div>
         </div>`;
     }
     return `
@@ -1886,7 +2173,8 @@ function renderUserManagementBody(pendingList, approvedList) {
                 </td>
                 <td style="padding:14px 16px; color:var(--muted); font-size:12px;">${fullDate(u.approved_at || u.created_at)}</td>
                 <td style="padding:14px 16px; text-align:right;">
-                  <button class="button button-outline compact" onclick="revokeUserAccess('${esc(u.id)}')">${icon('close')} Revogar</button>
+                  <button class="button button-outline compact" style="margin-right:6px;" onclick="copyUserAccessLink('${esc(u.id)}')">${icon('clipboard')} Copiar Convite/Acesso</button>
+                  <button class="button button-outline compact" style="color:var(--red);" onclick="revokeUserAccess('${esc(u.id)}')">${icon('close')} Revogar</button>
                 </td>
               </tr>
             `).join('')}
@@ -1908,7 +2196,7 @@ function renderUserManagementBody(pendingList, approvedList) {
           </div>
           <div class="field full" style="margin-bottom:14px;">
             <label style="display:block; font-weight:700; margin-bottom:4px;">Nome do Colaborador (opcional)</label>
-            <input type="text" name="name" list="invitePeopleList" placeholder="Ex: Carlos Eduardo" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" />
+            <input type="text" name="name" list="invitePeopleList" placeholder="Ex: Carlos Eduardo" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" oninput="handleInvitePersonChange(this)" onchange="handleInvitePersonChange(this)" />
             <datalist id="invitePeopleList">
               ${uniquePeople.map(p => `<option value="${esc(p)}"></option>`).join('')}
             </datalist>
@@ -1937,6 +2225,28 @@ function renderUserManagementBody(pendingList, approvedList) {
 
         <div id="inviteResultContainer" style="margin-top:20px; display:none;"></div>
       </div>`;
+  }
+}
+
+function handleInvitePersonChange(input) {
+  const nameVal = (input?.value || '').trim().toLowerCase();
+  if (!nameVal) return;
+  const form = input.closest('form');
+  const companySelect = form?.querySelector('select[name="company"]');
+  if (!companySelect) return;
+
+  const people = typeof workforce !== 'undefined' && Array.isArray(workforce) ? workforce : [];
+  const person = people.find(p => (p.name || '').trim().toLowerCase() === nameVal);
+  if (person && person.company) {
+    const targetComp = person.company.trim();
+    let optionFound = [...companySelect.options].find(opt => opt.value.trim().toLowerCase() === targetComp.toLowerCase());
+    if (!optionFound) {
+      const opt = new Option(targetComp, targetComp, true, true);
+      companySelect.add(opt);
+      companySelect.value = targetComp;
+    } else {
+      companySelect.value = optionFound.value;
+    }
   }
 }
 
@@ -1989,22 +2299,149 @@ function updatePendingUserRole(id, newRole) {
   }
 }
 
+function copyTextToClipboard(text, successMsg = 'Copiado para a área de transferência!') {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      toast(successMsg);
+    }).catch(() => {
+      fallbackCopyText(text, successMsg);
+    });
+  } else {
+    fallbackCopyText(text, successMsg);
+  }
+}
+
+function fallbackCopyText(text, successMsg) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    document.execCommand('copy');
+    toast(successMsg);
+  } catch (e) {
+    toast('Não foi possível copiar automaticamente.');
+  }
+  document.body.removeChild(ta);
+}
+
+function showInviteSuccessModal(opts) {
+  const { name, email, role, password, token, inviteUrl, fullMsg } = opts;
+  const roleLabel = role === 'gestor' || role === 'admin' ? 'Gestor de Obra' : role === 'engenheiro' ? 'Engenheiro' : 'Operador de Campo';
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(fullMsg)}`;
+  const mailtoUrl = email ? `mailto:${email}?subject=${encodeURIComponent('Acesso ObraFlow DataCenter')}&body=${encodeURIComponent(fullMsg)}` : '';
+
+  const modalHtml = `
+    ${modalHead('✅ Convite e Dados de Acesso', 'Copie o link ou as credenciais completas para enviar ao colaborador.')}
+    <div class="modal-body" style="display:grid; gap:16px;">
+      <div style="background:#e7f5ee; border:1px solid #72cda1; padding:14px; border-radius:10px;">
+        <strong style="color:#206b49; font-size:14px; display:block; margin-bottom:4px;">Acesso Gerado com Sucesso!</strong>
+        <p style="margin:0; font-size:12px; color:#2c3c35; line-height:1.5;">
+          ${name ? `Colaborador: <strong>${esc(name)}</strong><br/>` : ''}
+          ${email ? `E-mail: <strong>${esc(email)}</strong><br/>` : 'E-mail: <em>(Preenchimento pelo usuário no link)</em><br/>'}
+          Nível de Acesso: <strong>${esc(roleLabel)}</strong>
+        </p>
+      </div>
+
+      ${password ? `
+        <div style="background:#f8f9fa; border:1px solid var(--line); padding:12px; border-radius:8px; font-size:13px;">
+          <strong style="color:var(--ink);">🔑 Credenciais Cadastradas:</strong>
+          <div style="margin-top:6px; font-family:monospace; background:white; padding:10px; border-radius:6px; border:1px solid var(--line);">
+            E-mail: <strong>${esc(email)}</strong><br/>
+            Senha: <strong>${esc(password)}</strong>
+          </div>
+        </div>
+      ` : ''}
+
+      <div>
+        <label style="display:block; font-weight:700; font-size:12px; margin-bottom:6px;">Link Direto de Acesso / Convite:</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" readonly value="${esc(inviteUrl)}" style="flex:1; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:12px; background:#f9f9f9;" onclick="this.select()" />
+          <button type="button" class="button button-green compact" onclick="copyTextToClipboard('${esc(inviteUrl)}', 'Link copiado para a área de transferência!')">
+            ${icon('clipboard')} Copiar Link
+          </button>
+        </div>
+      </div>
+
+      <div style="background:#f0f7f3; border:1px solid #bce1cb; padding:12px; border-radius:8px;">
+        <strong style="display:block; font-size:12px; color:#0d4225; margin-bottom:6px;">💬 Mensagem Pronta para Envio:</strong>
+        <textarea readonly style="width:100%; height:90px; padding:8px; font-size:12px; border:1px solid #bce1cb; border-radius:6px; background:white; resize:none;" onclick="this.select()">${esc(fullMsg)}</textarea>
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+          <button type="button" class="button button-green compact" onclick="copyTextToClipboard('${esc(fullMsg)}', 'Dados e mensagem de acesso copiados!')">
+            ${icon('clipboard')} Copiar Mensagem Completa
+          </button>
+          <a href="${whatsappUrl}" target="_blank" class="button button-outline compact" style="color:#1b5e20; text-decoration:none;">
+            Enviar via WhatsApp
+          </a>
+          ${mailtoUrl ? `<a href="${mailtoUrl}" target="_blank" class="button button-outline compact" style="text-decoration:none;">
+            Enviar por E-mail
+          </a>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="button button-outline" onclick="closeModal()">Fechar</button>
+    </div>
+  `;
+
+  modal(modalHtml, 'modal-medium');
+}
+
+function copyUserAccessLink(id) {
+  const u = userApprovals.find(item => item.id === id);
+  if (!u) return;
+  const baseUrl = `${window.location.origin}${window.location.pathname}`;
+  let inviteUrl = '';
+  let fullMsg = '';
+
+  if (u.invite_token && u.status !== 'active' && !u.password) {
+    inviteUrl = `${baseUrl}#convite?email=${encodeURIComponent(u.email || '')}&company=${encodeURIComponent(u.company || '')}&token=${u.invite_token}`;
+    fullMsg = `Olá ${u.name || 'colaborador'}!\nVocê foi convidado para acessar o ObraFlow DataCenter.\n\nClique no link abaixo para criar sua senha:\n${inviteUrl}\n\n(Código do Convite: ${u.invite_token})`;
+  } else if (u.password) {
+    inviteUrl = `${baseUrl}#login?email=${encodeURIComponent(u.email || '')}`;
+    fullMsg = `Olá ${u.name || 'colaborador'}!\nSeu acesso ao ObraFlow DataCenter está liberado!\n\nE-mail: ${u.email}\nSenha: ${u.password}\n\nClique para acessar:\n${inviteUrl}`;
+  } else {
+    inviteUrl = `${baseUrl}#login?email=${encodeURIComponent(u.email || '')}`;
+    fullMsg = `Olá ${u.name || 'colaborador'}!\nSeu acesso ao ObraFlow DataCenter está liberado.\n\nE-mail: ${u.email}\n\nLink para entrar:\n${inviteUrl}`;
+  }
+
+  showInviteSuccessModal({
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    password: u.password,
+    token: u.invite_token,
+    inviteUrl: inviteUrl,
+    fullMsg: fullMsg
+  });
+}
+
 async function generateInviteLink(event) {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(event.target));
-  const email = (data.email || '').toLowerCase().trim();
+  let email = (data.email || '').toLowerCase().trim();
   const name = (data.name || (email ? email.split('@')[0] : '')).trim();
-  const company = (data.company || '').trim();
+  let company = (data.company || '').trim();
+  if (!company && name) {
+    const people = typeof workforce !== 'undefined' && Array.isArray(workforce) ? workforce : [];
+    const person = people.find(p => (p.name || '').trim().toLowerCase() === name.toLowerCase());
+    if (person && person.company) company = person.company.trim();
+  }
   const role = data.role || 'operador';
   const password = data.password ? String(data.password).trim() : '';
   const token = 'INV-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+
+  const syntheticEmail = email || `convite_${token.toLowerCase()}@obraflow.link`;
 
   let match = email ? userApprovals.find(u => u.email && u.email.toLowerCase() === email) : null;
   if (!match) {
     match = {
       id: crypto.randomUUID ? crypto.randomUUID() : 'usr_' + Date.now(),
-      email: email,
-      name: name,
+      email: syntheticEmail,
+      name: name || (email ? email.split('@')[0] : 'Colaborador Convidado'),
       company: company,
       role: role,
       status: 'approved',
@@ -2029,65 +2466,225 @@ async function generateInviteLink(event) {
   localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
   await saveUserApprovalToSupabase(match);
 
+  const baseUrl = `${window.location.origin}${window.location.pathname}`;
   let inviteUrl = '';
-  let whatsappUrl = '';
-  let mailtoUrl = '';
+  let fullMsg = '';
 
   if (password) {
-    inviteUrl = `${window.location.origin}${window.location.pathname}`;
-    const passwordText = `\nE-mail: ${email}\nSenha: ${password}\n`;
-    whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`Olá ${name}! Você foi convidado para acessar o app ObraFlow DataCenter. Seu acesso já foi criado!${passwordText}Clique no link para acessar: ${inviteUrl}`)}`;
-    mailtoUrl = `mailto:${email}?subject=${encodeURIComponent('Acesso Liberado - ObraFlow DataCenter')}&body=${encodeURIComponent(`Olá ${name},\n\nSeu acesso ao sistema ObraFlow já foi criado.\n${passwordText}\nClique no link abaixo para entrar:\n${inviteUrl}`)}`;
+    inviteUrl = `${baseUrl}#login?email=${encodeURIComponent(email || '')}`;
+    fullMsg = `Olá ${name || 'colaborador'}!\nSeu acesso ao ObraFlow DataCenter foi criado!\n\nE-mail: ${email}\nSenha: ${password}\n\nClique no link abaixo para entrar:\n${inviteUrl}`;
   } else {
-    inviteUrl = `${window.location.origin}${window.location.pathname}#convite?email=${encodeURIComponent(email)}&token=${token}`;
-    whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`Olá ${name}! Você foi convidado para acessar o app ObraFlow DataCenter. Clique no link para cadastrar sua senha: ${inviteUrl}`)}`;
-    mailtoUrl = `mailto:${email}?subject=${encodeURIComponent('Convite de Acesso - ObraFlow DataCenter')}&body=${encodeURIComponent(`Olá ${name},\n\nVocê recebeu um convite para acessar o sistema ObraFlow.\nClique no link abaixo para criar sua senha e entrar:\n${inviteUrl}`)}`;
+    inviteUrl = `${baseUrl}#convite?email=${encodeURIComponent(email || '')}&company=${encodeURIComponent(company)}&token=${token}`;
+    fullMsg = `Olá ${name || 'colaborador'}!\nVocê foi convidado para acessar o ObraFlow DataCenter.\n\nClique no link para criar sua senha e entrar:\n${inviteUrl}\n\n(Código do Convite: ${token})`;
   }
+
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(fullMsg)}`;
+  const mailtoUrl = email ? `mailto:${email}?subject=${encodeURIComponent('Convite / Acesso ObraFlow DataCenter')}&body=${encodeURIComponent(fullMsg)}` : '';
 
   const resContainer = document.getElementById('inviteResultContainer');
   if (resContainer) {
     resContainer.style.display = 'block';
     resContainer.innerHTML = `
-      <div style="padding:16px; background:#e7f5ee; border:1px solid #72cda1; border-radius:10px; margin-top:16px;">
-        <strong style="color:#206b49; display:block; margin-bottom:6px;">✅ Acesso Gerado com Sucesso!</strong>
-        <p style="font-size:12px; margin-bottom:10px; color:#2c3c35;">O usuário <strong>${esc(email)}</strong> já está pré-aprovado como <strong>${role}</strong>.</p>
-        ${password ? `<div style="background:#fff; padding:10px; border-radius:6px; border:1px solid #b3dfca; margin-bottom:12px; font-size:13px;">
-          <strong>Acesso para o colaborador:</strong><br/>
-          E-mail: <code>${esc(email)}</code><br/>
-          Senha: <code>${esc(password)}</code>
-        </div>` : ''}
+      <div style="padding:18px; background:#e7f5ee; border:1px solid #72cda1; border-radius:12px; margin-top:16px;">
+        <strong style="color:#206b49; display:block; font-size:15px; margin-bottom:6px;">✅ Link e Acesso Gerados com Sucesso!</strong>
+        <p style="font-size:13px; margin-bottom:12px; color:#2c3c35;">
+          ${email ? `Usuário: <strong>${esc(email)}</strong> | Nível: <strong>${esc(role)}</strong>` : `Link pré-aprovado gerado com sucesso para o nível <strong>${esc(role)}</strong>.`}
+        </p>
+
+        ${password ? `
+          <div style="background:#fff; padding:10px 12px; border-radius:8px; border:1px solid #b3dfca; margin-bottom:12px; font-size:13px;">
+            <strong>Acesso Cadastrado:</strong><br/>
+            E-mail: <code>${esc(email)}</code><br/>
+            Senha: <code>${esc(password)}</code>
+          </div>
+        ` : ''}
+
+        <label style="display:block; font-weight:700; font-size:11px; margin-bottom:4px; color:#206b49;">LINK DIRETO DE ACESSO:</label>
         <div style="display:flex; gap:8px; margin-bottom:12px;">
-          <input id="inviteUrlInput" type="text" readonly value="${esc(inviteUrl)}" style="flex:1; padding:8px; border:1px solid #b3dfca; border-radius:6px; font-size:11px;" />
-          <button type="button" class="button button-green compact" onclick="navigator.clipboard.writeText('${esc(inviteUrl)}'); toast('Link copiado para a área de transferência!');">Copiar Link</button>
+          <input id="inviteUrlInput" type="text" readonly value="${esc(inviteUrl)}" style="flex:1; padding:8px 10px; border:1px solid #b3dfca; border-radius:6px; font-size:12px; background:white;" onclick="this.select()" />
+          <button type="button" class="button button-green compact" onclick="copyTextToClipboard('${esc(inviteUrl)}', 'Link copiado para a área de transferência!')">
+            ${icon('clipboard')} Copiar Link
+          </button>
         </div>
-        <div style="display:flex; gap:10px;">
-          <a href="${whatsappUrl}" target="_blank" class="button button-outline compact" style="color:#1b5e20;">Enviar via WhatsApp</a>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="button button-green compact" onclick="copyTextToClipboard('${esc(fullMsg)}', 'Dados e mensagem copiados!')">
+            ${icon('clipboard')} Copiar Mensagem Completa
+          </button>
+          <a href="${whatsappUrl}" target="_blank" class="button button-outline compact" style="color:#1b5e20; text-decoration:none;">
+            Enviar via WhatsApp
+          </a>
+          ${mailtoUrl ? `<a href="${mailtoUrl}" target="_blank" class="button button-outline compact" style="text-decoration:none;">
+            Enviar por E-mail
+          </a>` : ''}
         </div>
       </div>
     `;
+    resContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
-  toast('Convite gerado com sucesso!');
+
+  showInviteSuccessModal({
+    name: name,
+    email: email,
+    role: role,
+    password: password,
+    token: token,
+    inviteUrl: inviteUrl,
+    fullMsg: fullMsg
+  });
+
+  toast('Convite e link gerados com sucesso!');
+}
+
+function getEquipmentHeightBreakdown() {
+  const breakdown = {};
+  equipments.forEach(eq => {
+    let label = 'Outras / Paleteiras';
+    const text = `${eq.name || ''} ${eq.model || ''} ${eq.type || ''}`;
+    const match = text.match(/(\d+)\s*m\b/i);
+    if (match) {
+      const h = parseInt(match[1], 10);
+      label = `${h} Metros`;
+    }
+    if (!breakdown[label]) {
+      breakdown[label] = { total: 0, available: 0, inUse: 0, maintenance: 0 };
+    }
+    breakdown[label].total++;
+    if (eq.status === 'available') breakdown[label].available++;
+    else if (eq.status === 'in-use') breakdown[label].inUse++;
+    else breakdown[label].maintenance++;
+  });
+  return breakdown;
 }
 
 function renderDashboard() {
-  const available = equipments.filter(e => e.status === 'available').length;
-  const inUse = equipments.filter(e => e.status === 'in-use').length;
-  const maintenance = equipments.filter(e => e.status === 'maintenance').length;
+  const availablePtas = equipments.filter(e => e.status === 'available').length;
+  const inUsePtas = equipments.filter(e => e.status === 'in-use').length;
+  const maintenancePtas = equipments.filter(e => e.status === 'maintenance').length;
+
+  const totalRadios = typeof radioAssets !== 'undefined' ? radioAssets.length : 0;
+  const availableRadios = typeof radioAssets !== 'undefined' ? radioAssets.filter(item => item.status !== 'in-use' && item.status !== 'maintenance').length : 0;
+  const inUseRadios = typeof radioAssets !== 'undefined' ? radioAssets.filter(item => item.status === 'in-use').length : 0;
+  const maintenanceRadios = typeof radioAssets !== 'undefined' ? radioAssets.filter(item => item.status === 'maintenance').length : 0;
+
   const stock = typeof inventorySnapshot === 'function' ? inventorySnapshot() : [];
   const stockedProducts = stock.filter(item => item.balance > 0).length;
   const formsCount = formsHubRecords().length;
-  const radiosInUse = typeof radioAssets !== 'undefined' ? radioAssets.filter(item => item.status === 'in-use').length : 0;
+
+  const companies = [...new Set(workforce.map(person => person?.company).filter(Boolean))].sort(safeSort);
+  if (!workforceSummaryDate.startsWith(workforceControlMonth)) workforceSummaryDate = `${workforceControlMonth}-01`;
+  const presentToday = workforce.filter(person => workforceAttendanceValue(person, workforceSummaryDate) === '1').length;
+
+  const heightBreakdown = getEquipmentHeightBreakdown();
+
   document.getElementById('app').innerHTML = `
-    ${pageHeader('Central da obra', 'Escolha o que precisa fazer. Indicadores detalhados ficam dentro de cada módulo.', 'DATACENTER OMNIA · DC01')}
-    <section class="dashboard-modules">
-      <button class="dashboard-module-card primary" onclick="location.hash='materiais'"><span>${icon('pallet')}</span><div><small>ALMOXARIFADO</small><h2>Materiais e saídas</h2><p>Estoque, entradas, saídas, romaneios, ferramentas e EPIs no mesmo módulo.</p></div><strong>${stockedProducts}<small> com saldo</small></strong></button>
-      <button class="dashboard-module-card" onclick="location.hash='radios'"><span>${icon('radio')}</span><div><small>COMUNICAÇÃO</small><h2>Controle de rádios</h2><p>Cadastro, entrega assinada, devolução e histórico dos comunicadores.</p></div><strong>${radiosInUse}<small> em uso</small></strong></button>
-      <button class="dashboard-module-card" onclick="location.hash='equipamentos'"><span>${icon('lift')}</span><div><small>EQUIPAMENTOS</small><h2>PTAs e paleteiras</h2><p>Ver disponibilidade, responsáveis e checklists.</p></div><strong>${available}<small> disponíveis</small></strong></button>
-      <button class="dashboard-module-card" onclick="location.hash='formularios'"><span>${icon('clipboard')}</span><div><small>DOCUMENTOS</small><h2>Formulários</h2><p>Abrir modelos e registros preenchidos da obra.</p></div><strong>${formsCount}<small> registros</small></strong></button>
+    ${pageHeader('Central da Obra', 'Visão geral e indicadores consolidados de PTAs, Efetivo, Rádios e Almoxarifado.', 'DATACENTER OMNIA · DC01')}
+    
+    <!-- GRID DE MÉTRICAS PRINCIPAIS (HERO CENTRAL) -->
+    <section class="dashboard-central-hero">
+      <div class="central-card card-ptas" onclick="location.hash='equipamentos'">
+        <div class="central-card-head">
+          <span class="icon-wrap">${icon('lift')}</span>
+          <div>
+            <small>FROTA DE PTAS</small>
+            <h2>${equipments.length} <small>PTAs no total</small></h2>
+          </div>
+        </div>
+        <div class="central-card-pills">
+          <span class="pill-badge green"><b>${availablePtas}</b> Disponíveis</span>
+          <span class="pill-badge amber"><b>${inUsePtas}</b> Em Uso</span>
+          <span class="pill-badge red"><b>${maintenancePtas}</b> Indisponíveis</span>
+        </div>
+      </div>
+
+      <div class="central-card card-radios" onclick="location.hash='radios'">
+        <div class="central-card-head">
+          <span class="icon-wrap purple">${icon('radio')}</span>
+          <div>
+            <small>COMUNICAÇÃO</small>
+            <h2>${totalRadios} <small>Rádios cadastrados</small></h2>
+          </div>
+        </div>
+        <div class="central-card-pills">
+          <span class="pill-badge green"><b>${availableRadios}</b> Disponíveis</span>
+          <span class="pill-badge amber"><b>${inUseRadios}</b> Em Uso</span>
+          ${maintenanceRadios > 0 ? `<span class="pill-badge red"><b>${maintenanceRadios}</b> Manutenção</span>` : ''}
+        </div>
+      </div>
+
+      <div class="central-card card-efetivo" onclick="location.hash='empresas'">
+        <div class="central-card-head">
+          <span class="icon-wrap green">${icon('user')}</span>
+          <div>
+            <small>EFETIVO & EQUIPE</small>
+            <h2>${presentToday} <small>Presentes hoje (de ${workforce.length})</small></h2>
+          </div>
+        </div>
+        <div class="central-card-pills">
+          <span class="pill-badge blue"><b>${companies.length}</b> Empresas</span>
+          <span class="pill-badge green"><b>${workforce.length}</b> Pessoas</span>
+        </div>
+      </div>
+
+      <div class="central-card card-materiais" onclick="location.hash='materiais'">
+        <div class="central-card-head">
+          <span class="icon-wrap orange">${icon('pallet')}</span>
+          <div>
+            <small>ALMOXARIFADO</small>
+            <h2>${stockedProducts} <small>Com saldo</small></h2>
+          </div>
+        </div>
+        <div class="central-card-pills">
+          <span class="pill-badge green"><b>${formsCount}</b> Registros</span>
+        </div>
+      </div>
     </section>
-    ${(inUse || maintenance) ? `<section class="dashboard-attention"><span>${icon('alert')}</span><div><strong>Situação dos equipamentos</strong><small>${inUse} em uso · ${maintenance} indisponível(is)</small></div><button class="button button-outline compact" onclick="location.hash='equipamentos'">Ver equipamentos ${icon('arrow')}</button></section>` : ''}
-    <section class="home-footer-card" id="dashboardInstallCard"><div><span>${icon('download')}</span><div><strong>Instalar DataCenter Omnia neste aparelho</strong><small>Crie um atalho com o icone da Heating Cooling e abra o sistema como aplicativo.</small></div></div><button class="button button-green compact" onclick="installDataCenterApp()">Instalar App ${icon('download')}</button></section>
-    `;
+
+    <!-- SEÇÕES DA CENTRAL: PTAS POR ALTURA & QUADRO DE EFETIVO -->
+    <div class="central-sections-grid">
+      <!-- PAINEL PTAS POR ALTURA -->
+      <section class="panel central-heights-panel">
+        <div class="panel-head">
+          <div>
+            <h2>${icon('lift')} Frota de PTAs por Altura</h2>
+            <p>Quantitativo de equipamentos por capacidade (8m, 10m, 14m, etc.)</p>
+          </div>
+          <button class="button button-outline compact" onclick="location.hash='equipamentos'">Ver PTAs ${icon('arrow')}</button>
+        </div>
+        <div class="heights-grid">
+          ${Object.entries(heightBreakdown).sort((a,b) => a[0].localeCompare(b[0])).map(([heightLabel, stats]) => `
+            <div class="height-card">
+              <div class="height-card-title">
+                <span class="height-tag">${heightLabel}</span>
+                <strong>${stats.total} <small>PTAs</small></strong>
+              </div>
+              <div class="height-card-stats">
+                <span class="stat-item green"><i class="dot"></i> <b>${stats.available}</b> disponíve${stats.available === 1 ? 'l' : 'is'}</span>
+                <span class="stat-item amber"><i class="dot"></i> <b>${stats.inUse}</b> em uso</span>
+                ${stats.maintenance > 0 ? `<span class="stat-item red"><i class="dot"></i> <b>${stats.maintenance}</b> indisponíve${stats.maintenance === 1 ? 'l' : 'is'}</span>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+
+      <!-- PAINEL QUADRO DE EFETIVO -->
+      <section class="panel central-quadro-panel">
+        <div class="panel-head">
+          <div>
+            <h2>${icon('building')} Quadro de Efetivo por Empresa</h2>
+            <p>Efetivo Diário vs Geral cadastrado por empreiteiro</p>
+          </div>
+          <button class="button button-outline compact" onclick="location.hash='empresas'">Gerenciar efetivo ${icon('arrow')}</button>
+        </div>
+        <div class="panel-body" style="padding: 16px;">
+          ${renderWorkforceQuadroTableHTML(workforceSummaryDate)}
+        </div>
+      </section>
+    </div>
+
+    <section class="home-footer-card" id="dashboardInstallCard" style="margin-top: 24px;"><div><span>${icon('download')}</span><div><strong>Instalar DataCenter Omnia neste aparelho</strong><small>Crie um atalho com o ícone da Heating Cooling e abra o sistema como aplicativo.</small></div></div><button class="button button-green compact" onclick="installDataCenterApp()">Instalar App ${icon('download')}</button></section>
+  `;
 }
 
 function equipmentRow(eq) {
@@ -2118,7 +2715,7 @@ function renderEquipments() {
 function equipmentControlRow(eq) {
   const latest=history.find(item=>item.equipmentId===eq.id&&item.inspection);
   const dates=[eq.emissionDate||'',...history.filter(item=>item.equipmentId===eq.id).map(item=>item.date?.slice(0,10)||'')].join(' ');
-  return `<tr class="equipment-control-row" data-status="${eq.status}" data-type="${esc(eq.type)}" data-model="${esc(eq.model||'')}" data-af="${esc(eq.afNumber||'')}" data-dates="${dates}" data-search="${esc(`${eq.name} ${eq.code} ${eq.afNumber||''} ${eq.contractor||''} ${eq.serial||''} ${eq.model||''} ${eq.usage?.responsible||''} ${eq.usage?.company||''} ${eq.usage?.activity||''}`.toLowerCase())}"><td><div class="equipment-identity"><span>${equipmentIcon(eq)}</span><div><strong>${esc(eq.code)}</strong><small>${esc(eq.name)}</small></div></div></td><td>${eq.afNumber ? `<span class="af-badge">${esc(eq.afNumber)}</span>` : '<span class="muted-dash">—</span>'}</td><td><strong>${esc(eq.contractor||'—')}</strong></td><td><strong>${esc(eq.model||'—')}</strong><small class="table-sub">${esc(eq.battery ? `Bateria ${eq.battery}` : eq.brand||'')}</small></td><td>${statusBadge(eq.status)}</td><td>${eq.usage?`<strong>${esc(eq.usage.responsible)}</strong><small class="table-sub">${esc(eq.usage.company)}</small>`:'<span class="muted-dash">—</span>'}</td><td>${eq.usage?`<strong>${esc(eq.usage.dataHall)}</strong><small class="table-sub">${esc(eq.usage.location)}</small><small class="table-sub activity-sub">${esc(eq.usage.activity||'')}</small>`:'<span class="muted-dash">Pátio / Base</span>'}</td><td>${eq.usage?`<strong>${fullDate(eq.usage.expectedAt)}</strong>`:'<span class="muted-dash">—</span>'}</td><td>${latest?`<button class="table-action" onclick="openInspectionRecord('${latest.id}')">${icon('file')} Ver</button>`:'<span class="muted-dash">Sem registro</span>'}</td><td><div class="control-row-actions"><button class="icon-button" title="QR Code" onclick="openQRModal('${eq.id}')">${icon('qr')}</button><button class="button ${eq.status==='available'?'button-green':'button-outline'} compact" onclick="openEquipmentDetails('${eq.id}')">${eq.status==='available'?'Retirar':'Detalhes'}</button></div></td></tr>`;
+  return `<tr class="equipment-control-row" data-status="${eq.status}" data-type="${esc(eq.type)}" data-model="${esc(eq.model||'')}" data-af="${esc(eq.afNumber||'')}" data-dates="${dates}" data-search="${esc(`${eq.name} ${eq.code} ${eq.afNumber||''} ${eq.contractor||''} ${eq.serial||''} ${eq.model||''} ${eq.usage?.responsible||''} ${eq.usage?.company||''} ${eq.usage?.activity||''}`.toLowerCase())}"><td><div class="equipment-identity"><span>${equipmentIcon(eq)}</span><div><strong>${esc(eq.code)}</strong><small>${esc(eq.name)}</small></div></div></td><td>${eq.afNumber ? `<span class="af-badge">${esc(eq.afNumber)}</span>` : '<span class="muted-dash">—</span>'}</td><td><strong>${esc(eq.contractor||'—')}</strong></td><td><strong>${esc(eq.model||'—')}</strong><small class="table-sub">${esc(eq.battery ? `Bateria ${eq.battery}` : eq.brand||'')}</small></td><td>${statusBadge(eq.status)}</td><td>${eq.usage?`<strong>${esc(eq.usage.responsible)}</strong><small class="table-sub">${esc(eq.usage.company)}</small>`:'<span class="muted-dash">—</span>'}</td><td>${eq.usage?`<strong>${esc(eq.usage.dataHall)}</strong><small class="table-sub">${esc(eq.usage.location)}</small><small class="table-sub activity-sub">${esc(eq.usage.activity||'')}</small>`:'<span class="muted-dash">Pátio / Base</span>'}</td><td>${eq.usage?`<strong>${fullDate(eq.usage.expectedAt)}</strong>`:'<span class="muted-dash">—</span>'}</td><td>${latest?`<button class="table-action" onclick="openInspectionRecord('${latest.id}')">${icon('file')} Ver</button>`:'<span class="muted-dash">Sem registro</span>'}</td><td><div class="control-row-actions"><button class="icon-button" title="QR Code" onclick="openQRModal('${eq.id}')">${icon('qr')}</button><button class="icon-button" title="Editar equipamento" onclick="openEquipmentModal('${eq.id}')">${icon('edit')}</button><button class="icon-button danger-icon" style="color:var(--red);" title="Excluir PTA do sistema" onclick="deleteEquipment('${eq.id}')">${icon('trash')}</button><button class="button ${eq.status==='available'?'button-green':'button-outline'} compact" onclick="openEquipmentDetails('${eq.id}')">${eq.status==='available'?'Retirar':'Detalhes'}</button></div></td></tr>`;
 }
 function assetCard(eq) {
   return `<article class="asset-card" data-status="${eq.status}" data-type="${esc(eq.type)}" data-search="${esc(`${eq.name} ${eq.code} ${eq.afNumber||''} ${eq.contractor||''} ${eq.brand} ${eq.model}`.toLowerCase())}"><div class="asset-card-top"><span class="asset-icon">${equipmentIcon(eq)}</span>${statusBadge(eq.status)}</div><h3>${esc(eq.name)}</h3><div class="asset-code">${esc(eq.code)} ${eq.afNumber ? `· <span class="af-badge">AFF: ${esc(eq.afNumber)}</span>` : ''} · ${esc(eq.contractor || eq.brand)} ${esc(eq.model)}</div><div class="asset-meta"><div><span>Localização</span><strong>${esc(eq.usage?.dataHall || 'Pátio / Base')}</strong></div><div><span>Responsável</span><strong>${esc(eq.usage?.responsible || 'Sem responsável')}</strong></div></div><div class="asset-actions"><button class="button button-outline" onclick="openQRModal('${eq.id}')">${icon('qr')} QR Code</button><button class="button ${eq.status === 'available' ? 'button-green' : 'button-dark'}" onclick="openEquipmentDetails('${eq.id}')">${eq.status === 'available' ? 'Liberar uso' : 'Ver detalhes'} ${icon('arrow')}</button></div></article>`;
@@ -2149,7 +2746,7 @@ function openEquipmentImportModalLegacy() {
 }
 
 function openEquipmentImportModal() {
-  modal(`${modalHead('Atualizar PTAs por Excel','Utilize sempre o modelo oficial OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · título na linha 1 e cabeçalhos na linha 3</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source||'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt?`· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}`:''}</small></div></div><div class="import-columns"><span>NF</span><span>Data Emissão</span><span>Descrição do Equipamento</span><span>Nº Série/Patrimônio</span><span>codigo AFF</span><span>Empreiteiro</span><span>Status</span></div><div class="notice">${icon('alert')} A importação atualiza os equipamentos pelo Nº Série/Patrimônio e adiciona os novos. Uma retirada ativa sempre prevalece como Em uso; nos demais casos, a planilha define Disponível ou Indisponível. Responsável, localização, dados técnicos e checklists são preservados.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar modelo oficial atualizado</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-large');
+  modal(`${modalHead('Atualizar PTAs por Excel','Utilize sempre o modelo oficial OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · título na linha 1 e cabeçalhos na linha 3</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source||'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt?`· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}`:''}</small></div></div><div class="import-columns"><span>NF</span><span>Data Emissão</span><span>Descrição do Equipamento</span><span>Nº Série/Patrimônio</span><span>codigo AFF</span><span>Empreiteiro</span><span>Status</span></div><div class="notice">${icon('alert')} A importação sincroniza a lista oficial: atualiza os existentes, cadastra os novos e remove automaticamente do sistema as PTAs que foram excluídas da planilha.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar modelo oficial atualizado</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-large');
 }
 
 async function exportEquipmentsExcelLegacy() {
@@ -2387,26 +2984,78 @@ async function handleEquipmentUpload(event) {
     let updated = 0;
     const importedAt = new Date().toISOString();
     const changedEquipments = [];
+    
+    // Identifica equipamentos que não estão mais na nova planilha e sincroniza
+    const importedCodes = new Set(imported.map(item => item.code.toUpperCase()));
+    const removedEquipments = equipments.filter(e => !importedCodes.has(e.code.toUpperCase()));
+    if (removedEquipments.length > 0) {
+      equipments = equipments.filter(e => importedCodes.has(e.code.toUpperCase()));
+    }
+
     imported.forEach(item => {
       const existingIndex = equipments.findIndex(e => e.code.toUpperCase() === item.code.toUpperCase());
       if (existingIndex >= 0) {
+        const existing = equipments[existingIndex];
+        const preservedUsage = existing.usage || null;
+
+        // Preserve 'in-use' if it was in-use in the app OR specified as 'in-use' in the spreadsheet.
+        // Respect 'maintenance' if specified in spreadsheet or app. Otherwise default to 'available'.
+        let finalStatus = 'available';
+        if (preservedUsage || existing.status === 'in-use' || item.status === 'in-use') {
+          finalStatus = 'in-use';
+        } else if (item.status === 'maintenance' || existing.status === 'maintenance') {
+          finalStatus = 'maintenance';
+        }
+
+        let finalUsage = preservedUsage;
+        if (finalStatus === 'in-use' && !finalUsage) {
+          finalUsage = {
+            responsible: item.contractor || 'Em uso (Planilha)',
+            company: item.contractor || '',
+            activity: 'Em uso via planilha',
+            dataHall: '—',
+            location: '—',
+            expectedAt: '',
+            startedAt: new Date().toISOString(),
+            phone: ''
+          };
+        } else if (finalStatus !== 'in-use') {
+          finalUsage = null;
+        }
+
         equipments[existingIndex] = {
-          ...equipments[existingIndex],
+          ...existing,
           ...item,
-          afNumber: item.afNumber || equipments[existingIndex].afNumber || '',
+          afNumber: item.afNumber || existing.afNumber || '',
           // The imported spreadsheet is authoritative for Empreiteiro. Keep an
           // empty cell empty so stale SIP/A.L.A. values are actually cleared.
           contractor: item.contractor,
-          status: equipments[existingIndex].usage ? 'in-use' : (item.status === 'maintenance' ? 'maintenance' : 'available'),
-          usage: equipments[existingIndex].usage,
+          status: finalStatus,
+          usage: finalUsage,
           updatedAt: importedAt
         };
         changedEquipments.push(equipments[existingIndex]);
         updated++;
       } else {
         item.id = `pta-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-        item.status = item.status === 'maintenance' ? 'maintenance' : 'available';
-        item.usage = null;
+        let newStatus = 'available';
+        if (item.status === 'in-use') {
+          newStatus = 'in-use';
+        } else if (item.status === 'maintenance') {
+          newStatus = 'maintenance';
+        }
+
+        item.status = newStatus;
+        item.usage = newStatus === 'in-use' ? {
+          responsible: item.contractor || 'Em uso (Planilha)',
+          company: item.contractor || '',
+          activity: 'Em uso via planilha',
+          dataHall: '—',
+          location: '—',
+          expectedAt: '',
+          startedAt: new Date().toISOString(),
+          phone: ''
+        } : null;
         item.updatedAt = importedAt;
         equipments.push(item);
         changedEquipments.push(item);
@@ -2421,6 +3070,17 @@ async function handleEquipmentUpload(event) {
     let shared = true;
     try {
       await persistEquipmentRecords(changedEquipments);
+      if (removedEquipments.length > 0) {
+        const removedIds = removedEquipments.map(e => e.id);
+        const client = getSupabase();
+        if (client) {
+          await client.from('equipments').delete().in('id', removedIds);
+        } else {
+          for (const reqId of removedIds) {
+            await supabaseRestRequest(`equipments?id=eq.${encodeURIComponent(reqId)}`, { method: 'DELETE' });
+          }
+        }
+      }
       const client = getSupabase();
       if (client) client.from('app_metadata').upsert({key:'equipment_import_meta',value:equipmentImportMeta});
     } catch (error) {
@@ -2430,9 +3090,10 @@ async function handleEquipmentUpload(event) {
     closeModal(); renderEquipments();
     const navCount = document.getElementById('navEquipmentCount');
     if (navCount) navCount.textContent = equipments.length;
+    const removedMsg = removedEquipments.length > 0 ? `, ${removedEquipments.length} removido(s)` : '';
     toast(shared
-      ? `${updated} equipamento(s) atualizado(s) e ${added} novo(s) importado(s) em todos os aparelhos.`
-      : `${updated} equipamento(s) atualizado(s) e ${added} novo(s) salvos somente neste aparelho. Verifique a internet e importe novamente.`,
+      ? `${updated} equipamento(s) atualizado(s), ${added} novo(s)${removedMsg} em todos os aparelhos.`
+      : `${updated} equipamento(s) atualizado(s), ${added} novo(s)${removedMsg} salvos somente neste aparelho. Verifique a internet e importe novamente.`,
       !shared);
   } catch(error){toast(error.message||'Não foi possível ler a planilha de equipamentos.',true);}
 }
@@ -3135,14 +3796,204 @@ function filterFormsHub() {
   if (empty) empty.style.display = document.querySelectorAll('.form-record-row').length && !visible ? 'block' : 'none';
 }
 
-function renderCompanies() {
-  const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
-  document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Cadastre manualmente ou importe a planilha completa da obra.', 'CADASTRO CENTRAL', `<button class="button button-outline" onclick="openWorkforceModal()">${icon('download')} Importar Excel</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar Excel</button><button class="button button-green" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>`)}<section class="workforce-summary"><div><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas</small></p></div><div><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source||'Cadastro manual')}</strong><span>${workforceMeta.updatedAt?`${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}`:''}</span></p></div></section><div class="simple-filters workforce-filters"><label class="search-box">${icon('search')}<input id="workforceSearch" type="search" placeholder="Buscar nome, função ou empresa..." oninput="filterWorkforce()"></label><label class="filter-field"><span>Empresa</span><select id="workforceCompany" onchange="filterWorkforce()"><option value="">Todas</option>${companies.map(company=>`<option>${esc(company)}</option>`).join('')}</select></label></div><article class="panel"><div class="panel-head"><div><h2>Pessoas cadastradas</h2><p>Disponíveis na lista de responsáveis dos checklists</p></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Nome</th><th>Empresa</th><th>Função</th><th>Vínculo</th><th></th></tr></thead><tbody>${workforce.map((person,index)=>`<tr class="workforce-row" data-company="${esc(person?.company||'')}" data-search="${esc(`${person?.name||''} ${person?.company||''} ${person?.role||''}`.toLowerCase())}"><td><strong>${esc(person?.name||'')}</strong></td><td>${esc(person?.company||'')}</td><td>${esc(person?.role||'—')}</td><td>${esc(person?.status||'—')}</td><td><div class="control-row-actions"><button class="icon-button" title="Editar" onclick="openPersonModal(${index})">${icon('edit')}</button><button class="icon-button" title="Excluir" onclick="deletePerson(${index})">${icon('trash')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="no-filter-results" id="noWorkforceResults">Nenhuma pessoa encontrada.</div></article>`;
+function workforceMonthDates(month = workforceControlMonth) {
+  if (!/^\d{4}-\d{2}$/.test(month || '')) return [];
+  const [year, monthNumber] = month.split('-').map(Number);
+  const total = new Date(year, monthNumber, 0).getDate();
+  return Array.from({ length: total }, (_, index) => `${month}-${String(index + 1).padStart(2, '0')}`);
 }
+
+function workforceMonthLabel(month = workforceControlMonth) {
+  const date = /^\d{4}-\d{2}$/.test(month || '') ? new Date(`${month}-01T12:00:00`) : new Date();
+  return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(date);
+}
+
+function workforceDayLabel(date) {
+  const parsed = new Date(`${date}T12:00:00`);
+  return {
+    day: String(parsed.getDate()).padStart(2, '0'),
+    weekday: new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(parsed).replace('.', '').slice(0, 3)
+  };
+}
+
+function normalizeAttendanceValue(value) {
+  if (value === 1 || String(value).trim() === '1') return '1';
+  if (value === 0 || String(value).trim() === '0') return '0';
+  const normalized = normalizeSpreadsheetHeader(value);
+  if (normalized === 'p' || normalized === 'presente') return '1';
+  if (normalized === 'a' || normalized === 'ausente' || normalized === 'falta') return '0';
+  if (normalized.includes('folga')) return 'FOLGA';
+  return '';
+}
+
+function workforceAttendanceValue(person, date) {
+  return workforceAttendance[workforcePersonKey(person)]?.[date] || '';
+}
+
+function workforceAttendanceCell(person, date) {
+  const value = workforceAttendanceValue(person, date);
+  const state = value === '1' ? 'present' : value === '0' ? 'absent' : value === 'FOLGA' ? 'off' : 'empty';
+  const label = value === 'FOLGA' ? 'F' : value || '·';
+  const title = value === '1' ? 'Presente' : value === '0' ? 'Ausente' : value === 'FOLGA' ? 'Folga' : 'Sem marcação';
+  const encodedKey = encodeURIComponent(workforcePersonKey(person)).replace(/'/g, '%27');
+  return `<button type="button" class="attendance-cell ${state}" data-value="${value}" data-date="${date}" title="${title} · clique para alterar" onclick="cycleWorkforceAttendance('${encodedKey}','${date}',this)">${label}</button>`;
+}
+
+function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
+  const companies = [...new Set(workforce.map(person => person?.company).filter(Boolean))].sort(safeSort);
+  let totalDaily = 0;
+  let totalGeral = 0;
+
+  const rows = companies.map(company => {
+    const people = workforce.filter(person => person?.company === company);
+    const dailyCount = people.filter(person => workforceAttendanceValue(person, date) === '1').length;
+    const geralCount = people.length;
+    totalDaily += dailyCount;
+    totalGeral += geralCount;
+
+    return `
+      <tr>
+        <td class="quadro-col-company">${esc(company)}</td>
+        <td class="quadro-col-daily">${dailyCount}</td>
+        <td class="quadro-col-geral">${geralCount}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div class="quadro-efetivo-card">
+      <div class="quadro-efetivo-table-wrap">
+        <table class="quadro-efetivo-table">
+          <thead>
+            <tr>
+              <th>EMPRESA</th>
+              <th>TOTAL DE EFETIVOS DIÁRIO</th>
+              <th>GERAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || '<tr><td colspan="3" style="text-align:center;">Nenhuma empresa cadastrada</td></tr>'}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td class="quadro-col-company">TOTAL</td>
+              <td class="quadro-col-daily">${totalDaily}</td>
+              <td class="quadro-col-geral">${totalGeral}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function workforceDailySummaryHTML(date = workforceSummaryDate) {
+  return renderWorkforceQuadroTableHTML(date);
+}
+
+function renderWorkforceControl(companies) {
+  const dates = workforceMonthDates();
+  const rows = workforce.map(person => `<tr class="workforce-control-row" data-company="${esc(person.company)}" data-search="${esc(`${person.name} ${person.company} ${person.role || ''}`.toLowerCase())}"><td class="workforce-sticky-company">${esc(person.company)}</td><td class="workforce-sticky-person"><strong>${esc(person.name)}</strong><small>${esc(person.role || '—')}</small></td><td>${esc(person.status || '—')}</td>${dates.map(date => `<td>${workforceAttendanceCell(person, date)}</td>`).join('')}</tr>`).join('');
+  const totals = dates.map(date => `<td class="attendance-total" data-total-date="${date}">${workforce.filter(person => workforceAttendanceValue(person, date) === '1').length}</td>`).join('');
+  return `<section class="workforce-control-panel">
+    <div class="workforce-control-toolbar">
+      <div class="month-switcher"><button class="icon-button" type="button" title="Mês anterior" onclick="shiftWorkforceMonth(-1)">${icon('chevron')}</button><label><span>Mês do controle</span><input id="workforceMonth" type="month" value="${workforceControlMonth}" onchange="changeWorkforceMonth(this.value)"></label><button class="icon-button next" type="button" title="Próximo mês" onclick="shiftWorkforceMonth(1)">${icon('chevron')}</button></div>
+      <label class="search-box">${icon('search')}<input id="workforceControlSearch" type="search" placeholder="Buscar pessoa ou função..." oninput="filterWorkforceControl()"></label>
+      <label class="filter-field"><span>Empresa</span><select id="workforceControlCompany" onchange="filterWorkforceControl()"><option value="">Todas</option>${companies.map(company => `<option value="${esc(company)}">${esc(company)}</option>`).join('')}</select></label>
+    </div>
+    <div class="attendance-guide"><span><i class="present">1</i> Presente</span><span><i class="absent">0</i> Ausente</span><span><i class="off">F</i> Folga</span><small>Clique em uma marcação para alternar. As alterações são salvas automaticamente.</small></div>
+    <div class="workforce-daily-head"><div><strong>Resumo do dia</strong><small>Presentes / cadastrados por empresa</small></div><input type="date" id="workforceSummaryDate" value="${workforceSummaryDate}" onchange="changeWorkforceSummaryDate(this.value)"></div>
+    <div class="workforce-daily-summary" id="workforceDailySummary">${workforceDailySummaryHTML()}</div>
+    <div class="table-wrap workforce-control-table-wrap"><table class="data-table workforce-control-table"><thead><tr><th class="workforce-sticky-company">Empresa</th><th class="workforce-sticky-person">Nome / função</th><th>Vínculo</th>${dates.map(date => { const label = workforceDayLabel(date); return `<th class="${['sáb','dom'].includes(label.weekday) ? 'weekend' : ''}"><span>${label.day}</span><small>${label.weekday}</small></th>`; }).join('')}</tr></thead><tbody>${rows}</tbody><tfoot><tr><td class="workforce-sticky-company"></td><td class="workforce-sticky-person"><strong>Total presente</strong></td><td></td>${totals}</tr></tfoot></table></div>
+    <div class="no-filter-results" id="noWorkforceControlResults">Nenhuma pessoa encontrada.</div>
+  </section>`;
+}
+
+function renderWorkforceDirectory(companies) {
+  return `<div class="simple-filters workforce-filters"><label class="search-box">${icon('search')}<input id="workforceSearch" type="search" placeholder="Buscar nome, função ou empresa..." oninput="filterWorkforce()"></label><label class="filter-field"><span>Empresa</span><select id="workforceCompany" onchange="filterWorkforce()"><option value="">Todas</option>${companies.map(company=>`<option>${esc(company)}</option>`).join('')}</select></label></div><article class="panel"><div class="panel-head"><div><h2>Pessoas cadastradas</h2><p>Disponíveis na lista de responsáveis dos checklists</p></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Nome</th><th>Empresa</th><th>Função</th><th>Vínculo</th><th></th></tr></thead><tbody>${workforce.map((person,index)=>`<tr class="workforce-row" data-company="${esc(person?.company||'')}" data-search="${esc(`${person?.name||''} ${person?.company||''} ${person?.role||''}`.toLowerCase())}"><td><strong>${esc(person?.name||'')}</strong></td><td>${esc(person?.company||'')}</td><td>${esc(person?.role||'—')}</td><td>${esc(person?.status||'—')}</td><td><div class="control-row-actions"><button class="icon-button" title="Editar" onclick="openPersonModal(${index})">${icon('edit')}</button><button class="icon-button" title="Excluir" onclick="deletePerson(${index})">${icon('trash')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="no-filter-results" id="noWorkforceResults">Nenhuma pessoa encontrada.</div></article>`;
+}
+
+function renderCompanies() {
+  workforce = normalizeWorkforcePeople(workforce);
+  const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
+  if (!workforceSummaryDate.startsWith(workforceControlMonth)) workforceSummaryDate = `${workforceControlMonth}-01`;
+  const presentToday = workforce.filter(person => workforceAttendanceValue(person, workforceSummaryDate) === '1').length;
+  const view = workforceView === 'directory' ? renderWorkforceDirectory(companies) : renderWorkforceControl(companies);
+  document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Controle o cadastro e a presença diária da equipe dentro do app.', 'CADASTRO CENTRAL', `<button class="button button-outline" onclick="openWorkforceModal()">${icon('download')} Importar Excel</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar modelo</button><button class="button button-green" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>`)}<section class="workforce-summary"><div><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas</small></p></div><div><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div><span>${icon('check')}</span><p><strong>${presentToday}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`))}</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source||'Cadastro manual')}</strong><span>${workforceMeta.updatedAt?`${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}`:''}</span></p></div></section><div class="workforce-tabs"><button class="${workforceView === 'control' ? 'active' : ''}" onclick="setWorkforceView('control')">${icon('chart')} Controle diário</button><button class="${workforceView === 'directory' ? 'active' : ''}" onclick="setWorkforceView('directory')">${icon('user')} Cadastro de pessoas</button></div>${view}`;
+}
+
+function setWorkforceView(view) {
+  workforceView = view === 'directory' ? 'directory' : 'control';
+  renderCompanies();
+}
+
 function filterWorkforce() {
-  const search=document.getElementById('workforceSearch').value.toLowerCase(); const company=document.getElementById('workforceCompany').value; let visible=0;
+  const search=document.getElementById('workforceSearch')?.value.toLowerCase() || ''; const company=document.getElementById('workforceCompany')?.value || ''; let visible=0;
   document.querySelectorAll('.workforce-row').forEach(row=>{const show=(!search||row.dataset.search.includes(search))&&(!company||row.dataset.company===company);row.style.display=show?'':'none';if(show)visible++;});
-  document.getElementById('noWorkforceResults').style.display=visible?'none':'block';
+  const empty = document.getElementById('noWorkforceResults'); if (empty) empty.style.display=visible?'none':'block';
+}
+
+function filterWorkforceControl() {
+  const search = document.getElementById('workforceControlSearch')?.value.toLowerCase() || '';
+  const company = document.getElementById('workforceControlCompany')?.value || '';
+  let visible = 0;
+  document.querySelectorAll('.workforce-control-row').forEach(row => {
+    const show = (!search || row.dataset.search.includes(search)) && (!company || row.dataset.company === company);
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.querySelectorAll('[data-total-date]').forEach(cell => {
+    const date = cell.dataset.totalDate;
+    cell.textContent = [...document.querySelectorAll('.workforce-control-row')].filter(row => row.style.display !== 'none' && row.querySelector(`[data-date="${date}"]`)?.dataset.value === '1').length;
+  });
+  const empty = document.getElementById('noWorkforceControlResults'); if (empty) empty.style.display = visible ? 'none' : 'block';
+}
+
+function changeWorkforceMonth(month) {
+  if (!/^\d{4}-\d{2}$/.test(month || '')) return;
+  workforceControlMonth = month;
+  const today = new Date().toISOString().slice(0, 10);
+  workforceSummaryDate = today.startsWith(month) ? today : `${month}-01`;
+  saveLocalBackup();
+  renderCompanies();
+}
+
+function shiftWorkforceMonth(delta) {
+  const [year, month] = workforceControlMonth.split('-').map(Number);
+  const shifted = new Date(year, month - 1 + delta, 1, 12);
+  changeWorkforceMonth(`${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}`);
+}
+
+function changeWorkforceSummaryDate(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return;
+  workforceSummaryDate = date;
+  saveLocalBackup();
+  const summary = document.getElementById('workforceDailySummary');
+  if (summary) summary.innerHTML = workforceDailySummaryHTML(date);
+  const metric = document.querySelector('.workforce-summary > div:nth-child(3) p');
+  if (metric) metric.innerHTML = `<strong>${workforce.filter(person => workforceAttendanceValue(person, date) === '1').length}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${date}T12:00:00`))}</small>`;
+}
+
+function cycleWorkforceAttendance(encodedKey, date, button) {
+  const key = decodeURIComponent(encodedKey);
+  const current = workforceAttendance[key]?.[date] || '';
+  const order = ['', '1', '0', 'FOLGA'];
+  const next = order[(order.indexOf(current) + 1) % order.length];
+  if (!workforceAttendance[key]) workforceAttendance[key] = {};
+  if (next) workforceAttendance[key][date] = next;
+  else delete workforceAttendance[key][date];
+  if (!Object.keys(workforceAttendance[key]).length) delete workforceAttendance[key];
+  workforceControlMeta = { updatedAt: new Date().toISOString() };
+  saveLocalBackup();
+  scheduleWorkforceRemoteSave();
+  if (button) {
+    button.dataset.value = next;
+    button.className = `attendance-cell ${next === '1' ? 'present' : next === '0' ? 'absent' : next === 'FOLGA' ? 'off' : 'empty'}`;
+    button.textContent = next === 'FOLGA' ? 'F' : next || '·';
+    button.title = `${next === '1' ? 'Presente' : next === '0' ? 'Ausente' : next === 'FOLGA' ? 'Folga' : 'Sem marcação'} · clique para alterar`;
+  }
+  filterWorkforceControl();
+  if (date === workforceSummaryDate) changeWorkforceSummaryDate(date);
 }
 function openPersonModal(index=null) {
   const person=index===null?null:workforce[index]; const companies=[...new Set(workforce.map(item=>item?.company).filter(Boolean))].sort(safeSort);
@@ -3150,41 +4001,344 @@ function openPersonModal(index=null) {
 }
 function savePerson(event,index) {
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target)); Object.keys(data).forEach(key=>data[key]=String(data[key]).replace(/\s+/g,' ').trim());
-  const duplicate=workforce.some((person,i)=>i!==index&&(person?.company||'').toLowerCase()===data.company.toLowerCase()&&(person?.name||'').toLowerCase()===data.name.toLowerCase()); if(duplicate)return toast('Esta pessoa já está cadastrada nesta empresa.',true);
-  if(index===null) { if(!data.id) data.id=crypto.randomUUID(); workforce.push(data); if(supabase) supabase.from('workforce').upsert(data); } else { workforce[index]={...workforce[index],...data}; if(supabase) supabase.from('workforce').upsert(workforce[index]); } workforce.sort((a,b)=>safeSort(a?.company,b?.company)||safeSort(a?.name,b?.name)); workforceMeta={source:'Cadastro manual',updatedAt:new Date().toISOString()}; if(supabase) supabase.from('app_metadata').upsert({key:'workforce_meta',value:workforceMeta}); saveLocalBackup(); closeModal(); renderCompanies(); toast(personMessage(index));
+  const duplicate=workforce.some((person,i)=>i!==index&&workforcePersonKey(person)===workforcePersonKey(data)); if(duplicate)return toast('Esta pessoa já está cadastrada nesta empresa.',true);
+  const previous = index === null ? null : workforce[index];
+  const previousKey = previous ? workforcePersonKey(previous) : '';
+  if(index===null) { data.id=crypto.randomUUID(); workforce.push(data); } else { workforce[index]={...previous,...data}; }
+  const nextPerson = index === null ? data : workforce[index];
+  const nextKey = workforcePersonKey(nextPerson);
+  if (previousKey && previousKey !== nextKey && workforceAttendance[previousKey]) {
+    workforceAttendance[nextKey] = { ...(workforceAttendance[nextKey] || {}), ...workforceAttendance[previousKey] };
+    delete workforceAttendance[previousKey];
+  }
+  workforce=normalizeWorkforcePeople(workforce); workforceMeta={source:'Cadastro manual',updatedAt:new Date().toISOString()}; workforceControlMeta={updatedAt:new Date().toISOString()}; saveLocalBackup(); scheduleWorkforceRemoteSave(0); closeModal(); renderCompanies(); toast(personMessage(index));
 }
 function personMessage(index) { return index===null?'Pessoa adicionada ao efetivo.':'Cadastro atualizado.'; }
 function deletePerson(index) {
-  const person=workforce[index]; if(!person||!confirm(`Excluir ${person.name} da lista de efetivo?`))return; workforce.splice(index,1); if(supabase) supabase.from('workforce').delete().eq('id', person.id); saveLocalBackup(); renderCompanies(); toast('Pessoa removida da lista.');
+  const person=workforce[index]; if(!person||!confirm(`Excluir ${person.name} da lista de efetivo e suas marcações diárias?`))return; workforce.splice(index,1); delete workforceAttendance[workforcePersonKey(person)]; workforceMeta={source:'Cadastro manual',updatedAt:new Date().toISOString()}; workforceControlMeta={updatedAt:new Date().toISOString()}; if(supabase) supabase.from('workforce').delete().eq('id', person.id); saveLocalBackup(); scheduleWorkforceRemoteSave(0); renderCompanies(); toast('Pessoa removida da lista.');
 }
 function openWorkforceModal() {
   const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
-  modal(`${modalHead('Atualizar empresas e efetivo','Importe uma nova versão do relatório em Excel')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('workforceFile').click()"><span>${icon('download')}</span><div><h3>Selecionar planilha de efetivo</h3><p>Formatos .xlsx ou .xls · a aba mais recente será importada</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="workforceFile" type="file" accept=".xlsx,.xls" hidden onchange="handleWorkforceUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${workforce.length} pessoas em ${companies.length} empresas</strong><small>${esc(workforceMeta.source||'Base inicial ainda não carregada')}</small></div></div><div class="company-chips">${companies.map(company=>`<span>${esc(company)} <b>${workforce.filter(person=>person?.company===company).length}</b></span>`).join('')}</div><div class="notice">${icon('alert')} Ao importar uma nova planilha, a lista de empresas e pessoas será atualizada. Os checklists e as movimentações já registrados não serão apagados.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar efetivo atual</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-small');
+  modal(`${modalHead('Atualizar empresas e efetivo','Importe ou exporte o mesmo modelo de controle mensal')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('workforceFile').click()"><span>${icon('download')}</span><div><h3>Selecionar planilha de efetivo</h3><p>Formatos .xlsx ou .xls · a aba mais recente será importada</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="workforceFile" type="file" accept=".xlsx,.xls" hidden onchange="handleWorkforceUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${workforce.length} pessoas em ${companies.length} empresas</strong><small>${esc(workforceMeta.source||'Base inicial ainda não carregada')}</small></div></div><div class="company-chips">${companies.map(company=>`<span>${esc(company)} <b>${workforce.filter(person=>person?.company===company).length}</b></span>`).join('')}</div><div class="notice">${icon('alert')} O leitor identifica os cabeçalhos EMPRESA, NOME, FUNÇÃO e STATUS em qualquer coluna e também importa as marcações diárias 1, 0 e FOLGA. A exportação gera este mesmo modelo para o mês selecionado.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar modelo de ${esc(workforceMonthLabel())}</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-small');
 }
+
+function workforceSpreadsheetHeader(row) {
+  const normalized = (Array.isArray(row) ? row : []).map(normalizeSpreadsheetHeader);
+  const company = normalized.findIndex(value => value === 'empresa');
+  const name = normalized.findIndex(value => value === 'nome');
+  const status = normalized.findIndex(value => value === 'status' || value === 'vinculo status' || value === 'vinculo');
+  const roles = normalized.map((value, index) => value === 'funcao' || value === 'funcao auxiliar' ? index : -1).filter(index => index >= 0);
+  if (company < 0 || name < 0 || (status < 0 && !roles.length)) return null;
+  return { company, name, status, roles, firstDailyColumn: Math.max(company, name, status, ...roles) + 1 };
+}
+
+function workforceSpreadsheetDateColumns(rows, headerIndex, firstDailyColumn) {
+  const dates = new Map();
+  for (let rowIndex = headerIndex; rowIndex >= Math.max(0, headerIndex - 5); rowIndex--) {
+    const row = rows[rowIndex] || [];
+    for (let column = firstDailyColumn; column < row.length; column++) {
+      if (dates.has(column)) continue;
+      const value = row[column];
+      if (typeof value === 'number' && (value < 30000 || value > 80000)) continue;
+      const date = spreadsheetDate(value);
+      const year = Number(date.slice(0, 4));
+      if (year < 2020 || year > 2100) continue;
+      if (date) dates.set(column, date);
+    }
+  }
+  return dates;
+}
+
+function parseWorkforceSpreadsheet(rows) {
+  const headers = [];
+  rows.forEach((row, index) => { const map = workforceSpreadsheetHeader(row); if (map) headers.push({ index, map }); });
+  if (!headers.length) throw new Error('Não encontrei os cabeçalhos EMPRESA e NOME nesta aba.');
+  const existingByKey = new Map(workforce.map(person => [workforcePersonKey(person), person]));
+  const importedByKey = new Map();
+  const importedAttendance = {};
+  const importedDates = new Set();
+  let inheritedDateColumns = new Map();
+  headers.forEach((header, headerPosition) => {
+    const end = headers[headerPosition + 1]?.index ?? rows.length;
+    const localDateColumns = workforceSpreadsheetDateColumns(rows, header.index, header.map.firstDailyColumn);
+    let dateColumns = new Map(inheritedDateColumns);
+    localDateColumns.forEach((date, column) => dateColumns.set(column, date));
+    if (dateColumns.size) inheritedDateColumns = new Map(dateColumns);
+    for (let rowIndex = header.index + 1; rowIndex < end; rowIndex++) {
+      const row = rows[rowIndex] || [];
+      const company = String(row[header.map.company] || '').replace(/\s+/g, ' ').trim();
+      const name = String(row[header.map.name] || '').replace(/\s+/g, ' ').trim();
+      const companyHeader = normalizeSpreadsheetHeader(company);
+      const nameHeader = normalizeSpreadsheetHeader(name);
+      if (!company || !name || name.length < 4 || companyHeader === 'empresa' || companyHeader === 'total' || companyHeader.startsWith('total ') || nameHeader === 'nome' || nameHeader.startsWith('total de efetivos')) continue;
+      const key = workforcePersonKey(company, name);
+      const auxRole = String(row[header.map.roles[0]] || '').replace(/\s+/g, ' ').trim();
+      const role = String(row[header.map.roles[1]] || row[header.map.roles[0]] || '').replace(/\s+/g, ' ').trim();
+      const status = header.map.status >= 0 ? String(row[header.map.status] || '').replace(/\s+/g, ' ').trim() : '';
+      const previous = importedByKey.get(key) || existingByKey.get(key) || {};
+      importedByKey.set(key, { ...previous, id: previous.id || crypto.randomUUID(), company, name, auxRole: auxRole || previous.auxRole || '', role: role || previous.role || '', status: status || previous.status || '' });
+      dateColumns.forEach((date, column) => {
+        const marker = normalizeAttendanceValue(row[column]);
+        if (!marker) return;
+        importedDates.add(date);
+        if (!importedAttendance[key]) importedAttendance[key] = {};
+        importedAttendance[key][date] = marker;
+      });
+    }
+  });
+  if (!importedByKey.size) throw new Error('A planilha não possui pessoas válidas para importar.');
+  return { people: normalizeWorkforcePeople([...importedByKey.values()]), attendance: importedAttendance, dates: [...importedDates].sort(), headers: headers.length };
+}
+
 async function handleWorkforceUpload(event) {
   const file=event.target.files?.[0]; if(!file) return;
   if(!await ensureExcelLibrary()) { event.target.value=''; return toast('Não foi possível carregar o leitor de Excel. Verifique a internet e tente novamente.',true); }
   try {
-    const bytes=await file.arrayBuffer(); const workbook=XLSX.read(bytes,{type:'array'}); const sheetName=workbook.SheetNames[workbook.SheetNames.length-1]; const rows=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName],{header:1,defval:''});
-    const imported=[]; const seen=new Set();
-    rows.forEach(row=>{const company=String(row[1]||'').replace(/\s+/g,' ').trim();const name=String(row[2]||'').replace(/\s+/g,' ').trim();const role=String(row[5]||row[3]||'').replace(/\s+/g,' ').trim();const status=String(row[4]||'').replace(/\s+/g,' ').trim();if(!company||!name||name.length<4||/empresa|obras:|referente|pc:/i.test(company)||/^nome$/i.test(name))return;const key=`${company.toUpperCase()}|${name.toUpperCase()}`;if(seen.has(key))return;seen.add(key);imported.push({company,name,role,status});});
-    workforce=imported.sort((a,b)=>safeSort(a?.company, b?.company)||safeSort(a?.name, b?.name));
+    const bytes=await file.arrayBuffer(); const workbook=XLSX.read(bytes,{type:'array',cellDates:true});
+    let sheetName=''; let rows=[];
+    for (const candidate of [...workbook.SheetNames].reverse()) {
+      const candidateRows=XLSX.utils.sheet_to_json(workbook.Sheets[candidate],{header:1,defval:'',raw:true});
+      if (candidateRows.some(row => workforceSpreadsheetHeader(row))) { sheetName=candidate; rows=candidateRows; break; }
+    }
+    if (!sheetName) throw new Error('Nenhuma aba possui os cabeçalhos EMPRESA e NOME do controle de efetivo.');
+    const imported = parseWorkforceSpreadsheet(rows);
+    workforce=imported.people;
+    Object.entries(imported.attendance).forEach(([key, dates]) => { workforceAttendance[key] = { ...(workforceAttendance[key] || {}), ...dates }; });
     workforceMeta={source:file.name,updatedAt:new Date().toISOString()};
-    const client = getSupabase();
-    if (client) {
-      client.from('app_metadata').upsert({key:'workforce_meta',value:workforceMeta});
-      for(const p of workforce){ if(!p.id) p.id=crypto.randomUUID(); client.from('workforce').upsert(p); }
+    workforceControlMeta={updatedAt:new Date().toISOString()};
+    const latestDate = imported.dates[imported.dates.length - 1];
+    if (latestDate) {
+      workforceControlMonth = latestDate.slice(0, 7);
+      workforceSummaryDate = latestDate;
     }
     saveLocalBackup();
-    openWorkforceModal(); toast(`${workforce.length} pessoas importadas da aba ${sheetName}.`);
+    workforceView='control'; renderCompanies(); openWorkforceModal();
+    const shared = await persistWorkforceControlRemote();
+    toast(shared
+      ? `${workforce.length} pessoas e ${imported.dates.length} dia(s) importados da aba ${sheetName} em todos os aparelhos.`
+      : `${workforce.length} pessoas e ${imported.dates.length} dia(s) importados neste aparelho. A base compartilhada está indisponível.`, !shared);
   } catch(error) { toast(error.message||'Não foi possível ler esta planilha.',true); }
+  finally { event.target.value=''; }
 }
+
 async function exportWorkforceExcel() {
-  if(!await ensureExcelLibrary())return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.',true);
-  const selectedWorkforce=getReportFilteredWorkforce(); if(!selectedWorkforce.length)return toast('Nenhuma pessoa encontrada com os filtros selecionados.',true); const rows=[['ITEM','EMPRESA','NOME','FUNÇÃO AUXILIAR','VÍNCULO / STATUS','FUNÇÃO','TELEFONE'],...selectedWorkforce.map((person,index)=>[index+1,person.company||'',person.name||'','',person.status||'',person.role||'',person.phone||''])];
-  const sheet=XLSX.utils.aoa_to_sheet(rows); sheet['!cols']=[{wch:8},{wch:32},{wch:36},{wch:18},{wch:20},{wch:28},{wch:18}];
-  const book=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book,sheet,'Efetivo atualizado');
-  XLSX.writeFile(book,`efetivo-atual-${new Date().toISOString().slice(0,10)}.xlsx`); toast('Planilha atual do efetivo exportada.');
+  const exportPeople = currentPage === 'relatorios' ? getReportFilteredWorkforce() : workforce;
+  if (!exportPeople.length) return toast('Nenhuma pessoa cadastrada para exportar.', true);
+  if (!await ensureExcelExportLibrary()) return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.', true);
+
+  const dates = workforceMonthDates();
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Heating Cooling - DataCenter Omnia';
+  workbook.created = new Date();
+
+  // Load Heating Cooling Logo
+  let logoId = null;
+  try {
+    const logoResp = await fetch('assets/heating-cooling-logo.png');
+    if (logoResp.ok) {
+      const logoBuffer = await logoResp.arrayBuffer();
+      logoId = workbook.addImage({
+        buffer: logoBuffer,
+        extension: 'png',
+      });
+    }
+  } catch (err) {
+    console.warn('Não foi possível carregar a logo para a exportação de Excel:', err);
+  }
+
+  // Worksheet 1: CONTROLE MENSAL & QUADRO DE EFETIVOS
+  const sheetName = workforceMonthLabel().split(' ')[0].toLocaleUpperCase('pt-BR').slice(0, 31);
+  const worksheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', xSplit: 4, ySplit: 7 }] });
+
+  // Add Logo at top left if loaded
+  if (logoId !== null) {
+    worksheet.addImage(logoId, {
+      tl: { col: 0, row: 0 },
+      ext: { width: 140, height: 42 }
+    });
+  }
+
+  // Main Header Title
+  worksheet.mergeCells(1, 1, 1, 4 + dates.length);
+  const title = worksheet.getCell(1, 1);
+  title.value = 'RELATÓRIO DE EFETIVO - HEATING COOLING (OBRA OMNIA-PÉCEM)';
+  title.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+  title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF173C2C' } };
+  title.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(1).height = 34;
+
+  worksheet.getCell('A2').value = 'PC: 131/24';
+  worksheet.getCell('A3').value = 'Obras: 607 / DC OMNIA PÉCEM';
+  worksheet.getCell('A4').value = 'Referente ao Mês:';
+  worksheet.getCell('B4').value = workforceMonthLabel().toLocaleUpperCase('pt-BR');
+
+  // Daily headers (dates)
+  dates.forEach((date, index) => {
+    const cell = worksheet.getCell(6, 5 + index);
+    cell.value = new Date(`${date}T12:00:00`);
+    cell.numFmt = 'dd/mm/yyyy';
+    cell.alignment = { horizontal: 'center' };
+  });
+
+  const header = ['EMPRESA', 'NOME', 'FUNÇÃO', 'STATUS', ...dates.map(date => new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(new Date(`${date}T12:00:00`)).toLocaleUpperCase('pt-BR'))];
+  const headerRow = worksheet.addRow(header);
+  while (headerRow.number < 7) worksheet.insertRow(headerRow.number, []);
+  
+  const actualHeader = worksheet.getRow(7);
+  actualHeader.values = header;
+  actualHeader.height = 30;
+  actualHeader.eachCell(cell => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 9 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2F7D5B' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  });
+
+  exportPeople.forEach(person => {
+    const values = [
+      person.company || '',
+      person.name || '',
+      person.role || person.auxRole || '',
+      person.status || '',
+      ...dates.map(date => {
+        const value = workforceAttendanceValue(person, date);
+        return value === '1' ? 1 : value === '0' ? 0 : value;
+      })
+    ];
+    const row = worksheet.addRow(values);
+    row.eachCell((cell, column) => {
+      cell.alignment = { vertical: 'middle', horizontal: column > 4 ? 'center' : 'left', wrapText: column <= 4 };
+      cell.border = { bottom: { style: 'hair', color: { argb: 'FFDCE6E0' } } };
+      if (column > 4) {
+        const value = String(cell.value ?? '');
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: value === '1' ? 'FFDDF3E7' : value === '0' ? 'FFFDE2E2' : value === 'FOLGA' ? 'FFFFF0C9' : 'FFFFFFFF' }
+        };
+      }
+    });
+  });
+
+  const totalRow = worksheet.addRow(['TOTAL DE EFETIVOS DIÁRIO', '', '', '', ...dates.map(date => exportPeople.filter(person => workforceAttendanceValue(person, date) === '1').length)]);
+  totalRow.font = { bold: true };
+  totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAF2ED' } };
+  worksheet.mergeCells(totalRow.number, 1, totalRow.number, 4);
+  totalRow.getCell(1).alignment = { horizontal: 'right' };
+
+  // --- SEÇÃO QUADRO DE EFETIVOS (EMPRESA x DIÁRIO x GERAL) ---
+  worksheet.addRow([]);
+  const quadroHeaderTitle = worksheet.addRow(['QUADRO DE EFETIVO DIÁRIO X GERAL']);
+  quadroHeaderTitle.font = { bold: true, size: 12, color: { argb: 'FF173C2C' } };
+  
+  const quadroHeader = worksheet.addRow(['EMPRESA', 'TOTAL DE EFETIVOS DIÁRIO', 'GERAL']);
+  quadroHeader.height = 24;
+  quadroHeader.eachCell(cell => {
+    cell.font = { bold: true, color: { argb: 'FF000000' }, size: 10 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFB4C6E7' } }; // Light blue grey matching screenshot
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+  });
+
+  const companiesList = [...new Set(exportPeople.map(p => p.company).filter(Boolean))].sort(safeSort);
+  let totalDailySum = 0;
+  let totalGeralSum = 0;
+
+  companiesList.forEach(company => {
+    const people = exportPeople.filter(p => p.company === company);
+    const dailyCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === '1').length;
+    const geralCount = people.length;
+    totalDailySum += dailyCount;
+    totalGeralSum += geralCount;
+
+    const qRow = worksheet.addRow([company, dailyCount, geralCount]);
+    qRow.eachCell((cell, colIndex) => {
+      cell.alignment = { horizontal: colIndex === 1 ? 'left' : 'center', vertical: 'middle' };
+      cell.font = { bold: colIndex > 1, size: 10 };
+      cell.border = { top: { style: 'thin', color: { argb: 'FFCCCCCC' } }, left: { style: 'thin' }, bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } }, right: { style: 'thin' } };
+    });
+  });
+
+  const quadroTotalRow = worksheet.addRow(['TOTAL', totalDailySum, totalGeralSum]);
+  quadroTotalRow.height = 22;
+  quadroTotalRow.eachCell((cell, colIndex) => {
+    cell.font = { bold: true, size: 11 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6E6E6' } };
+    cell.alignment = { horizontal: colIndex === 1 ? 'left' : 'center', vertical: 'middle' };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF000000' } },
+      bottom: { style: 'double', color: { argb: 'FF000000' } },
+      left: { style: 'thin' },
+      right: { style: 'thin' }
+    };
+  });
+
+  worksheet.columns.forEach((column, index) => {
+    column.width = index === 0 ? 28 : index === 1 ? 38 : index === 2 ? 28 : index === 3 ? 14 : 11;
+  });
+  worksheet.autoFilter = { from: { row: 7, column: 1 }, to: { row: 7, column: 4 + dates.length } };
+  worksheet.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 };
+
+  // Worksheet 2: QUADRO & RESUMO
+  const summary = workbook.addWorksheet('RESUMO E QUADRO');
+  if (logoId !== null) {
+    summary.addImage(logoId, {
+      tl: { col: 0, row: 0 },
+      ext: { width: 140, height: 42 }
+    });
+  }
+  summary.addRow([]);
+  summary.addRow([]);
+  
+  const sumTitle = summary.addRow(['QUADRO RESUMO DE EFETIVOS POR EMPRESA']);
+  sumTitle.font = { bold: true, size: 14, color: { argb: 'FF173C2C' } };
+  summary.mergeCells(3, 1, 3, 3);
+  
+  const sumHeader = summary.addRow(['EMPRESA', 'TOTAL DE EFETIVOS DIÁRIO', 'GERAL']);
+  sumHeader.height = 24;
+  sumHeader.eachCell(cell => {
+    cell.font = { bold: true, color: { argb: 'FF000000' }, size: 10 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFB4C6E7' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+  });
+
+  companiesList.forEach(company => {
+    const people = exportPeople.filter(p => p.company === company);
+    const dailyCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === '1').length;
+    const sRow = summary.addRow([company, dailyCount, people.length]);
+    sRow.eachCell((cell, colIndex) => {
+      cell.alignment = { horizontal: colIndex === 1 ? 'left' : 'center', vertical: 'middle' };
+      cell.font = { bold: colIndex > 1, size: 10 };
+      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    });
+  });
+
+  const sTotalRow = summary.addRow(['TOTAL', totalDailySum, totalGeralSum]);
+  sTotalRow.height = 22;
+  sTotalRow.eachCell((cell, colIndex) => {
+    cell.font = { bold: true, size: 11 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6E6E6' } };
+    cell.alignment = { horizontal: colIndex === 1 ? 'left' : 'center', vertical: 'middle' };
+    cell.border = { top: { style: 'thin' }, bottom: { style: 'double' }, left: { style: 'thin' }, right: { style: 'thin' } };
+  });
+
+  summary.columns = [
+    { key: 'company', width: 32 },
+    { key: 'daily', width: 28 },
+    { key: 'geral', width: 16 }
+  ];
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `relatorio-efetivo-omnia-${workforceControlMonth}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast(`Planilha com Quadro e Logo exportada com sucesso.`);
 }
 function renderLocations() {
   const halls = Array.from({length:10},(_,i)=>`Data Hall ${String(i+1).padStart(2,'0')}`);
@@ -3338,7 +4492,7 @@ function modalHead(title, subtitle='') { return `<div class="modal-head"><div><h
 
 function openEquipmentModal(id = null) {
   const eq = id ? equipments.find(e=>e.id===id) : null;
-  modal(`<form id="equipmentForm" onsubmit="saveEquipment(event,'${id||''}')">${modalHead(eq?'Editar equipamento':'Novo equipamento',eq?'Atualize os dados do ativo':'Cadastre um ativo e gere seu QR Code')}<div class="modal-body"><div class="form-grid"><div class="field"><label>Tipo de equipamento <em>*</em></label><select name="type" required><option value="">Selecione...</option>${['PTA Tesoura','PTA Articulada','PTA Mastro','Paleteira Elétrica'].map(v=>`<option ${eq?.type===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Código de identificação (Patrimônio) <em>*</em></label><input name="code" required placeholder="Ex.: TPTA00674" value="${esc(eq?.code||'')}"></div><div class="field"><label>Nº AF (Afonso França)</label><input name="afNumber" placeholder="Ex.: AF-001" value="${esc(eq?.afNumber||'')}"></div><div class="field full"><label>Nome do equipamento <em>*</em></label><input name="name" required placeholder="Ex.: Plataforma Tesoura 10m" value="${esc(eq?.name||'')}"></div><div class="field"><label>Fabricante <em>*</em></label><input name="brand" required placeholder="Ex.: JLG" value="${esc(eq?.brand||'')}"></div><div class="field"><label>Modelo <em>*</em></label><input name="model" required placeholder="Ex.: 2646ES" value="${esc(eq?.model||'')}"></div><div class="field"><label>Número de série</label><input name="serial" placeholder="Número do fabricante" value="${esc(eq?.serial||'')}"></div><div class="field"><label>Capacidade</label><input name="capacity" placeholder="Ex.: 450 kg" value="${esc(eq?.capacity||'')}"></div><div class="field"><label>Status inicial</label><select name="status"><option value="available" ${!eq||eq.status==='available'?'selected':''}>Disponível</option><option value="maintenance" ${eq?.status==='maintenance'?'selected':''}>Indisponível</option></select></div><div class="field"><label>Data da última inspeção</label><input name="inspection" type="date" value="${eq?.inspection||new Date().toISOString().slice(0,10)}"></div></div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} ${eq?'Salvar alterações':'Cadastrar equipamento'}</button></div></form>`, 'modal-large');
+  modal(`<form id="equipmentForm" onsubmit="saveEquipment(event,'${id||''}')">${modalHead(eq?'Editar equipamento':'Novo equipamento',eq?'Atualize os dados do ativo':'Cadastre um ativo e gere seu QR Code')}<div class="modal-body"><div class="form-grid"><div class="field"><label>Tipo de equipamento <em>*</em></label><select name="type" required><option value="">Selecione...</option>${['PTA Tesoura','PTA Articulada','PTA Mastro','Paleteira Elétrica'].map(v=>`<option ${eq?.type===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Código de identificação (Patrimônio) <em>*</em></label><input name="code" required placeholder="Ex.: TPTA00674" value="${esc(eq?.code||'')}"></div><div class="field"><label>Nº AF (Afonso França)</label><input name="afNumber" placeholder="Ex.: AF-001" value="${esc(eq?.afNumber||'')}"></div><div class="field full"><label>Nome do equipamento <em>*</em></label><input name="name" required placeholder="Ex.: Plataforma Tesoura 10m" value="${esc(eq?.name||'')}"></div><div class="field"><label>Fabricante <em>*</em></label><input name="brand" required placeholder="Ex.: JLG" value="${esc(eq?.brand||'')}"></div><div class="field"><label>Modelo <em>*</em></label><input name="model" required placeholder="Ex.: 2646ES" value="${esc(eq?.model||'')}"></div><div class="field"><label>Número de série</label><input name="serial" placeholder="Número do fabricante" value="${esc(eq?.serial||'')}"></div><div class="field"><label>Capacidade</label><input name="capacity" placeholder="Ex.: 450 kg" value="${esc(eq?.capacity||'')}"></div><div class="field"><label>Status inicial</label><select name="status"><option value="available" ${!eq||eq.status==='available'?'selected':''}>Disponível</option><option value="maintenance" ${eq?.status==='maintenance'?'selected':''}>Indisponível</option></select></div><div class="field"><label>Data da última inspeção</label><input name="inspection" type="date" value="${eq?.inspection||new Date().toISOString().slice(0,10)}"></div></div></div><div class="modal-foot">${eq ? `<button type="button" class="button button-ghost" style="color:var(--danger,#ef4444);margin-right:auto;" onclick="deleteEquipment('${id}')">${icon('trash')} Excluir equipamento</button>` : ''}<button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} ${eq?'Salvar alterações':'Cadastrar equipamento'}</button></div></form>`, 'modal-large');
 }
 async function saveEquipment(event, id) {
   event.preventDefault(); const data = Object.fromEntries(new FormData(event.target));
@@ -3365,12 +4519,45 @@ async function saveEquipment(event, id) {
     : 'Cadastro salvo somente neste aparelho. Verifique a internet e tente novamente.',
     !shared);
 }
+async function deleteEquipment(id) {
+  const eq = equipments.find(e => e.id === id);
+  if (!eq) return;
+  if (!confirm(`Tem certeza que deseja excluir a PTA / Equipamento ${eq.code} (${eq.name}) do sistema?`)) return;
+  equipments = equipments.filter(e => e.id !== id);
+  saveLocalBackup();
+  localDataRevision += 1;
+  let shared = true;
+  try {
+    const client = getSupabase();
+    if (client) {
+      const { error } = await client.from('equipments').delete().eq('id', id);
+      if (error) throw error;
+    } else {
+      await supabaseRestRequest(`equipments?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+    }
+  } catch (error) {
+    shared = false;
+    console.warn('Exclusão salva somente neste aparelho:', error);
+  }
+  closeModal();
+  render();
+  toast(shared ? `PTA ${eq.code} removida com sucesso em todos os aparelhos.` : `PTA ${eq.code} removida neste aparelho.`);
+}
 
 function openEquipmentDetails(id) {
   const eq = equipments.find(e=>e.id===id); if (!eq) return;
   if (eq.status === 'available') return openCheckoutModal(id);
-  const usage = eq.usage;
-  modal(`${modalHead(eq.name,`${eq.code} · ${eq.brand} ${eq.model}`)}<div class="modal-body"><div class="equipment-summary"><span class="asset-icon">${equipmentIcon(eq)}</span><div><strong>${esc(eq.name)}</strong><small>Série ${esc(eq.serial)} · Horímetro ${esc(eq.hourmeter ?? '—')} h${eq.battery?` · Bateria ${esc(eq.battery)}`:''}</small></div>${statusBadge(eq.status)}</div>${eq.status==='in-use'?`<div class="form-grid"><div class="field"><label>Empresa</label><strong>${esc(usage.company)}</strong></div><div class="field"><label>Responsável</label><strong>${esc(usage.responsible)}</strong></div><div class="field full"><label>Atividade</label><strong>${esc(usage.activity||'—')}</strong></div><div class="field"><label>DH / Local específico</label><strong>${esc(usage.dataHall)} · ${esc(usage.location)}</strong></div><div class="field"><label>Previsão de entrega</label><strong>${fullDate(usage.expectedAt)}</strong></div><div class="field"><label>Retirada em</label><strong>${fullDate(usage.startedAt)}</strong></div><div class="field"><label>Contato</label><strong>${esc(usage.phone)}</strong></div></div>`:`<div class="notice">${icon(eq.status==='maintenance'?'tool':'check')} ${eq.status==='maintenance'?'Este equipamento está bloqueado para manutenção. Edite o cadastro para liberá-lo após a inspeção.':'Equipamento disponível no Pátio / Base e pronto para retirada.'}</div>`}</div><div class="modal-foot"><button class="button button-ghost" onclick="openEquipmentModal('${id}')">${icon('edit')} Editar</button><button class="button button-outline" onclick="openQRModal('${id}')">${icon('qr')} QR Code</button>${eq.status==='in-use'?`<button class="button button-outline" onclick="openDailyInspectionModal('${id}')">${icon('plus')} Inspeção Diária (Novo Dia)</button><button class="button button-green" onclick="openReturnModal('${id}')">${icon('return')} Registrar devolução</button>`:''}</div>`);
+  const usage = eq.usage || {
+    company: eq.contractor || '—',
+    responsible: eq.contractor || 'Em uso (Planilha)',
+    activity: 'Em uso via planilha',
+    dataHall: '—',
+    location: '—',
+    expectedAt: '',
+    startedAt: '',
+    phone: ''
+  };
+  modal(`${modalHead(eq.name,`${eq.code} · ${eq.brand} ${eq.model}`)}<div class="modal-body"><div class="equipment-summary"><span class="asset-icon">${equipmentIcon(eq)}</span><div><strong>${esc(eq.name)}</strong><small>Série ${esc(eq.serial)} · Horímetro ${esc(eq.hourmeter ?? '—')} h${eq.battery?` · Bateria ${esc(eq.battery)}`:''}</small></div>${statusBadge(eq.status)}</div>${eq.status==='in-use'?`<div class="form-grid"><div class="field"><label>Empresa</label><strong>${esc(usage.company)}</strong></div><div class="field"><label>Responsável</label><strong>${esc(usage.responsible)}</strong></div><div class="field full"><label>Atividade</label><strong>${esc(usage.activity||'—')}</strong></div><div class="field"><label>DH / Local específico</label><strong>${esc(usage.dataHall)} · ${esc(usage.location)}</strong></div><div class="field"><label>Previsão de entrega</label><strong>${fullDate(usage.expectedAt)}</strong></div><div class="field"><label>Retirada em</label><strong>${fullDate(usage.startedAt)}</strong></div><div class="field"><label>Contato</label><strong>${esc(usage.phone)}</strong></div></div>`:`<div class="notice">${icon(eq.status==='maintenance'?'tool':'check')} ${eq.status==='maintenance'?'Este equipamento está bloqueado para manutenção. Edite o cadastro para liberá-lo após a inspeção.':'Equipamento disponível no Pátio / Base e pronto para retirada.'}</div>`}</div><div class="modal-foot"><button class="button button-outline danger-button" style="color:var(--red);border-color:var(--red-soft);margin-right:auto;" onclick="deleteEquipment('${id}')">${icon('trash')} Excluir PTA</button><button class="button button-ghost" onclick="openEquipmentModal('${id}')">${icon('edit')} Editar</button><button class="button button-outline" onclick="openQRModal('${id}')">${icon('qr')} QR Code</button>${eq.status==='in-use'?`<button class="button button-outline" onclick="openDailyInspectionModal('${id}')">${icon('plus')} Inspeção Diária (Novo Dia)</button><button class="button button-green" onclick="openReturnModal('${id}')">${icon('return')} Registrar devolução</button>`:''}</div>`);
 }
 
 function openDailyInspectionModal(id) {
