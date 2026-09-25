@@ -306,6 +306,25 @@ try {
   if (savedApprovals) userApprovals = JSON.parse(savedApprovals);
 } catch(e) {}
 
+let inviteDraft = {
+  email: '',
+  name: '',
+  company: '',
+  role: 'operador',
+  password: ''
+};
+
+function canSafelyAutoRender(relevantPages = null) {
+  if (Array.isArray(relevantPages) && typeof currentPage !== 'undefined' && !relevantPages.includes(currentPage)) {
+    return false;
+  }
+  if (document.querySelector('#modalRoot form')) return false;
+  if (document.querySelector('form')) return false;
+  const active = document.activeElement;
+  if (active && ['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName)) return false;
+  return true;
+}
+
 async function syncUserApprovalsFromSupabase() {
   try {
     const rows = await supabaseRestRequest('user_approvals?select=*&order=created_at.desc');
@@ -316,7 +335,10 @@ async function syncUserApprovalsFromSupabase() {
       userApprovals = Array.from(map.values());
       localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
       updateAppShellAccess();
-      if (currentPage === 'usuarios') renderUserManagement();
+      // Não recria a tela se o gestor estiver na aba convidar ou preenchendo qualquer campo
+      if (currentPage === 'usuarios' && userManagementTab !== 'convidar' && canSafelyAutoRender(['usuarios'])) {
+        renderUserManagement();
+      }
     }
   } catch(e) {
     console.warn('Supabase user_approvals sync indisponível:', e);
@@ -411,7 +433,8 @@ function openInviteFromLanding() {
     'invite',
     params.get('email') || '',
     params.get('token') || '',
-    params.get('company') || ''
+    params.get('company') || '',
+    params.get('name') || ''
   );
 }
 
@@ -549,7 +572,7 @@ function showLoginHelp() {
   `, 'modal-small');
 }
 
-function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', prefillCompany = '') {
+function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', prefillCompany = '', prefillName = '') {
   let modalBody = '';
 
   if (tab === 'login') {
@@ -663,8 +686,12 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', pre
         </div>
       </form>`;
   } else if (tab === 'invite') {
-    const existingApproval = prefillEmail ? userApprovals.find(u => u.email && u.email.toLowerCase() === prefillEmail.toLowerCase()) : null;
+    const existingApproval = userApprovals.find(u =>
+      (prefillEmail && u.email && u.email.toLowerCase() === prefillEmail.toLowerCase())
+      || (prefillToken && u.invite_token === prefillToken)
+    );
     const resolvedCompany = prefillCompany || existingApproval?.company || '';
+    const resolvedName = existingApproval?.name || prefillName || '';
     modalBody = `
       <form onsubmit="submitInviteActivation(event)">
         <div class="modal-body">
@@ -694,7 +721,7 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', pre
             <label>Seu Nome Completo <em>*</em></label>
             <div class="input-icon-wrapper">
               <span class="input-leading-icon">${icon('user')}</span>
-              <input type="text" name="name" value="${esc(existingApproval?.name || '')}" placeholder="Confirme seu nome completo" required />
+              <input type="text" name="name" value="${esc(resolvedName)}" placeholder="Confirme seu nome completo" required />
             </div>
           </div>
 
@@ -1024,31 +1051,24 @@ function equipmentDatabasePayload(record, { catalogOnly = false } = {}) {
 
 async function persistEquipmentRecords(records, options = {}) {
   if (!records?.length) return;
-  await Promise.all(records.map(async record => {
-    const payload = equipmentDatabasePayload(record, options);
-    const updatePayload = { ...payload };
-    delete updatePayload.id;
-    const updated = await supabaseRestRequest(
-      `equipments?id=eq.${encodeURIComponent(payload.id)}&select=id`,
-      {
-        method: 'PATCH',
-        headers: { Prefer: 'return=representation' },
-        body: JSON.stringify(updatePayload),
-        timeoutMs: 30000
-      }
-    );
-    if (Array.isArray(updated) && updated.length > 0) return;
+  const payloads = records.map(record => equipmentDatabasePayload(record, options));
+  const invalid = payloads.findIndex(payload => !payload.id || !payload.code);
+  if (invalid >= 0) throw new Error(`Equipamento sem identificação válida: ${records[invalid]?.code || invalid + 1}.`);
 
-    const inserted = await supabaseRestRequest('equipments?on_conflict=id&select=id', {
-      method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-      body: JSON.stringify(payload),
-      timeoutMs: 30000
-    });
-    if (!Array.isArray(inserted) || inserted.length === 0) {
-      throw new Error(`O banco não confirmou a gravação do equipamento ${record.code || record.id}.`);
-    }
-  }));
+  // Uma única operação evita sincronizações parciais quando uma planilha
+  // atualiza toda a frota. A representação retornada confirma cada gravação.
+  const saved = await supabaseRestRequest('equipments?on_conflict=id&select=id,code,status,updatedAt', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+    body: JSON.stringify(payloads),
+    timeoutMs: 30000
+  });
+  const savedIds = new Set((Array.isArray(saved) ? saved : []).map(item => String(item.id)));
+  const missing = payloads.filter(payload => !savedIds.has(String(payload.id)));
+  if (missing.length) {
+    throw new Error(`O banco não confirmou ${missing.length} equipamento(s): ${missing.slice(0, 3).map(item => item.code).join(', ')}.`);
+  }
+  return saved;
 }
 
 async function persistEquipmentCatalog(records) {
@@ -1352,7 +1372,7 @@ async function syncPackingSlipsFromSupabase() {
     packingSlips = dedupePackingSlips(Array.from(merged.values()));
     packingSlipRemoteAvailable = true;
     saveLocalBackup();
-    if (['romaneios','formularios','materiais','notas-entrada','movimentacoes-materiais','cautelas'].includes(currentPage) && !document.querySelector('#modalRoot form')) render();
+    if (canSafelyAutoRender(['romaneios','formularios','materiais','notas-entrada','movimentacoes-materiais','cautelas'])) render();
   } catch (error) {
     packingSlipRemoteAvailable = false;
     console.warn('Sincronização de romaneios indisponível; mantendo os dados locais:', error);
@@ -1389,7 +1409,7 @@ async function syncReceivingInspectionsFromSupabase() {
     });
     receivingInspections = Array.from(merged.values()).sort((a,b) => (Date.parse(b.inspectedAt || b.entryDate || b.createdAt || '') || 0) - (Date.parse(a.inspectedAt || a.entryDate || a.createdAt || '') || 0));
     saveLocalBackup();
-    if (['formularios','materiais','notas-entrada','movimentacoes-materiais'].includes(currentPage) && !document.querySelector('#modalRoot form')) render();
+    if (canSafelyAutoRender(['formularios','materiais','notas-entrada','movimentacoes-materiais'])) render();
   } catch (error) {
     console.warn('Sincronização dos checklists de recebimento indisponível; mantendo os dados locais:', error);
   }
@@ -1672,6 +1692,16 @@ function chooseHistoryRecord(localRecord, remoteRecord) {
   return recordTimestamp(localRecord) > recordTimestamp(remoteRecord) ? localRecord : remoteRecord;
 }
 
+function equipmentSyncTimestamp(record) {
+  return Date.parse(record?.updatedAt || '') || 0;
+}
+
+function pendingEquipmentIdSet() {
+  return new Set(pendingFieldEvents
+    .map(event => String(event?.equipment?.id || ''))
+    .filter(Boolean));
+}
+
 let activeDataSync = null;
 function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
   if (activeDataSync) return activeDataSync;
@@ -1713,27 +1743,46 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
       item
     ]));
     const localEquipmentMap = new Map(currentLocalEquipments.map(item => [String(item.code || item.id || '').toUpperCase(), item]));
+    const pendingEquipmentIds = pendingEquipmentIdSet();
+    const recoverableLocalKeys = new Set(currentLocalEquipments
+      .filter(localEquipment => {
+        const key = String(localEquipment.code || localEquipment.id || '').toUpperCase();
+        const remoteEquipment = remoteEquipmentMap.get(key);
+        return pendingEquipmentIds.has(String(localEquipment.id))
+          || equipmentSyncTimestamp(localEquipment) > equipmentSyncTimestamp(remoteEquipment);
+      })
+      .map(localEquipment => String(localEquipment.code || localEquipment.id || '').toUpperCase()));
     let equipmentKeys;
     if (Array.isArray(remoteEquipments)) {
-      const pendingKeys = new Set(currentLocalEquipments.filter(e => pendingEquipmentIds.has(String(e.id))).map(e => String(e.code || e.id || '').toUpperCase()));
-      equipmentKeys = new Set([...remoteEquipmentMap.keys(), ...pendingKeys]);
+      equipmentKeys = new Set([...remoteEquipmentMap.keys(), ...recoverableLocalKeys]);
     } else {
       equipmentKeys = new Set([...localEquipmentMap.keys()]);
     }
+    const localRecordsToRecover = [];
     equipments = Array.from(equipmentKeys).map(key => {
       const localEquipment = localEquipmentMap.get(key);
       const remoteEquipment = remoteEquipmentMap.get(key);
       const hasPendingEvent = localEquipment && pendingEquipmentIds.has(String(localEquipment.id));
-      return mergeEquipmentSnapshots(localEquipment, remoteEquipment, hasPendingEvent);
+      const localIsNewer = localEquipment
+        && equipmentSyncTimestamp(localEquipment) > equipmentSyncTimestamp(remoteEquipment);
+      const localWins = hasPendingEvent || localIsNewer;
+      const merged = mergeEquipmentSnapshots(localEquipment, remoteEquipment, localWins);
+      if (localWins && merged) localRecordsToRecover.push(merged);
+      return merged;
     }).filter(Boolean);
 
     const stateChanged = JSON.stringify({ equipments, history }) !== stateBeforeSync;
     if (stateChanged) saveLocalBackup();
+    // Recupera automaticamente importações mais novas que ficaram somente
+    // neste aparelho por falhas de sincronização em versões anteriores.
+    if (pushAfter && localRecordsToRecover.length) {
+      await persistEquipmentRecords(localRecordsToRecover);
+    }
     const saveResult = pushAfter && pendingFieldEvents.length > 0
       ? await save()
       : { local: true, remote: true };
-    // Nunca substitui um formulário que a pessoa já está preenchendo no celular.
-    if (renderAfter && stateChanged && !document.querySelector('#modalRoot form')) render();
+    // Nunca substitui um formulário que a pessoa já está preenchendo no celular ou na tela.
+    if (renderAfter && stateChanged && canSafelyAutoRender(['dashboard', 'equipamentos', 'relatorios', 'formularios'])) render();
     return saveResult;
   })().catch(error => {
     console.warn('Sincronização com Supabase falhou; mantendo os dados locais:', error);
@@ -1759,7 +1808,7 @@ async function initializeApp() {
   workforceReadyPromise = loadSeedWorkforce().then(async () => {
     loadLocalStorageBackup();
     await syncWorkforceFromSupabase();
-    if (!document.querySelector('#modalRoot form')) render();
+    if (canSafelyAutoRender(['dashboard', 'equipamentos', 'empresas'])) render();
   });
   setTimeout(() => syncFromSupabase(), 0);
   setTimeout(() => syncPackingSlipsFromSupabase(), 100);
@@ -1769,7 +1818,7 @@ async function initializeApp() {
   setInterval(() => syncUserApprovalsFromSupabase(), 15000);
   setInterval(() => {
     syncWorkforceFromSupabase().then(updated => {
-      if (updated && currentPage === 'empresas' && !document.querySelector('#modalRoot form')) renderCompanies();
+      if (updated && currentPage === 'empresas' && canSafelyAutoRender(['empresas'])) renderCompanies();
     });
   }, 15000);
 }
@@ -2343,36 +2392,36 @@ function renderUserManagementBody(pendingList, approvedList) {
         <h3 style="margin-bottom:6px; font-size:18px;">Enviar Convite Direto por E-mail / Link</h3>
         <p style="color:var(--muted); font-size:13px; margin-bottom:20px;">Gere um link pré-aprovado para enviar via E-mail ou WhatsApp. Ao clicar, o colaborador define a senha e entra imediatamente.</p>
         
-        <form onsubmit="generateInviteLink(event)">
+        <form id="userInviteForm" onsubmit="generateInviteLink(event)">
           <div class="field full" style="margin-bottom:14px;">
             <label style="display:block; font-weight:700; margin-bottom:4px;">E-mail do Colaborador (opcional se enviar via link)</label>
-            <input type="email" name="email" placeholder="Deixe em branco para preenchimento pelo usuário" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" />
+            <input type="email" name="email" value="${esc(inviteDraft.email || '')}" oninput="inviteDraft.email=this.value" placeholder="Deixe em branco para preenchimento pelo usuário" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" />
           </div>
           <div class="field full" style="margin-bottom:14px;">
             <label style="display:block; font-weight:700; margin-bottom:4px;">Nome do Colaborador (opcional)</label>
-            <input type="text" name="name" list="invitePeopleList" placeholder="Ex: Carlos Eduardo" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" oninput="handleInvitePersonChange(this)" onchange="handleInvitePersonChange(this)" />
+            <input type="text" name="name" value="${esc(inviteDraft.name || '')}" list="invitePeopleList" placeholder="Ex: Carlos Eduardo" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" oninput="inviteDraft.name=this.value; handleInvitePersonChange(this)" onchange="inviteDraft.name=this.value; handleInvitePersonChange(this)" />
             <datalist id="invitePeopleList">
               ${uniquePeople.map(p => `<option value="${esc(p)}"></option>`).join('')}
             </datalist>
           </div>
           <div class="field full" style="margin-bottom:14px;">
             <label style="display:block; font-weight:700; margin-bottom:4px;">Empresa / Subempreiteira</label>
-            <select name="company" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;">
+            <select name="company" onchange="inviteDraft.company=this.value" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;">
               <option value="">Selecione ou deixe em branco...</option>
-              ${uniqueCompanies.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('')}
+              ${uniqueCompanies.map(c => `<option value="${esc(c)}" ${(inviteDraft.company||'')===c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
             </select>
           </div>
           <div class="field full" style="margin-bottom:14px;">
             <label style="display:block; font-weight:700; margin-bottom:4px;">Nível de Acesso Autorizado <em>*</em></label>
-            <select name="role" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;">
-              <option value="operador">Operador de Campo / Técnico</option>
-              <option value="engenheiro">Engenheiro / Fiscal de Obra</option>
-              <option value="gestor">Gestor de Obra (Acesso Total)</option>
+            <select name="role" onchange="inviteDraft.role=this.value" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;">
+              <option value="operador" ${(inviteDraft.role||'operador')==='operador' ? 'selected' : ''}>Operador de Campo / Técnico</option>
+              <option value="engenheiro" ${(inviteDraft.role||'')==='engenheiro' ? 'selected' : ''}>Engenheiro / Fiscal de Obra</option>
+              <option value="gestor" ${(inviteDraft.role||'')==='gestor' ? 'selected' : ''}>Gestor de Obra (Acesso Total)</option>
             </select>
           </div>
           <div class="field full" style="margin-bottom:18px;">
             <label style="display:block; font-weight:700; margin-bottom:4px;">Definir Senha (Opcional)</label>
-            <input type="text" name="password" placeholder="Se preenchida, o usuário não precisará criar senha" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" />
+            <input type="text" name="password" value="${esc(inviteDraft.password || '')}" oninput="inviteDraft.password=this.value" placeholder="Se preenchida, o usuário não precisará criar senha" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" />
           </div>
           <button type="submit" class="button button-green" style="width:100%; justify-content:center;">${icon('shield')} Gerar e Enviar Link de Convite</button>
         </form>
@@ -2383,14 +2432,15 @@ function renderUserManagementBody(pendingList, approvedList) {
 }
 
 function handleInvitePersonChange(input) {
-  const nameVal = (input?.value || '').trim().toLowerCase();
+  const nameVal = (input?.value || '').trim();
+  if (typeof inviteDraft !== 'undefined') inviteDraft.name = nameVal;
   if (!nameVal) return;
   const form = input.closest('form');
   const companySelect = form?.querySelector('select[name="company"]');
   if (!companySelect) return;
 
   const people = typeof workforce !== 'undefined' && Array.isArray(workforce) ? workforce : [];
-  const person = people.find(p => (p.name || '').trim().toLowerCase() === nameVal);
+  const person = people.find(p => (p.name || '').trim().toLowerCase() === nameVal.toLowerCase());
   if (person && person.company) {
     const targetComp = person.company.trim();
     let optionFound = [...companySelect.options].find(opt => opt.value.trim().toLowerCase() === targetComp.toLowerCase());
@@ -2401,6 +2451,7 @@ function handleInvitePersonChange(input) {
     } else {
       companySelect.value = optionFound.value;
     }
+    if (typeof inviteDraft !== 'undefined') inviteDraft.company = targetComp;
   }
 }
 
@@ -2449,7 +2500,9 @@ function updatePendingUserRole(id, newRole) {
   const user = userApprovals.find(u => u.id === id);
   if (user) {
     user.role = newRole;
+    user.updated_at = new Date().toISOString();
     localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
+    saveUserApprovalToSupabase(user);
   }
 }
 
@@ -2608,6 +2661,7 @@ async function generateInviteLink(event) {
     userApprovals.unshift(match);
   } else {
     match.invite_token = token;
+    match.name = name || match.name;
     match.role = role;
     match.company = company || match.company;
     match.status = 'approved';
@@ -2687,6 +2741,7 @@ async function generateInviteLink(event) {
     fullMsg: fullMsg
   });
 
+  inviteDraft = { email: '', name: '', company: '', role: 'operador', password: '' };
   toast('Convite e link gerados com sucesso!');
 }
 
@@ -5084,10 +5139,19 @@ if (installAppButton) {
 }
 
 if ('serviceWorker' in navigator) {
+  const hadServiceWorkerController = Boolean(navigator.serviceWorker.controller);
+  let reloadingForServiceWorker = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadServiceWorkerController || reloadingForServiceWorker) return;
+    reloadingForServiceWorker = true;
+    location.reload();
+  });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js').catch(error => {
-      console.warn('Falha ao registrar o aplicativo instalavel:', error);
-    });
+    navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
+      .then(registration => registration.update())
+      .catch(error => {
+        console.warn('Falha ao registrar o aplicativo instalavel:', error);
+      });
   });
 }
 

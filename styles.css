@@ -1627,6 +1627,150 @@ h3 { font-size: 14px; }
   }
 }
 
+@media (max-width: 760px) {
+  /* No celular, cada PTA vira um cartão. Assim o status e os dados de quem
+     está usando o equipamento não ficam escondidos à direita da tabela. */
+  .compact-equipment-panel .table-wrap {
+    overflow: visible;
+  }
+  .equipment-control-table,
+  .equipment-control-table tbody {
+    display: block;
+    width: 100%;
+  }
+  .equipment-control-table thead {
+    display: none;
+  }
+  .equipment-control-table tbody {
+    padding: 10px;
+    background: #f4f7f5;
+  }
+  .equipment-control-table .equipment-control-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0;
+    margin-bottom: 10px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: white;
+  }
+  .equipment-control-table .equipment-control-row:last-child {
+    margin-bottom: 0;
+  }
+  .equipment-control-table .equipment-control-row > td {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+    align-content: center;
+    padding: 10px 12px;
+    border: 0;
+    border-top: 1px solid #edf0ee;
+    white-space: normal;
+  }
+  .equipment-control-table .equipment-control-row > td::before {
+    color: #89938e;
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: .55px;
+    text-transform: uppercase;
+  }
+  .equipment-control-table .equipment-control-row > td:nth-child(1) {
+    grid-column: 1 / -1;
+    padding: 13px 12px;
+    border-top: 0;
+  }
+  .equipment-control-table .equipment-control-row > td:nth-child(5)::before { content: "Status"; }
+  .equipment-control-table .equipment-control-row > td:nth-child(6)::before { content: "Em uso por"; }
+  .equipment-control-table .equipment-control-row > td:nth-child(7)::before { content: "Local"; }
+  .equipment-control-table .equipment-control-row > td:nth-child(8)::before { content: "Devolução prevista"; }
+  .equipment-control-table .equipment-control-row > td:nth-child(5),
+  .equipment-control-table .equipment-control-row > td:nth-child(6) {
+    border-right: 1px solid #edf0ee;
+  }
+  .equipment-control-table .equipment-control-row > td:nth-child(7),
+  .equipment-control-table .equipment-control-row > td:nth-child(8) {
+    background: #fbfcfb;
+  }
+  .equipment-control-table .equipment-control-row > td:nth-child(10) {
+    grid-column: 1 / -1;
+    padding: 9px 12px 12px;
+    background: #fbfcfb;
+  }
+  .equipment-control-table .equipment-control-row > td:nth-child(2),
+  .equipment-control-table .equipment-control-row > td:nth-child(3),
+  .equipment-control-table .equipment-control-row > td:nth-child(4),
+  .equipment-control-table .equipment-control-row > td:nth-child(9),
+  .equipment-control-table .equipment-control-row:not([data-status="in-use"]) > td:nth-child(6),
+  .equipment-control-table .equipment-control-row:not([data-status="in-use"]) > td:nth-child(7),
+  .equipment-control-table .equipment-control-row:not([data-status="in-use"]) > td:nth-child(8),
+  .equipment-control-table .control-row-actions .icon-button {
+    display: none;
+  }
+  .equipment-control-table .control-row-actions,
+  .equipment-control-table .control-row-actions .button {
+    width: 100%;
+  }
+  .equipment-control-table .equipment-identity {
+    min-width: 0;
+  }
+
+  /* Libera área para os dias do efetivo e mantém a grade rolável nos
+     dois sentidos com o gesto nativo do navegador. */
+  .workforce-control-table-wrap {
+    max-height: 62dvh;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-x pan-y;
+  }
+  .workforce-control-table .workforce-sticky-company {
+    width: 72px;
+    min-width: 72px;
+    max-width: 72px;
+    padding-left: 7px;
+    font-size: 8px;
+  }
+  .workforce-control-table .workforce-sticky-person {
+    left: 72px;
+    width: 116px;
+    min-width: 116px;
+    max-width: 116px;
+    padding-left: 7px;
+  }
+  .workforce-control-table th:nth-child(3),
+  .workforce-control-table td:nth-child(3) {
+    display: none;
+  }
+  .workforce-control-table .workforce-sticky-person strong {
+    font-size: 9px;
+  }
+  .workforce-daily-summary,
+  .quadro-efetivo-table-wrap {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
+  /* O modal de importação/edição precisa continuar rolando mesmo
+     quando o body fica travado ao fundo. */
+  .modal-backdrop {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .modal,
+  .modal.modal-large,
+  .modal.modal-small,
+  .modal.modal-inspection,
+  .modal.modal-paper {
+    max-height: calc(100dvh - env(safe-area-inset-top));
+    padding-bottom: env(safe-area-inset-bottom);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+}
+
 .button-link-inline {
   background: transparent;
   border: 0;
