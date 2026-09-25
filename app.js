@@ -341,12 +341,13 @@ function isAdmin() {
 }
 
 function updateAppShellAccess() {
+  const isAuth = !!currentUser;
   const isAdm = isAdmin();
   const sidebar = document.getElementById('sidebar');
   const mainArea = document.querySelector('.main-area');
   
-  if (sidebar) sidebar.style.display = isAdm ? 'flex' : 'none';
-  if (mainArea) mainArea.style.marginLeft = isAdm ? '252px' : '0';
+  if (sidebar) sidebar.style.display = isAuth ? 'flex' : 'none';
+  if (mainArea) mainArea.style.marginLeft = (isAuth && window.innerWidth > 992) ? '252px' : '0';
 
   const userBox = document.getElementById('sidebarUserContainer') || document.querySelector('.sidebar-user');
   if (userBox) {
@@ -367,7 +368,7 @@ function updateAppShellAccess() {
         }
       }
       if (nameEl) nameEl.textContent = name;
-      if (roleEl) roleEl.textContent = currentUser.role === 'admin' ? 'Administrador' : currentUser.role === 'manager' || currentUser.role === 'gestor' ? 'Gestor de Obra' : 'Operador';
+      if (roleEl) roleEl.textContent = currentUser.role === 'admin' ? 'Administrador' : currentUser.role === 'manager' || currentUser.role === 'gestor' ? 'Gestor de Obra' : currentUser.role === 'engenheiro' ? 'Engenheiro' : 'Operador de Obra';
     } else {
       if (avatarEl) avatarEl.textContent = 'VIS';
       if (nameEl) nameEl.textContent = 'Visitante / Operador';
@@ -379,7 +380,7 @@ function updateAppShellAccess() {
   const badge = document.getElementById('navPendingUsersCount');
   if (badge) {
     badge.textContent = pendingCount;
-    badge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
+    badge.style.display = (isAuth && pendingCount > 0) ? 'inline-block' : 'none';
   }
 
   const topActions = document.querySelector('.top-actions');
@@ -390,12 +391,121 @@ function updateAppShellAccess() {
     topActions.prepend(authBtn);
   }
   if (authBtn) {
-    if (isAdm) {
+    if (isAuth) {
       authBtn.innerHTML = `<button class="button button-outline compact" onclick="logoutUser()">${icon('user')} <strong>${esc(currentUser.name || currentUser.email)}</strong> (Sair)</button>`;
     } else {
       authBtn.innerHTML = `<button class="button button-green compact" onclick="openLoginModal('login')">${icon('shield')} Entrar / Cadastrar</button>`;
     }
   }
+}
+
+function accessLinkParams() {
+  const rawHash = location.hash.replace('#', '');
+  const query = rawHash.includes('?') ? rawHash.slice(rawHash.indexOf('?') + 1) : '';
+  return new URLSearchParams(query);
+}
+
+function openInviteFromLanding() {
+  const params = accessLinkParams();
+  openLoginModal(
+    'invite',
+    params.get('email') || '',
+    params.get('token') || '',
+    params.get('company') || ''
+  );
+}
+
+function openLoginFromLanding() {
+  openLoginModal('login', accessLinkParams().get('email') || '');
+}
+
+function finishAuthenticationRoute() {
+  const route = location.hash.replace('#', '').split('?')[0];
+  if (['convite', 'invite', 'login', 'acesso'].includes(route)) {
+    history.replaceState(null, '', `${location.pathname}${location.search}#dashboard`);
+  }
+}
+
+function accessRoleLabel(role) {
+  const labels = {
+    admin: 'Administrador',
+    manager: 'Gestor de obra',
+    gestor: 'Gestor de obra',
+    engenheiro: 'Engenheiro / Fiscal',
+    operador: 'Operador de campo'
+  };
+  return labels[role] || 'Colaborador da obra';
+}
+
+function renderAccessLanding(mode, params) {
+  const app = document.getElementById('app');
+  if (!app) return;
+
+  const isInvite = mode === 'invite';
+  const email = params.get('email') || '';
+  const company = params.get('company') || '';
+  const name = params.get('name') || '';
+  const role = accessRoleLabel(params.get('role') || '');
+  const firstName = name.trim().split(/\s+/)[0] || '';
+  const title = isInvite
+    ? `${firstName ? `${esc(firstName)}, seu` : 'Seu'} acesso à obra está pronto`
+    : 'Bem-vindo ao DataCenter Omnia';
+
+  app.innerHTML = `
+    <section class="access-landing">
+      <div class="access-landing-glow access-landing-glow-one"></div>
+      <div class="access-landing-glow access-landing-glow-two"></div>
+
+      <header class="access-landing-header">
+        <a class="access-landing-brand" href="#" aria-label="DataCenter Omnia">
+          <img src="assets/heating-cooling-logo.png" alt="Heating Cooling" />
+          <span><strong>DataCenter</strong> Omnia<small>GESTÃO HVAC</small></span>
+        </a>
+        <span class="access-secure-badge">${icon('shield')} Ambiente seguro</span>
+      </header>
+
+      <div class="access-landing-content">
+        <div class="access-landing-copy">
+          <span class="access-invite-pill">${icon(isInvite ? 'mail' : 'user')} ${isInvite ? 'CONVITE PESSOAL' : 'PORTAL DA OBRA'}</span>
+          <h1>${title}</h1>
+          <p>${isInvite
+            ? 'Você foi convidado para acessar a plataforma de gestão da obra. Confirme seus dados, crie sua senha e comece a usar.'
+            : 'Acesse a plataforma que conecta equipes, equipamentos, materiais e operações da obra em um só lugar.'}</p>
+
+          <div class="access-landing-actions">
+            ${currentUser
+              ? `<a class="button button-green access-primary-button" href="#dashboard">${icon('arrow')} Ir para o painel</a>`
+              : `<button type="button" class="button button-green access-primary-button" onclick="${isInvite ? 'openInviteFromLanding()' : 'openLoginFromLanding()'}">${icon(isInvite ? 'check' : 'user')} ${isInvite ? 'Ativar meu acesso' : 'Entrar na plataforma'}</button>`}
+            ${!currentUser && isInvite ? `<button type="button" class="access-text-button" onclick="openLoginFromLanding()">Já tenho uma conta</button>` : ''}
+          </div>
+
+          <div class="access-trust-row">
+            <span>${icon('check')} Acesso autorizado</span>
+            <span>${icon('lock')} Dados protegidos</span>
+            <span>${icon('tool')} Operação centralizada</span>
+          </div>
+        </div>
+
+        <aside class="access-invite-card">
+          <div class="access-card-icon">${icon(isInvite ? 'mail' : 'building')}</div>
+          <p>${isInvite ? 'DETALHES DO CONVITE' : 'ACESSO À PLATAFORMA'}</p>
+          <h2>${name ? esc(name) : (isInvite ? 'Convite para colaborador' : 'DataCenter Omnia')}</h2>
+          <div class="access-invite-details">
+            ${email ? `<span><small>E-mail</small><strong>${esc(email)}</strong></span>` : ''}
+            ${company ? `<span><small>Empresa</small><strong>${esc(company)}</strong></span>` : ''}
+            ${isInvite ? `<span><small>Perfil de acesso</small><strong>${esc(role)}</strong></span>` : ''}
+            <span><small>Obra</small><strong>DataCenter Omnia (DC01)</strong></span>
+          </div>
+          <div class="access-card-note">${icon('shield')} <span>Este acesso foi enviado por um gestor autorizado da obra.</span></div>
+        </aside>
+      </div>
+
+      <footer class="access-landing-footer">
+        <span>Heating Cooling · Gestão de obra</span>
+        <span>Precisa de ajuda? Fale com o gestor que enviou o convite.</span>
+      </footer>
+    </section>`;
+  hydrateIcons();
 }
 
 function togglePasswordVisibility(inputId, btnEl) {
@@ -656,10 +766,14 @@ async function submitUserLogin(event) {
     localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
     closeModal();
     updateAppShellAccess();
+    finishAuthenticationRoute();
     render();
     toast('Login master efetuado! Painel liberado.');
     return;
   }
+
+  // Sincronizar usuários do Supabase antes de validar o login
+  await syncUserApprovalsFromSupabase();
 
   const match = userApprovals.find(u => u.email && u.email.toLowerCase() === email);
 
@@ -687,6 +801,7 @@ async function submitUserLogin(event) {
       localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
       closeModal();
       updateAppShellAccess();
+      finishAuthenticationRoute();
       render();
       toast(`Bem-vindo, ${currentUser.name}! Acesso liberado.`);
       return;
@@ -708,6 +823,7 @@ async function submitUserLogin(event) {
         localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
         closeModal();
         updateAppShellAccess();
+        finishAuthenticationRoute();
         render();
         toast(`Bem-vindo, ${currentUser.name}! Acesso Supabase liberado.`);
         return;
@@ -782,7 +898,7 @@ async function submitInviteActivation(event) {
       company: company || 'Obra',
       password: password,
       photo: data.photo_base64 || undefined,
-      role: 'operador',
+      role: 'gestor',
       status: 'approved',
       invite_token: token,
       approved_at: new Date().toISOString(),
@@ -797,6 +913,7 @@ async function submitInviteActivation(event) {
     match.password = password;
     if (data.photo_base64) match.photo = data.photo_base64;
     match.status = 'approved';
+    if (!match.role) match.role = 'gestor';
     match.approved_at = new Date().toISOString();
     match.updated_at = new Date().toISOString();
   }
@@ -808,15 +925,16 @@ async function submitInviteActivation(event) {
     id: match.id,
     email: match.email,
     name: match.name,
-    role: match.role || 'operador',
+    role: match.role || 'gestor',
     company: match.company || 'Obra'
   };
   localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
 
   closeModal();
   updateAppShellAccess();
+  finishAuthenticationRoute();
   render();
-  toast(`Convite ativado com sucesso! Bem-vindo(a), ${currentUser.name}.`);
+  toast(`Convite ativado com sucesso! Bem-vindo(a), ${currentUser.name}. Acesso liberado.`);
 }
 
 function logoutUser() {
@@ -1429,12 +1547,13 @@ function workforceSnapshot() {
 }
 
 async function persistWorkforceControlRemote() {
-  const client = await waitForSupabaseClient();
-  if (!client) return false;
   try {
     const snapshot = workforceSnapshot();
-    const { error: snapshotError } = await client.from('app_metadata').upsert({ key: 'workforce_control', value: snapshot });
-    if (snapshotError) throw snapshotError;
+    await supabaseRestRequest('app_metadata?on_conflict=key', {
+      method: 'POST',
+      body: JSON.stringify({ key: 'workforce_control', value: snapshot }),
+      headers: { Prefer: 'resolution=merge-duplicates' }
+    });
     const remotePeople = workforce.map(person => ({
       id: person.id || crypto.randomUUID(),
       company: person.company || '',
@@ -1446,8 +1565,11 @@ async function persistWorkforceControlRemote() {
       pin: person.pin || ''
     }));
     if (remotePeople.length) {
-      const { error: peopleError } = await client.from('workforce').upsert(remotePeople);
-      if (peopleError) console.warn('O retrato do efetivo foi salvo, mas o cadastro legado não foi atualizado:', peopleError);
+      await supabaseRestRequest('workforce?on_conflict=id', {
+        method: 'POST',
+        body: JSON.stringify(remotePeople),
+        headers: { Prefer: 'resolution=merge-duplicates' }
+      }).catch(err => console.warn('O retrato do efetivo foi salvo, mas o cadastro de workforce não foi atualizado:', err));
     }
     return true;
   } catch (error) {
@@ -1462,39 +1584,64 @@ function scheduleWorkforceRemoteSave(delay = 700) {
 }
 
 async function syncWorkforceFromSupabase() {
-  const client = await waitForSupabaseClient();
-  if (!client) return false;
   try {
-    const [{ data: people, error: peopleError }, { data: metadata, error: metadataError }, { data: control, error: controlError }] = await Promise.all([
-      client.from('workforce').select('*'),
-      client.from('app_metadata').select('value').eq('key', 'workforce_meta').maybeSingle(),
-      client.from('app_metadata').select('value').eq('key', 'workforce_control').maybeSingle()
+    const [controlRows, peopleRows, metadataRows] = await Promise.all([
+      supabaseRestRequest('app_metadata?key=eq.workforce_control&select=value').catch(() => null),
+      supabaseRestRequest('workforce?select=*').catch(() => null),
+      supabaseRestRequest('app_metadata?key=eq.workforce_meta&select=value').catch(() => null)
     ]);
-    const remoteSnapshot = !controlError && control?.value?.version >= 2 ? control.value : null;
+    const remoteSnapshot = Array.isArray(controlRows) && controlRows[0]?.value?.version >= 2 ? controlRows[0].value : null;
     if (remoteSnapshot) {
       const remoteTime = Date.parse(remoteSnapshot.updatedAt || '') || 0;
       const localTime = Date.parse(workforceControlMeta.updatedAt || '') || 0;
+      const remoteAttendance = normalizeWorkforceAttendanceMap(remoteSnapshot.attendance);
+      const localAttendance = workforceAttendance || {};
+
+      // Combina as marcações remotas e locais de forma inteligente para que nenhuma seja perdida
+      const mergedAttendance = { ...remoteAttendance };
+      Object.entries(localAttendance).forEach(([personKey, dates]) => {
+        if (!mergedAttendance[personKey]) {
+          mergedAttendance[personKey] = { ...dates };
+        } else {
+          if (localTime >= remoteTime) {
+            mergedAttendance[personKey] = { ...mergedAttendance[personKey], ...dates };
+          } else {
+            mergedAttendance[personKey] = { ...dates, ...mergedAttendance[personKey] };
+          }
+        }
+      });
+
+      const remotePeople = normalizeWorkforcePeople(remoteSnapshot.people);
+      const mergedPeopleMap = new Map();
+
       if (!workforce.length || remoteTime >= localTime) {
-        workforce = normalizeWorkforcePeople(remoteSnapshot.people);
-        workforceAttendance = normalizeWorkforceAttendanceMap(remoteSnapshot.attendance);
+        workforce.forEach(p => mergedPeopleMap.set(workforcePersonKey(p), p));
+        remotePeople.forEach(p => mergedPeopleMap.set(workforcePersonKey(p), { ...mergedPeopleMap.get(workforcePersonKey(p)), ...p }));
+        workforce = normalizeWorkforcePeople(Array.from(mergedPeopleMap.values()));
+        workforceAttendance = mergedAttendance;
         workforceMeta = remoteSnapshot.meta || workforceMeta;
         workforceControlMeta = { updatedAt: remoteSnapshot.updatedAt || '' };
       } else {
+        remotePeople.forEach(p => mergedPeopleMap.set(workforcePersonKey(p), p));
+        workforce.forEach(p => mergedPeopleMap.set(workforcePersonKey(p), { ...mergedPeopleMap.get(workforcePersonKey(p)), ...p }));
+        workforce = normalizeWorkforcePeople(Array.from(mergedPeopleMap.values()));
+        workforceAttendance = mergedAttendance;
         scheduleWorkforceRemoteSave(0);
       }
       saveLocalBackup();
       return true;
     }
-    if (peopleError) throw peopleError;
-    if (Array.isArray(people) && people.length) {
+    if (Array.isArray(peopleRows) && peopleRows.length) {
       const merged = new Map(workforce.filter(person => person?.name).map(person => [workforcePersonKey(person), person]));
-      people.filter(person => person?.name).forEach(person => {
+      peopleRows.filter(person => person?.name).forEach(person => {
         const key = workforcePersonKey(person);
         merged.set(key, { ...(merged.get(key) || {}), ...person });
       });
       workforce = normalizeWorkforcePeople(Array.from(merged.values()));
     }
-    if (!metadataError && metadata?.value) workforceMeta = metadata.value;
+    if (Array.isArray(metadataRows) && metadataRows[0]?.value) {
+      workforceMeta = metadataRows[0].value;
+    }
     saveLocalBackup();
     return true;
   } catch (error) {
@@ -1620,6 +1767,11 @@ async function initializeApp() {
   if (typeof syncRadiosFromSupabase === 'function') setTimeout(() => syncRadiosFromSupabase(), 250);
   setTimeout(() => syncUserApprovalsFromSupabase(), 300);
   setInterval(() => syncUserApprovalsFromSupabase(), 15000);
+  setInterval(() => {
+    syncWorkforceFromSupabase().then(updated => {
+      if (updated && currentPage === 'empresas' && !document.querySelector('#modalRoot form')) renderCompanies();
+    });
+  }, 15000);
 }
 function companyOptions(selected='') {
   const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))];
@@ -1953,29 +2105,31 @@ function metric(label, value, detail, type, iconName, width) {
 
 function render() {
   try {
-    updateAppShellAccess();
     const rawHash = location.hash.replace('#','');
     const hash = rawHash.split('?')[0] || 'dashboard';
+    const isInviteLanding = rawHash.startsWith('convite') || rawHash.startsWith('invite');
+    const isLoginLanding = hash === 'login' || hash === 'acesso';
+    const isPublicHome = !currentUser && hash === 'dashboard';
+    document.body.classList.toggle('public-access-page', isInviteLanding || isLoginLanding || isPublicHome);
+    updateAppShellAccess();
 
-    if (rawHash.startsWith('convite') || rawHash.startsWith('invite')) {
+    if (isInviteLanding || isLoginLanding || isPublicHome) {
       const query = rawHash.includes('?') ? rawHash.split('?')[1] : '';
       const params = new URLSearchParams(query);
-      const email = params.get('email') || '';
-      const token = params.get('token') || '';
-      const company = params.get('company') || '';
-      setTimeout(() => openLoginModal('invite', email, token, company), 50);
+      currentPage = 'access';
+      renderAccessLanding(isInviteLanding ? 'invite' : 'login', params);
+      return;
     } else if (hash === 'signup' || hash === 'cadastrar') {
       setTimeout(() => openLoginModal('signup'), 50);
-    } else if (hash === 'login') {
-      const query = rawHash.includes('?') ? rawHash.split('?')[1] : '';
-      const params = new URLSearchParams(query);
-      const email = params.get('email') || '';
-      setTimeout(() => openLoginModal('login', email), 50);
     }
 
-    if (!isAdmin() && ['dashboard', 'empresas', 'relatorios', 'romaneios', 'formularios', 'materiais', 'notas-entrada', 'movimentacoes-materiais', 'cautelas', 'radios', 'usuarios'].includes(hash) && !hash.startsWith('scan/')) {
+    if (!currentUser && ['dashboard', 'empresas', 'relatorios', 'romaneios', 'formularios', 'materiais', 'notas-entrada', 'movimentacoes-materiais', 'cautelas', 'radios', 'usuarios'].includes(hash) && !hash.startsWith('scan/')) {
       currentPage = 'equipamentos';
       renderEquipments();
+    } else if (hash === 'usuarios' && !isAdmin()) {
+      toast('Acesso a Usuários & Aprovações é exclusivo de Gestores.', true);
+      currentPage = 'dashboard';
+      renderDashboard();
     } else if (hash.startsWith('scan/')) {
       currentPage = 'equipamentos';
       renderEquipments();
@@ -2398,13 +2552,13 @@ function copyUserAccessLink(id) {
   let fullMsg = '';
 
   if (u.invite_token && u.status !== 'active' && !u.password) {
-    inviteUrl = `${baseUrl}#convite?email=${encodeURIComponent(u.email || '')}&company=${encodeURIComponent(u.company || '')}&token=${u.invite_token}`;
+    inviteUrl = `${baseUrl}#convite?email=${encodeURIComponent(u.email || '')}&company=${encodeURIComponent(u.company || '')}&name=${encodeURIComponent(u.name || '')}&role=${encodeURIComponent(u.role || '')}&token=${encodeURIComponent(u.invite_token)}`;
     fullMsg = `Olá ${u.name || 'colaborador'}!\nVocê foi convidado para acessar o ObraFlow DataCenter.\n\nClique no link abaixo para criar sua senha:\n${inviteUrl}\n\n(Código do Convite: ${u.invite_token})`;
   } else if (u.password) {
-    inviteUrl = `${baseUrl}#login?email=${encodeURIComponent(u.email || '')}`;
+    inviteUrl = `${baseUrl}#login?email=${encodeURIComponent(u.email || '')}&name=${encodeURIComponent(u.name || '')}&company=${encodeURIComponent(u.company || '')}`;
     fullMsg = `Olá ${u.name || 'colaborador'}!\nSeu acesso ao ObraFlow DataCenter está liberado!\n\nE-mail: ${u.email}\nSenha: ${u.password}\n\nClique para acessar:\n${inviteUrl}`;
   } else {
-    inviteUrl = `${baseUrl}#login?email=${encodeURIComponent(u.email || '')}`;
+    inviteUrl = `${baseUrl}#login?email=${encodeURIComponent(u.email || '')}&name=${encodeURIComponent(u.name || '')}&company=${encodeURIComponent(u.company || '')}`;
     fullMsg = `Olá ${u.name || 'colaborador'}!\nSeu acesso ao ObraFlow DataCenter está liberado.\n\nE-mail: ${u.email}\n\nLink para entrar:\n${inviteUrl}`;
   }
 
@@ -2430,7 +2584,7 @@ async function generateInviteLink(event) {
     const person = people.find(p => (p.name || '').trim().toLowerCase() === name.toLowerCase());
     if (person && person.company) company = person.company.trim();
   }
-  const role = data.role || 'operador';
+  const role = data.role || 'gestor';
   const password = data.password ? String(data.password).trim() : '';
   const token = 'INV-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -2471,10 +2625,10 @@ async function generateInviteLink(event) {
   let fullMsg = '';
 
   if (password) {
-    inviteUrl = `${baseUrl}#login?email=${encodeURIComponent(email || '')}`;
+    inviteUrl = `${baseUrl}#login?email=${encodeURIComponent(email || '')}&name=${encodeURIComponent(name || '')}&company=${encodeURIComponent(company || '')}`;
     fullMsg = `Olá ${name || 'colaborador'}!\nSeu acesso ao ObraFlow DataCenter foi criado!\n\nE-mail: ${email}\nSenha: ${password}\n\nClique no link abaixo para entrar:\n${inviteUrl}`;
   } else {
-    inviteUrl = `${baseUrl}#convite?email=${encodeURIComponent(email || '')}&company=${encodeURIComponent(company)}&token=${token}`;
+    inviteUrl = `${baseUrl}#convite?email=${encodeURIComponent(email || '')}&company=${encodeURIComponent(company)}&name=${encodeURIComponent(name || '')}&role=${encodeURIComponent(role)}&token=${encodeURIComponent(token)}`;
     fullMsg = `Olá ${name || 'colaborador'}!\nVocê foi convidado para acessar o ObraFlow DataCenter.\n\nClique no link para criar sua senha e entrar:\n${inviteUrl}\n\n(Código do Convite: ${token})`;
   }
 
