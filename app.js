@@ -313,6 +313,7 @@ let workforceControlMonth = new Date().toISOString().slice(0, 7);
 let workforceSummaryDate = new Date().toISOString().slice(0, 10);
 let workforceRemoteSaveTimer = null;
 let workforceReadyPromise = Promise.resolve();
+let lastWorkforceSyncTime = 0;
 let currentPage = 'dashboard';
 let currentUser = null;
 try {
@@ -345,13 +346,55 @@ function canSafelyAutoRender(relevantPages = null) {
   return true;
 }
 
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID();
+    } catch(e) {}
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+function isValidUUID(str) {
+  return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
+function userApprovalDatabasePayload(record) {
+  if (!record) return {};
+  const allowedFields = [
+    'id', 'email', 'name', 'role', 'company', 'status',
+    'invite_token', 'invited_by', 'created_at', 'updated_at',
+    'approved_at', 'approved_by', 'password', 'photo'
+  ];
+  const payload = {};
+  for (const field of allowedFields) {
+    if (record[field] !== undefined && record[field] !== null) {
+      payload[field] = record[field];
+    }
+  }
+  if (!payload.id || !isValidUUID(payload.id)) {
+    payload.id = generateUUID();
+    record.id = payload.id;
+  }
+  return payload;
+}
+
 async function syncUserApprovalsFromSupabase() {
   try {
     const rows = await supabaseRestRequest('user_approvals?select=*&order=created_at.desc');
     if (Array.isArray(rows)) {
       const map = new Map();
       userApprovals.forEach(u => u && u.email && map.set(u.email.toLowerCase(), u));
-      rows.forEach(r => r && r.email && map.set(r.email.toLowerCase(), r));
+      rows.forEach(r => {
+        if (!r || !r.email) return;
+        const key = r.email.toLowerCase();
+        const existing = map.get(key) || {};
+        map.set(key, { ...existing, ...r });
+      });
       userApprovals = Array.from(map.values());
       localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
       updateAppShellAccess();
@@ -365,16 +408,29 @@ async function syncUserApprovalsFromSupabase() {
   }
 }
 
-
 async function saveUserApprovalToSupabase(record) {
+  if (!record || !record.email) return null;
+  const payload = userApprovalDatabasePayload(record);
   try {
     return await supabaseRestRequest('user_approvals?on_conflict=email', {
       method: 'POST',
       headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' },
-      body: JSON.stringify(record)
+      body: JSON.stringify(payload)
     });
   } catch(e) {
-    console.warn('Erro ao salvar no Supabase:', e);
+    console.warn('Erro ao salvar no Supabase, tentando fallback sem campos de senha/foto:', e);
+    try {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.password;
+      delete fallbackPayload.photo;
+      return await supabaseRestRequest('user_approvals?on_conflict=email', {
+        method: 'POST',
+        headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' },
+        body: JSON.stringify(fallbackPayload)
+      });
+    } catch(err2) {
+      console.error('Falha crítica ao salvar usuário no Supabase:', err2);
+    }
   }
 }
 
@@ -393,6 +449,18 @@ function updateAppShellAccess() {
 
   const userBox = document.getElementById('sidebarUserContainer') || document.querySelector('.sidebar-user');
   if (userBox) {
+    userBox.style.cursor = 'pointer';
+    userBox.title = 'Clique para ver ou alterar seu nome de usuário / perfil';
+    userBox.onclick = () => openUserProfileModal();
+
+    const authMoreBtn = document.getElementById('userAuthActionButton');
+    if (authMoreBtn) {
+      authMoreBtn.onclick = (e) => {
+        e.stopPropagation();
+        openUserProfileModal();
+      };
+    }
+
     const avatarEl = document.getElementById('sidebarUserAvatar') || userBox.querySelector('.avatar');
     const nameEl = document.getElementById('sidebarUserName') || userBox.querySelector('strong');
     const roleEl = document.getElementById('sidebarUserRole') || userBox.querySelector('small');
@@ -517,9 +585,16 @@ function renderAccessLanding(mode, params) {
 
           <div class="access-landing-actions">
             ${currentUser
-              ? `<a class="button button-green access-primary-button" href="#dashboard">${icon('arrow')} Ir para o painel</a>`
-              : `<button type="button" class="button button-green access-primary-button" onclick="${isInvite ? 'openInviteFromLanding()' : 'openLoginFromLanding()'}">${icon(isInvite ? 'check' : 'user')} ${isInvite ? 'Ativar meu acesso' : 'Entrar na plataforma'}</button>`}
-            ${!currentUser && isInvite ? `<button type="button" class="access-text-button" onclick="openLoginFromLanding()">Já tenho uma conta</button>` : ''}
+              ? `<a class="button button-green access-primary-button" href="#dashboard">${icon('arrow')} Ir para o painel da obra</a>`
+              : isInvite
+                ? `<button type="button" class="button button-green access-primary-button" onclick="openInviteFromLanding()">${icon('check')} Ativar Meu Acesso Imediato</button>
+                   <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
+                     <button type="button" class="access-text-button" onclick="openLoginFromLanding()">Já tenho uma conta</button>
+                     <span style="color:var(--muted); font-size:12px;">•</span>
+                     <button type="button" class="access-text-button" onclick="openLoginModal('signup')">Solicitar acesso direto</button>
+                   </div>`
+                : `<button type="button" class="button button-green access-primary-button" onclick="openLoginFromLanding()">${icon('user')} Entrar na Plataforma</button>
+                   <button type="button" class="button button-outline access-primary-button" style="background:white; border-color:var(--primary); color:var(--primary); font-weight:700;" onclick="openLoginModal('signup')">${icon('plus')} Solicitar Acesso à Obra</button>`}
           </div>
 
           <div class="access-trust-row">
@@ -712,6 +787,8 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', pre
     );
     const resolvedCompany = prefillCompany || existingApproval?.company || '';
     const resolvedName = existingApproval?.name || prefillName || '';
+    const isSyntheticEmail = (prefillEmail || '').includes('@obraflow.link') || (prefillEmail || '').startsWith('convite_');
+    const displayEmail = isSyntheticEmail ? '' : prefillEmail;
     modalBody = `
       <form onsubmit="submitInviteActivation(event)">
         <div class="modal-body">
@@ -722,10 +799,10 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', pre
           </div>
 
           <div class="field full" style="margin-bottom:12px;">
-            <label>E-mail do Convite <em>*</em></label>
+            <label>Seu E-mail <em>*</em></label>
             <div class="input-icon-wrapper">
               <span class="input-leading-icon">${icon('mail')}</span>
-              <input type="email" name="email" value="${esc(prefillEmail)}" placeholder="seu.email@empresa.com" required />
+              <input type="email" name="email" value="${esc(displayEmail)}" placeholder="seu.email@empresa.com" required />
             </div>
           </div>
 
@@ -906,7 +983,7 @@ async function submitUserSignup(event) {
   }
 
   const record = {
-    id: crypto.randomUUID ? crypto.randomUUID() : 'usr_' + Date.now(),
+    id: generateUUID(),
     email: email,
     name: name,
     password: password,
@@ -939,7 +1016,7 @@ async function submitInviteActivation(event) {
 
   if (!match) {
     match = {
-      id: crypto.randomUUID ? crypto.randomUUID() : 'usr_' + Date.now(),
+      id: generateUUID(),
       email: email,
       name: name,
       company: company || 'Obra',
@@ -990,6 +1067,91 @@ function logoutUser() {
   updateAppShellAccess();
   render();
   toast('Sessão encerrada. O sistema agora está no Modo Operador de Campo.');
+}
+
+function openUserProfileModal() {
+  if (!currentUser) {
+    openLoginModal('login');
+    return;
+  }
+
+  const name = currentUser.name || currentUser.email || '';
+  const email = currentUser.email || '';
+  const company = currentUser.company || '';
+  const role = currentUser.role || 'operador';
+  const roleLabel = role === 'admin' ? 'Administrador' : role === 'manager' || role === 'gestor' ? 'Gestor de Obra' : role === 'engenheiro' ? 'Engenheiro' : 'Operador de Campo';
+  const initials = (name.split(' ').map(n=>n[0]).join('').substring(0, 2) || 'US').toUpperCase();
+
+  modal(`
+    <form onsubmit="saveUserProfile(event)">
+      ${modalHead('👤 Perfil do Usuário', 'Altere seu nome de exibição no app ou gerencie seu acesso.')}
+      <div class="modal-body" style="display:grid; gap:16px;">
+        <div style="display:flex; align-items:center; gap:14px; padding:14px; background:#f7f9f8; border:1px solid var(--line); border-radius:10px;">
+          <div style="width:48px; height:48px; border-radius:50%; background:var(--primary); color:white; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:16px;">
+            ${initials}
+          </div>
+          <div style="min-width:0; flex:1;">
+            <strong style="font-size:15px; color:var(--ink); display:block; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${esc(name)}</strong>
+            <span style="font-size:12px; color:var(--muted);">${esc(email)} • <strong>${esc(roleLabel)}</strong></span>
+          </div>
+        </div>
+
+        <div class="field full">
+          <label style="font-weight:700; display:block; margin-bottom:4px;">Nome de Exibição no App <em>*</em></label>
+          <input type="text" name="name" value="${esc(name)}" required placeholder="Seu nome completo ou como deseja ser chamado" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px;" autofocus />
+          <small style="color:var(--muted); font-size:11px; margin-top:4px; display:block;">Este nome aparecerá no menu lateral (canto inferior esquerdo), na barra superior e nos relatórios.</small>
+        </div>
+
+        <div class="field full">
+          <label style="font-weight:700; display:block; margin-bottom:4px;">Empresa / Vínculo</label>
+          <input type="text" name="company" value="${esc(company)}" placeholder="Ex: Heating Cooling, AIRTEC..." style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px;" />
+        </div>
+
+        <div style="border-top:1px solid var(--line); padding-top:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div>
+            <strong style="font-size:12px; display:block;">Trocar de Usuário</strong>
+            <span style="font-size:11px; color:var(--muted);">Fazer login com outra conta</span>
+          </div>
+          <button type="button" class="button button-outline compact" onclick="closeModal(); openLoginModal('login');">Entrar com Outro Usuário</button>
+        </div>
+      </div>
+      <div class="modal-foot" style="display:flex; justify-content:space-between;">
+        <button type="button" class="button button-outline" style="color:var(--red);" onclick="closeModal(); logoutUser();">${icon('close')} Sair da Conta</button>
+        <button type="submit" class="button button-green">${icon('check')} Salvar Alterações</button>
+      </div>
+    </form>
+  `, 'modal-small');
+}
+
+async function saveUserProfile(event) {
+  event.preventDefault();
+  const data = Object.fromEntries(new FormData(event.target));
+  const newName = (data.name || '').trim();
+  const newCompany = (data.company || '').trim();
+  if (!newName) {
+    toast('O nome não pode ficar em branco.', true);
+    return;
+  }
+
+  if (currentUser) {
+    currentUser.name = newName;
+    if (newCompany) currentUser.company = newCompany;
+    localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
+
+    const match = userApprovals.find(u => u.email && u.email.toLowerCase() === (currentUser.email || '').toLowerCase());
+    if (match) {
+      match.name = newName;
+      if (newCompany) match.company = newCompany;
+      match.updated_at = new Date().toISOString();
+      localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
+      saveUserApprovalToSupabase(match);
+    }
+  }
+
+  updateAppShellAccess();
+  closeModal();
+  toast(`Nome alterado para "${newName}" com sucesso!`);
+  render();
 }
 
 function safeSort(a, b) {
@@ -1709,17 +1871,17 @@ async function syncWorkforceFromSupabase() {
       const remoteAttendance = normalizeWorkforceAttendanceMap(remoteSnapshot.attendance);
       const localAttendance = workforceAttendance || {};
 
-      // Combina as marcações remotas e locais de forma inteligente para que nenhuma seja perdida
+      // Combina as marcações remotas e locais de forma inteligente por dia, garantindo que marcações não se percam
       const mergedAttendance = { ...remoteAttendance };
       Object.entries(localAttendance).forEach(([personKey, dates]) => {
         if (!mergedAttendance[personKey]) {
           mergedAttendance[personKey] = { ...dates };
         } else {
-          if (localTime >= remoteTime) {
-            mergedAttendance[personKey] = { ...mergedAttendance[personKey], ...dates };
-          } else {
-            mergedAttendance[personKey] = { ...dates, ...mergedAttendance[personKey] };
-          }
+          Object.entries(dates).forEach(([d, val]) => {
+            if (val || !mergedAttendance[personKey][d]) {
+              mergedAttendance[personKey][d] = val;
+            }
+          });
         }
       });
 
@@ -2353,13 +2515,12 @@ function renderUserManagement() {
   const pendingList = userApprovals.filter(u => u.status === 'pending');
   const approvedList = userApprovals.filter(u => u.status === 'approved' || u.status === 'active');
   const managersCount = userApprovals.filter(u => u.status === 'approved' && (u.role === 'admin' || u.role === 'gestor' || u.role === 'manager')).length + 1;
-  const invitesCount = userApprovals.filter(u => u.invite_token).length;
 
   const appEl = document.getElementById('app');
   appEl.innerHTML = `
     ${pageHeader(
       'Gestão de Usuários & Aprovações',
-      'Painel do Gestor para autorização de acessos por e-mail, convites diretos por link e controle de funções na obra.',
+      'Painel do Gestor para autorização de acessos, solicitações de entrada e controle de funções na obra.',
       'CONTROLE DE ACESSO',
       `<div style="display:flex; gap:8px;">
         <button class="button button-outline compact" onclick="syncUserApprovalsFromSupabase().then(() => toast('Lista de usuários atualizada com sucesso!'))">${icon('refresh')} Sincronizar Dados</button>
@@ -2368,11 +2529,24 @@ function renderUserManagement() {
     )}
 
     <section class="metrics-grid">
-      ${metric('Usuários Liberados', approvedList.length + 1, 'Com acesso ativo ao app', 'green', 'user', 100)}
-      ${metric('Aprovações Pendentes', pendingList.length, 'Aguardando decisão do gestor', pendingList.length > 0 ? 'amber' : 'green', 'clock', pendingList.length > 0 ? 80 : 0)}
+      ${metric('Pendentes para Aceitar', pendingList.length, pendingList.length > 0 ? `${pendingList.length} aguardando liberação do gestor` : 'Nenhuma solicitação pendente', pendingList.length > 0 ? 'amber' : 'green', 'clock', pendingList.length > 0 ? 100 : 0)}
+      ${metric('Usuários Liberados', approvedList.length + 1, 'Com acesso ativo ao sistema', 'green', 'user', 100)}
       ${metric('Gestores & Admins', managersCount, 'Com permissão administrativa', 'blue', 'shield', 100)}
-      ${metric('Convites Enviados', invitesCount, 'Links de cadastro gerados', 'green', 'file', 50)}
+      ${metric('Efetivo da Obra', workforce.length, 'Colaboradores cadastrados', 'blue', 'users', 100)}
     </section>
+
+    ${pendingList.length > 0 ? `
+      <div style="background:#fffbe6; border:1px solid #ffe58f; padding:16px 20px; border-radius:12px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; gap:16px; box-shadow:0 2px 8px rgba(212,107,8,0.06);">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <span style="font-size:26px;">⏳</span>
+          <div>
+            <strong style="color:#d46b08; font-size:14px; display:block;">Há ${pendingList.length} solicitação(ões) pendente(s) para aceitar entrar no sistema!</strong>
+            <span style="font-size:12px; color:#595959;">Novos colaboradores solicitaram acesso e aguardam sua aprovação para utilizar a plataforma.</span>
+          </div>
+        </div>
+        <button class="button button-green compact" onclick="setUserManagementTab('pendentes')">${icon('check')} Ver Solicitações (${pendingList.length})</button>
+      </div>
+    ` : ''}
 
     <div class="module-tabs">
       <a href="javascript:void(0)" class="${userManagementTab === 'pendentes' ? 'active' : ''}" onclick="setUserManagementTab('pendentes')">${icon('clock')} Solicitações Pendentes <b>${pendingList.length}</b></a>
@@ -2399,11 +2573,11 @@ function renderUserManagementBody(pendingList, approvedList) {
         <div class="empty-state" style="padding:32px 24px; text-align:center; border:1px dashed var(--line); border-radius:12px; background:white;">
           <span style="font-size:32px; display:block; margin-bottom:8px;">✅</span>
           <h3 style="font-size:16px; margin-bottom:4px;">Nenhuma solicitação pendente no momento</h3>
-          <p style="color:var(--muted); font-size:13px; margin-bottom:16px;">Todas as solicitações de e-mail e senha enviadas pelos colaboradores foram processadas.</p>
-          <div style="margin:0 auto; padding:14px; background:#f7f9f8; border:1px solid var(--line); border-radius:8px; font-size:12px; text-align:left; color:#333; max-width:520px; line-height:1.6;">
+          <p style="color:var(--muted); font-size:13px; margin-bottom:16px;">Todas as solicitações de acesso enviadas pelos colaboradores foram processadas.</p>
+          <div style="margin:0 auto; padding:14px; background:#f7f9f8; border:1px solid var(--line); border-radius:8px; font-size:12px; text-align:left; color:#333; max-width:540px; line-height:1.6;">
             <strong>📌 Como funcionam as aprovações no sistema:</strong><br/>
-            • <strong>Convites Enviados por Link/E-mail:</strong> O colaborador entra como <strong>Pré-aprovado</strong> e aparece diretamente na aba <a href="javascript:void(0)" onclick="setUserManagementTab('ativos')" style="color:var(--primary); font-weight:bold;">"Usuários Ativos"</a> assim que cria a senha.<br/>
-            • <strong>Cadastro Direto ("Solicitar Cadastro"):</strong> Aparece nesta aba para você Aprovar ou Rejeitar.<br/>
+            • <strong>Convites por Link/E-mail enviados pelo gestor:</strong> O colaborador define sua senha no link e entra como <strong>Pré-aprovado</strong> imediatamente (não precisa esperar o admin aprovar).<br/>
+            • <strong>Solicitação de Acesso Direto ("Solicitar Cadastro"):</strong> Fica como <strong>Pendente</strong> nesta aba até você clicar em <strong>Aprovar Acesso</strong>.<br/>
             • <strong>Não vê o cadastro?</strong> Clique no botão <button class="button button-outline compact" style="padding:2px 8px; font-size:11px; margin-left:4px;" onclick="syncUserApprovalsFromSupabase().then(() => toast('Dados sincronizados com o Supabase!'))">🔄 Sincronizar Dados</button> para atualizar.
           </div>
         </div>`;
@@ -2495,27 +2669,40 @@ function renderUserManagementBody(pendingList, approvedList) {
     return `
       <div style="max-width:640px; margin:0 auto; background:white; padding:28px; border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow);">
         <h3 style="margin-bottom:6px; font-size:18px;">Enviar Convite Direto por E-mail / Link</h3>
-        <p style="color:var(--muted); font-size:13px; margin-bottom:20px;">Gere um link pré-aprovado para enviar via E-mail ou WhatsApp. Ao clicar, o colaborador define a senha e entra imediatamente.</p>
+        <p style="color:var(--muted); font-size:13px; margin-bottom:20px;">Gere um link pré-aprovado para enviar via E-mail ou WhatsApp. Ao clicar, o colaborador define a senha e entra imediatamente, sem precisar aguardar aprovação.</p>
         
         <form id="userInviteForm" onsubmit="generateInviteLink(event)">
           <div class="field full" style="margin-bottom:14px;">
             <label style="display:block; font-weight:700; margin-bottom:4px;">E-mail do Colaborador (opcional se enviar via link)</label>
-            <input type="email" name="email" value="${esc(inviteDraft.email || '')}" oninput="inviteDraft.email=this.value" placeholder="Deixe em branco para preenchimento pelo usuário" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" />
+            <input type="email" name="email" value="${esc(inviteDraft.email || '')}" oninput="inviteDraft.email=this.value" placeholder="Deixe em branco para preenchimento pelo próprio usuário" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" />
           </div>
+
           <div class="field full" style="margin-bottom:14px;">
-            <label style="display:block; font-weight:700; margin-bottom:4px;">Nome do Colaborador (opcional)</label>
-            <input type="text" name="name" value="${esc(inviteDraft.name || '')}" list="invitePeopleList" placeholder="Ex: Carlos Eduardo" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" oninput="inviteDraft.name=this.value; handleInvitePersonChange(this)" onchange="inviteDraft.name=this.value; handleInvitePersonChange(this)" />
-            <datalist id="invitePeopleList">
-              ${uniquePeople.map(p => `<option value="${esc(p)}"></option>`).join('')}
-            </datalist>
+            <label style="display:block; font-weight:700; margin-bottom:4px;">Colaborador Cadastrado na Obra (Lista Suspensa)</label>
+            <select id="inviteWorkforceSelect" onchange="handleSelectWorkforcePerson(this)" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:white; font-size:13px;">
+              <option value="">— Selecione da lista de colaboradores ou digite abaixo —</option>
+              ${uniquePeople.map(p => {
+                const personObj = workforce.find(w => w && w.name === p);
+                const comp = personObj?.company ? ` (${personObj.company})` : '';
+                return `<option value="${esc(p)}" data-company="${esc(personObj?.company || '')}">${esc(p)}${esc(comp)}</option>`;
+              }).join('')}
+            </select>
+            <small style="color:var(--muted); font-size:11px; margin-top:4px; display:block;">Ao escolher um nome na lista, o nome e a empresa são preenchidos automaticamente sem sumir a lista.</small>
           </div>
+
+          <div class="field full" style="margin-bottom:14px;">
+            <label style="display:block; font-weight:700; margin-bottom:4px;">Nome do Colaborador (ou novo colaborador)</label>
+            <input type="text" id="inviteNameInput" name="name" value="${esc(inviteDraft.name || '')}" placeholder="Ex: Carlos Eduardo" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" oninput="inviteDraft.name=this.value" onchange="inviteDraft.name=this.value" />
+          </div>
+
           <div class="field full" style="margin-bottom:14px;">
             <label style="display:block; font-weight:700; margin-bottom:4px;">Empresa / Subempreiteira</label>
-            <select name="company" onchange="inviteDraft.company=this.value" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;">
+            <select id="inviteCompanySelect" name="company" onchange="inviteDraft.company=this.value" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;">
               <option value="">Selecione ou deixe em branco...</option>
               ${uniqueCompanies.map(c => `<option value="${esc(c)}" ${(inviteDraft.company||'')===c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
             </select>
           </div>
+
           <div class="field full" style="margin-bottom:14px;">
             <label style="display:block; font-weight:700; margin-bottom:4px;">Nível de Acesso Autorizado <em>*</em></label>
             <select name="role" onchange="inviteDraft.role=this.value" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;">
@@ -2524,15 +2711,43 @@ function renderUserManagementBody(pendingList, approvedList) {
               <option value="gestor" ${(inviteDraft.role||'')==='gestor' ? 'selected' : ''}>Gestor de Obra (Acesso Total)</option>
             </select>
           </div>
+
           <div class="field full" style="margin-bottom:18px;">
             <label style="display:block; font-weight:700; margin-bottom:4px;">Definir Senha (Opcional)</label>
             <input type="text" name="password" value="${esc(inviteDraft.password || '')}" oninput="inviteDraft.password=this.value" placeholder="Se preenchida, o usuário não precisará criar senha" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" />
           </div>
+
           <button type="submit" class="button button-green" style="width:100%; justify-content:center;">${icon('shield')} Gerar e Enviar Link de Convite</button>
         </form>
 
         <div id="inviteResultContainer" style="margin-top:20px; display:none;"></div>
       </div>`;
+  }
+}
+
+function handleSelectWorkforcePerson(selectEl) {
+  const name = selectEl.value;
+  const opt = selectEl.selectedOptions ? selectEl.selectedOptions[0] : null;
+  const company = opt ? (opt.dataset.company || '') : '';
+  const form = selectEl.closest('form');
+  if (form) {
+    const nameInput = form.querySelector('input[name="name"]');
+    if (nameInput) {
+      nameInput.value = name;
+      if (typeof inviteDraft !== 'undefined') inviteDraft.name = name;
+    }
+    const companySelect = form.querySelector('select[name="company"]');
+    if (companySelect && company) {
+      let optionFound = [...companySelect.options].find(o => o.value.trim().toLowerCase() === company.trim().toLowerCase());
+      if (!optionFound) {
+        const newOpt = new Option(company, company, true, true);
+        companySelect.add(newOpt);
+        companySelect.value = company;
+      } else {
+        companySelect.value = optionFound.value;
+      }
+      if (typeof inviteDraft !== 'undefined') inviteDraft.company = company;
+    }
   }
 }
 
@@ -2751,7 +2966,7 @@ async function generateInviteLink(event) {
   let match = email ? userApprovals.find(u => u.email && u.email.toLowerCase() === email) : null;
   if (!match) {
     match = {
-      id: crypto.randomUUID ? crypto.randomUUID() : 'usr_' + Date.now(),
+      id: generateUUID(),
       email: syntheticEmail,
       name: name || (email ? email.split('@')[0] : 'Colaborador Convidado'),
       company: company,
@@ -4232,12 +4447,21 @@ function renderWorkforceDirectory(companies) {
 }
 
 function renderCompanies() {
+  if (Date.now() - lastWorkforceSyncTime > 4000) {
+    lastWorkforceSyncTime = Date.now();
+    syncWorkforceFromSupabase().then(updated => {
+      if (updated && currentPage === 'empresas' && canSafelyAutoRender(['empresas'])) {
+        renderCompanies();
+      }
+    });
+  }
+
   workforce = normalizeWorkforcePeople(workforce);
   const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
   if (!workforceSummaryDate.startsWith(workforceControlMonth)) workforceSummaryDate = `${workforceControlMonth}-01`;
   const presentToday = workforce.filter(person => workforceAttendanceValue(person, workforceSummaryDate) === '1').length;
   const view = workforceView === 'directory' ? renderWorkforceDirectory(companies) : renderWorkforceControl(companies);
-  document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Controle o cadastro e a presença diária da equipe dentro do app.', 'CADASTRO CENTRAL', `<button class="button button-outline" onclick="openWorkforceModal()">${icon('download')} Importar Excel</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar modelo</button><button class="button button-green" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>`)}<section class="workforce-summary"><div><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas</small></p></div><div><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div><span>${icon('check')}</span><p><strong>${presentToday}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`))}</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source||'Cadastro manual')}</strong><span>${workforceMeta.updatedAt?`${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}`:''}</span></p></div></section><div class="workforce-tabs"><button class="${workforceView === 'control' ? 'active' : ''}" onclick="setWorkforceView('control')">${icon('chart')} Controle diário</button><button class="${workforceView === 'directory' ? 'active' : ''}" onclick="setWorkforceView('directory')">${icon('user')} Cadastro de pessoas</button></div>${view}`;
+  document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Controle o cadastro e a presença diária da equipe dentro do app.', 'CADASTRO CENTRAL', `<button class="button button-outline" onclick="syncWorkforceFromSupabase().then(() => { renderCompanies(); toast('Marcações e efetivo sincronizados com a nuvem!'); })">${icon('refresh')} Sincronizar</button><button class="button button-outline" onclick="openWorkforceModal()">${icon('download')} Importar Excel</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar modelo</button><button class="button button-green" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>`)}<section class="workforce-summary"><div><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas</small></p></div><div><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div><span>${icon('check')}</span><p><strong>${presentToday}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`))}</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source||'Cadastro manual')}</strong><span>${workforceMeta.updatedAt?`${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}`:''}</span></p></div></section><div class="workforce-tabs"><button class="${workforceView === 'control' ? 'active' : ''}" onclick="setWorkforceView('control')">${icon('chart')} Controle diário</button><button class="${workforceView === 'directory' ? 'active' : ''}" onclick="setWorkforceView('directory')">${icon('user')} Cadastro de pessoas</button></div>${view}`;
 }
 
 function setWorkforceView(view) {
@@ -4412,6 +4636,9 @@ async function handleWorkforceUpload(event) {
   const file=event.target.files?.[0]; if(!file) return;
   if(!await ensureExcelLibrary()) { event.target.value=''; return toast('Não foi possível carregar o leitor de Excel. Verifique a internet e tente novamente.',true); }
   try {
+    // Sincroniza marcações e cadastro remotos mais recentes do Supabase antes de mesclar a planilha
+    await syncWorkforceFromSupabase();
+
     const bytes=await file.arrayBuffer(); const workbook=XLSX.read(bytes,{type:'array',cellDates:true});
     let sheetName=''; let rows=[];
     for (const candidate of [...workbook.SheetNames].reverse()) {
@@ -4420,8 +4647,30 @@ async function handleWorkforceUpload(event) {
     }
     if (!sheetName) throw new Error('Nenhuma aba possui os cabeçalhos EMPRESA e NOME do controle de efetivo.');
     const imported = parseWorkforceSpreadsheet(rows);
-    workforce=imported.people;
-    Object.entries(imported.attendance).forEach(([key, dates]) => { workforceAttendance[key] = { ...(workforceAttendance[key] || {}), ...dates }; });
+
+    // Mescla pessoas da planilha com as que já existem no sistema, evitando perda de dados cadastrais
+    const existingMap = new Map();
+    workforce.forEach(p => existingMap.set(workforcePersonKey(p), p));
+    imported.people.forEach(p => {
+      const key = workforcePersonKey(p);
+      existingMap.set(key, { ...(existingMap.get(key) || {}), ...p });
+    });
+    workforce = normalizeWorkforcePeople(Array.from(existingMap.values()));
+
+    // A orientação oficial é realizar as marcações no próprio sistema.
+    // Assim como nas PTAs (onde os status e usos operacionais do sistema são protegidos),
+    // qualquer marcação já feita no sistema NUNCA deve ser sobrescrita pela planilha.
+    // A planilha serve apenas para preencher dias vazios que ainda não tinham marcação no sistema.
+    Object.entries(imported.attendance).forEach(([key, dates]) => {
+      if (!workforceAttendance[key]) workforceAttendance[key] = {};
+      Object.entries(dates).forEach(([date, marker]) => {
+        // Se este dia NÃO tem marcação no sistema, aceita a marcação da planilha
+        if (!workforceAttendance[key][date] && marker) {
+          workforceAttendance[key][date] = marker;
+        }
+      });
+    });
+
     workforceMeta={source:file.name,updatedAt:new Date().toISOString()};
     workforceControlMeta={updatedAt:new Date().toISOString()};
     const latestDate = imported.dates[imported.dates.length - 1];
@@ -4433,8 +4682,8 @@ async function handleWorkforceUpload(event) {
     workforceView='control'; renderCompanies(); openWorkforceModal();
     const shared = await persistWorkforceControlRemote();
     toast(shared
-      ? `${workforce.length} pessoas e ${imported.dates.length} dia(s) importados da aba ${sheetName} em todos os aparelhos.`
-      : `${workforce.length} pessoas e ${imported.dates.length} dia(s) importados neste aparelho. A base compartilhada está indisponível.`, !shared);
+      ? `${imported.people.length} pessoas e ${imported.dates.length} dia(s) mesclados com sucesso em todos os aparelhos.`
+      : `${imported.people.length} pessoas e ${imported.dates.length} dia(s) mesclados neste aparelho. A base compartilhada está indisponível.`, !shared);
   } catch(error) { toast(error.message||'Não foi possível ler esta planilha.',true); }
   finally { event.target.value=''; }
 }

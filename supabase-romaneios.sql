@@ -237,6 +237,8 @@ create table if not exists public.user_approvals (
   name text not null,
   role text not null default 'operador',
   company text,
+  password text,
+  photo text,
   status text not null default 'pending',
   invite_token text,
   invited_by text,
@@ -246,6 +248,9 @@ create table if not exists public.user_approvals (
   approved_by text,
   constraint user_approvals_email_not_blank check (btrim(email) <> '')
 );
+
+alter table public.user_approvals add column if not exists password text;
+alter table public.user_approvals add column if not exists photo text;
 
 create index if not exists user_approvals_email_idx on public.user_approvals (lower(email));
 create index if not exists user_approvals_status_idx on public.user_approvals (status);
