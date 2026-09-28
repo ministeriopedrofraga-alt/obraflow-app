@@ -75,7 +75,7 @@ const seedEquipments = [
 ];
 
 const equipmentCatalogRevision = '2026-09-21-aff-1';
-const equipmentOperationalRevision = '2026-09-28-planilha-25-10-em-uso-1';
+const equipmentOperationalRevision = '2026-09-28-planilha-25-10-em-uso-v2';
 const equipmentOperationalCutoff = Date.parse('2026-09-26T00:00:00.000Z');
 const verifiedAfNumbers = {
   TPTA00845:'626', TPTA02796:'686', TPTA02797:'687', TPTA02798:'683', TPTA02799:'685',
