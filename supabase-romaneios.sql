@@ -393,3 +393,42 @@ create policy "obraflow_delete_radio_movements" on public.radio_movements for de
 
 comment on table public.radio_assets is 'Cadastro dos rádios comunicadores controlados pelo almoxarifado.';
 comment on table public.radio_movements is 'Histórico de entregas assinadas e devoluções de rádios.';
+
+-- Permissões para controle de efetivo e metadados globais (sincronização entre computadores)
+create table if not exists public.app_metadata (
+  key text primary key,
+  value jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.app_metadata enable row level security;
+grant select, insert, update, delete on table public.app_metadata to anon, authenticated;
+drop policy if exists "obraflow_read_app_metadata" on public.app_metadata;
+create policy "obraflow_read_app_metadata" on public.app_metadata for select to anon, authenticated using (true);
+drop policy if exists "obraflow_insert_app_metadata" on public.app_metadata;
+create policy "obraflow_insert_app_metadata" on public.app_metadata for insert to anon, authenticated with check (true);
+drop policy if exists "obraflow_update_app_metadata" on public.app_metadata;
+create policy "obraflow_update_app_metadata" on public.app_metadata for update to anon, authenticated using (true) with check (true);
+drop policy if exists "obraflow_delete_app_metadata" on public.app_metadata;
+create policy "obraflow_delete_app_metadata" on public.app_metadata for delete to anon, authenticated using (true);
+
+create table if not exists public.workforce (
+  id text primary key,
+  company text,
+  name text,
+  role text,
+  status text,
+  phone text,
+  accessRole text,
+  pin text,
+  updated_at timestamptz not null default now()
+);
+alter table public.workforce enable row level security;
+grant select, insert, update, delete on table public.workforce to anon, authenticated;
+drop policy if exists "obraflow_read_workforce" on public.workforce;
+create policy "obraflow_read_workforce" on public.workforce for select to anon, authenticated using (true);
+drop policy if exists "obraflow_insert_workforce" on public.workforce;
+create policy "obraflow_insert_workforce" on public.workforce for insert to anon, authenticated with check (true);
+drop policy if exists "obraflow_update_workforce" on public.workforce;
+create policy "obraflow_update_workforce" on public.workforce for update to anon, authenticated using (true) with check (true);
+drop policy if exists "obraflow_delete_workforce" on public.workforce;
+create policy "obraflow_delete_workforce" on public.workforce for delete to anon, authenticated using (true);
