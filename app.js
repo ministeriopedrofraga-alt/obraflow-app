@@ -1091,13 +1091,19 @@ function remoteEquipmentRecord(record) {
   ));
 }
 
-function mergeEquipmentSnapshots(localRecord, remoteRecord, localWins = false) {
+function mergeEquipmentSnapshots(localRecord, remoteRecord, localWins = false, localCatalogWins = false) {
   const remoteDefined = remoteEquipmentRecord(remoteRecord);
   if (!localRecord) return sanitizeEquipment(remoteDefined);
   if (!remoteRecord) return sanitizeEquipment(localRecord);
   const chosen = localWins
     ? { ...sanitizeEquipment(remoteDefined), ...localRecord }
     : { ...localRecord, ...remoteDefined };
+  if (localCatalogWins && !localWins) {
+    equipmentCatalogFields.forEach(field => {
+      if (Object.prototype.hasOwnProperty.call(localRecord, field)) chosen[field] = localRecord[field];
+    });
+    chosen.updatedAt = localRecord.updatedAt;
+  }
   return sanitizeEquipment(chosen);
 }
 
@@ -1139,14 +1145,25 @@ function sanitizeEquipment(item) {
       // able to remove an old contractor instead of restoring the seed value.
       contractor: hasContractor ? contractor : (seed.contractor || '')
     };
-    return { ...merged, usage: normalizeEquipmentUsage(merged.usage) };
+    return normalizeEquipmentOperationalState(merged);
   }
   const sanitized = {
     ...item,
     afNumber: af,
     contractor: contractor
   };
-  return { ...sanitized, usage: normalizeEquipmentUsage(sanitized.usage) };
+  return normalizeEquipmentOperationalState(sanitized);
+}
+
+function normalizeEquipmentOperationalState(equipment) {
+  const usage = normalizeEquipmentUsage(equipment.usage);
+  return {
+    ...equipment,
+    // Um uso ativo e a evidencia mais forte. Evita mostrar "Disponivel"
+    // quando um registro antigo ficou com status e usage inconsistentes.
+    status: usage ? 'in-use' : (equipment.status || 'available'),
+    usage
+  };
 }
 
 function normalizeEquipmentUsage(usage) {
@@ -1703,7 +1720,7 @@ function pendingEquipmentIdSet() {
 }
 
 let activeDataSync = null;
-function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
+function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOperationalState = false } = {}) {
   if (activeDataSync) return activeDataSync;
   activeDataSync = (async () => {
     const revisionAtStart = localDataRevision;
@@ -1759,15 +1776,23 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
       equipmentKeys = new Set([...localEquipmentMap.keys()]);
     }
     const localRecordsToRecover = [];
+    const localCatalogToRecover = [];
     equipments = Array.from(equipmentKeys).map(key => {
       const localEquipment = localEquipmentMap.get(key);
       const remoteEquipment = remoteEquipmentMap.get(key);
       const hasPendingEvent = localEquipment && pendingEquipmentIds.has(String(localEquipment.id));
       const localIsNewer = localEquipment
         && equipmentSyncTimestamp(localEquipment) > equipmentSyncTimestamp(remoteEquipment);
-      const localWins = hasPendingEvent || localIsNewer;
-      const merged = mergeEquipmentSnapshots(localEquipment, remoteEquipment, localWins);
-      if (localWins && merged) localRecordsToRecover.push(merged);
+      // Status, uso e horimetro nunca podem ser rebaixados por um cache antigo.
+      // Somente uma operacao explicitamente enfileirada neste aparelho vence a base.
+      const localWins = hasPendingEvent;
+      const localCatalogWins = localIsNewer && !!remoteEquipment && !hasPendingEvent;
+      const merged = mergeEquipmentSnapshots(localEquipment, remoteEquipment, localWins, localCatalogWins);
+      if ((hasPendingEvent || (localIsNewer && !remoteEquipment && !preferRemoteOperationalState)) && merged) {
+        localRecordsToRecover.push(merged);
+      } else if (localCatalogWins) {
+        localCatalogToRecover.push({ ...localEquipment, id: remoteEquipment.id, code: remoteEquipment.code });
+      }
       return merged;
     }).filter(Boolean);
 
@@ -1777,6 +1802,9 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true } = {}) {
     // neste aparelho por falhas de sincronização em versões anteriores.
     if (pushAfter && localRecordsToRecover.length) {
       await persistEquipmentRecords(localRecordsToRecover);
+    }
+    if (pushAfter && localCatalogToRecover.length) {
+      await persistEquipmentCatalog(localCatalogToRecover);
     }
     const saveResult = pushAfter && pendingFieldEvents.length > 0
       ? await save()
@@ -4057,17 +4085,21 @@ function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
     const people = workforce.filter(person => person?.company === company);
     const dailyCount = people.filter(person => workforceAttendanceValue(person, date) === '1').length;
     const geralCount = people.length;
-    totalDaily += dailyCount;
-    totalGeral += geralCount;
+    return { company, dailyCount, geralCount };
+  }).filter(row => row.dailyCount > 0);
 
-    return `
+  rows.forEach(row => {
+    totalDaily += row.dailyCount;
+    totalGeral += row.geralCount;
+  });
+
+  const rowsHTML = rows.map(row => `
       <tr>
-        <td class="quadro-col-company">${esc(company)}</td>
-        <td class="quadro-col-daily">${dailyCount}</td>
-        <td class="quadro-col-geral">${geralCount}</td>
+        <td class="quadro-col-company">${esc(row.company)}</td>
+        <td class="quadro-col-daily">${row.dailyCount}</td>
+        <td class="quadro-col-geral">${row.geralCount}</td>
       </tr>
-    `;
-  }).join('');
+    `).join('');
 
   return `
     <div class="quadro-efetivo-card">
@@ -4081,7 +4113,7 @@ function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
             </tr>
           </thead>
           <tbody>
-            ${rows || '<tr><td colspan="3" style="text-align:center;">Nenhuma empresa cadastrada</td></tr>'}
+            ${rowsHTML || '<tr><td colspan="3" style="text-align:center;">Nenhum efetivo registrado hoje</td></tr>'}
           </tbody>
           <tfoot>
             <tr>
@@ -4850,7 +4882,7 @@ function openCheckoutModal(id) {
   const start = nowLocal(); const end = new Date(Date.now()+8*3600000); end.setMinutes(end.getMinutes()-end.getTimezoneOffset());
   modal(`<form id="checkoutForm" onsubmit="submitCheckout(event,'${id}')">${modalHead('Inspeção e liberação de uso','Formulário FV-MAQ-ST obrigatório antes da retirada')}<div class="modal-body">${inspectionFormHTML(eq,'retirada')}<div class="section-title"><span>${icon('location')}</span><div><h3>Planejamento da utilização</h3><small>Atividade, local e previsão de devolução</small></div></div><div class="form-grid"><div class="field"><label>Telefone do responsável</label><input name="phone" placeholder="(85) 99999-9999"></div><div class="field"><label>Atividade a executar <em>*</em></label><input name="activity" required placeholder="Ex.: Instalação de dutos no teto"></div><div class="field"><label>Data Hall — DH <em>*</em></label><select name="dataHall" required><option value="">Selecione...</option>${Array.from({length:10},(_,i)=>`<option>Data Hall ${String(i+1).padStart(2,'0')}</option>`).join('')}<option>Área externa</option><option>Casa de máquinas</option><option>Almoxarifado</option></select></div><div class="field"><label>Local específico <em>*</em></label><input name="location" required placeholder="Ex.: Corredor B / Sala elétrica"></div><div class="field"><label>Início previsto <em>*</em></label><input type="datetime-local" name="startedAt" required value="${start}"></div><div class="field"><label>Devolução prevista <em>*</em></label><input type="datetime-local" name="expectedAt" required value="${end.toISOString().slice(0,16)}"></div></div><label class="terms physical-term"><input type="checkbox" name="physicalCopy" required><span>Confirmo que a via física do formulário PEMT foi preenchida e será arquivada na pasta do colaborador.</span></label><label class="terms"><input type="checkbox" name="terms" required><span>Declaro que realizei pessoalmente esta inspeção, sou autorizado a operar o equipamento e me responsabilizo pelas informações registradas.</span></label></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} Concluir e retirar</button></div></form>`, 'modal-inspection');
 }
-function submitCheckout(event, id) {
+async function submitCheckout(event, id) {
   event.preventDefault(); const form = event.target; const data = Object.fromEntries(new FormData(form)); const eq = equipments.find(e=>e.id===id); const inspection = inspectionFromData(data,'retirada');
   if (!data.operatorSign) {
     toast('Por favor, faça a sua rubrica no campo indicado antes de salvar.', true);
@@ -4862,10 +4894,11 @@ function submitCheckout(event, id) {
   eq.updatedAt = new Date().toISOString();
   if (new Date(data.expectedAt) <= new Date(data.startedAt)) return toast('A devolução deve ser posterior ao início.', true);
   if (hasFailure) {
-    eq.status='maintenance'; eq.usage=null; const movement={id:Date.now(),equipmentId:id,action:'issue',person:data.responsible,company:data.company,place:data.dataHall,date:data.inspectionAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection,inspections:[inspection]}; history.unshift(movement); save(id, movement.id); closeModal(); render(); return toast('Item reprovado. Formulário salvo e equipamento bloqueado.', true);
+    eq.status='maintenance'; eq.usage=null; const movement={id:Date.now(),equipmentId:id,action:'issue',person:data.responsible,company:data.company,place:data.dataHall,date:data.inspectionAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection,inspections:[inspection]}; history.unshift(movement); const syncPromise=save(id, movement.id); closeModal(); render(); const result=await syncPromise; return toast(result.remote?'Item reprovado e sincronizado. Equipamento bloqueado.':'Item reprovado e salvo neste aparelho, mas a sincronização está pendente.', true);
   }
   eq.status='in-use'; eq.usage={ company:data.company, responsible:data.responsible, phone:data.phone, activity:data.activity, location:data.location, dataHall:data.dataHall, startedAt:data.startedAt, expectedAt:data.expectedAt };
-  const movement={id:Date.now(),equipmentId:id,action:'withdraw',person:data.responsible,company:data.company,place:data.dataHall,date:data.startedAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection,inspections:[inspection]}; history.unshift(movement); save(id, movement.id); closeModal(); render(); toast(`${eq.code} liberado. Formulário de retirada salvo.`);
+  const movement={id:Date.now(),equipmentId:id,action:'withdraw',person:data.responsible,company:data.company,place:data.dataHall,date:data.startedAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection,inspections:[inspection]}; history.unshift(movement); const syncPromise=save(id, movement.id); closeModal(); render(); const result=await syncPromise;
+  toast(result.remote?`${eq.code} liberado e sincronizado.`:`${eq.code} foi liberado neste aparelho, mas a sincronização está pendente. O QR em outros aparelhos ainda pode mostrar o estado anterior.`,!result.remote);
 }
 
 function openReturnModal(id) {
@@ -4908,7 +4941,8 @@ function openInspectionRecord(historyId) {
 
 async function openQRModal(id) {
   const eq=equipments.find(e=>e.id===id); if(!eq) return;
-  const url=`${location.origin}${location.pathname}#scan/${eq.id}`;
+  // O codigo patrimonial permanece estavel mesmo se uma importacao recriar o registro.
+  const url=`${location.origin}${location.pathname}#scan/${encodeURIComponent(eq.code)}`;
   const contractor = eq.contractor || eq.brand || 'Tecnogera';
   const afVal = eq.afNumber || '—';
   modal(`${modalHead('QR Code do equipamento','Imprima e fixe esta etiqueta em local visível')}<div class="modal-body qr-layout"><img src="assets/heating-cooling-logo.jpg" class="qr-brand-logo" alt="Heating Cooling"><div class="qr-box" id="qrTarget"></div><h2>${esc(eq.name)}</h2><span class="qr-code-label">${esc(eq.code)}</span><p style="margin:5px 0 2px;font-weight:800;color:#206b49;font-size:13px;">Nº AF (Afonso França): ${esc(afVal)}</p><p style="margin:2px 0 2px;font-weight:700;color:#14201b;font-size:12px;">Empreiteiro: ${esc(contractor)}</p><p style="margin:2px 0;color:#67736d;font-size:11px;">${esc(eq.brand)} ${esc(eq.model)} · Série ${esc(eq.serial)}</p><p style="margin-top:6px;color:#67736d;font-size:10px;">Obra DataCenter Omnia · Escaneie para checklist / uso</p></div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir etiqueta</button></div>`, 'modal-small');
@@ -4934,7 +4968,7 @@ async function printAllQRCodes() {
   };
   modal(`${modalHead('Etiquetas de todos os equipamentos',`${equipments.length} QR Codes · ${pages.length} página(s) para impressão`)}<div class="modal-body qr-pages">${pages.map((page,index)=>`<section class="qr-sheet qr-print-page" data-page="${index+1}">${page.map(label).join('')}</section>`).join('')}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir todas (${equipments.length})</button></div>`, 'modal-large');
   document.querySelector('.modal-backdrop').classList.add('print-area');
-  equipments.forEach(eq => renderQRCode(document.getElementById(`qr-${eq.id}`),`${location.origin}${location.pathname}#scan/${eq.id}`,135));
+  equipments.forEach(eq => renderQRCode(document.getElementById(`qr-${eq.id}`),`${location.origin}${location.pathname}#scan/${encodeURIComponent(eq.code)}`,135));
 }
 
 async function openScanModal() {
@@ -5051,40 +5085,62 @@ function findEquipment(event) {
 }
 
 let latestScanRequest = 0;
+function normalizeScannedEquipmentIdentifier(value) {
+  let target = String(value || '').trim();
+  try { target = decodeURIComponent(target); } catch (error) {}
+  const scanMarker = target.toLowerCase().lastIndexOf('#scan/');
+  if (scanMarker >= 0) target = target.slice(scanMarker + 6);
+  else if (target.includes('/')) target = target.split('/').filter(Boolean).pop() || target;
+  target = target.split(/[?#]/)[0].trim();
+  // Tolera espaços, traços e pontuação que alguns leitores inserem no código.
+  return target.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+function findEquipmentByScannedIdentifier(target) {
+  return equipments.find(e => [e.id, e.code, e.afNumber, e.serial]
+    .some(value => value && normalizeScannedEquipmentIdentifier(value) === target));
+}
+
 async function openScannedEquipment(text) {
   if (!text) return;
   const scanRequest = ++latestScanRequest;
-  let target = String(text).trim();
-  if (target.includes('#scan/')) {
-    target = target.split('#scan/')[1];
-  } else if (target.includes('/')) {
-    target = target.split('/').pop();
-  }
-  target = target.split(/[?#]/)[0].toLowerCase().trim();
+  const target = normalizeScannedEquipmentIdentifier(text);
+  if (!target) return toast('O QR Code lido não possui um código de equipamento válido.', true);
+
+  modal(`${modalHead('Consultando equipamento','Validando o QR Code na base compartilhada')}<div class="modal-body"><div class="notice">${icon('clock')} Aguarde um instante. Estamos carregando o status mais recente do equipamento.</div></div>`, 'modal-small');
 
   // The actions depend on the latest shared status, not stale phone data.
   const [syncResult] = await Promise.all([
-    syncFromSupabase({ renderAfter: false, pushAfter: hasPendingRemoteSave }),
+    syncFromSupabase({ renderAfter: false, pushAfter: hasPendingRemoteSave, preferRemoteOperationalState: true }),
     workforceReadyPromise
   ]);
   if (scanRequest !== latestScanRequest) return;
 
-  const eq = equipments.find(e => 
-    (e.id && e.id.toLowerCase() === target) || 
-    (e.code && e.code.toLowerCase() === target) ||
-    (e.afNumber && e.afNumber.toLowerCase() === target) ||
-    (e.serial && e.serial.toLowerCase() === target)
-  );
+  const eq = findEquipmentByScannedIdentifier(target);
 
-  if (!eq) return toast(`Equipamento não encontrado para o código "${text}".`, true);
+  if (!eq) {
+    modal(`${modalHead('Equipamento não encontrado','O QR Code foi lido, mas não corresponde à base atual')}<div class="modal-body"><div class="notice">${icon('alert')} Código lido: <strong>${esc(String(text))}</strong></div><p>Confira se esta etiqueta pertence à obra atual ou tente localizar pelo patrimônio, Nº AF ou número de série.</p><form class="scan-input" onsubmit="findEquipment(event)"><input id="scanCode" required autocomplete="off" placeholder="Ex.: TPTA00674, 686..."><button class="button button-green">Localizar</button></form></div>`, 'modal-small');
+    return;
+  }
   openPublicEquipmentModal(eq.id);
   if (!syncResult?.remote) toast('Ficha carregada da c\u00f3pia deste aparelho. Verifique a internet antes de registrar a opera\u00e7\u00e3o.', true);
 }
 function openPublicEquipmentModal(id) {
-  const eq=equipments.find(item=>item.id===id); if(!eq)return; const latest=history.find(item=>item.equipmentId===id&&item.inspection); const usage=eq.usage;
+  const eq=equipments.find(item=>item.id===id); if(!eq)return;
+  const latest=history.find(item=>item.equipmentId===id&&item.inspection);
+  const usage=eq.usage;
+  const operationalStatus=usage?'in-use':eq.status;
   const contractor = eq.contractor || eq.brand || 'Tecnogera';
   const afVal = eq.afNumber || '—';
-  modal(`${modalHead('Informações do equipamento','Acesso público pelo QR Code')}<div class="modal-body"><section class="public-equipment-head"><span>${equipmentIcon(eq)}</span><div><small>${esc(eq.code)} · <strong style="color:#206b49;">Nº AF: ${esc(afVal)}</strong></small><h2>${esc(eq.name)}</h2><p>${esc(eq.model)} · Série ${esc(eq.serial)} · Empreiteiro: <strong>${esc(contractor)}</strong></p></div>${statusBadge(eq.status)}</section><div class="public-specs"><span><small>Nº AF (Afonso França)</small><strong style="color:#206b49;">${esc(afVal)}</strong></span><span><small>Empreiteiro</small><strong>${esc(contractor)}</strong></span><span><small>Horímetro</small><strong>${esc(eq.hourmeter??'—')} h</strong></span><span><small>Bateria</small><strong>${esc(eq.battery||'—')}</strong></span></div>${usage?`<section class="public-use-card"><h3>Utilização atual</h3><div class="public-use-grid"><span><small>Responsável</small><strong>${esc(usage.responsible)}</strong><em>${esc(usage.company)}</em></span><span><small>Atividade</small><strong>${esc(usage.activity||'—')}</strong></span><span><small>DH e local</small><strong>${esc(usage.dataHall)} · ${esc(usage.location)}</strong></span><span><small>Previsão de devolução</small><strong>${fullDate(usage.expectedAt)}</strong></span></div></section>`:`<div class="public-availability">${icon(eq.status==='maintenance'?'tool':'check')}<div><strong>${eq.status==='maintenance'?'Equipamento bloqueado':'Equipamento disponível'}</strong><small>${eq.status==='maintenance'?'Aguardando manutenção e nova liberação.':'Local atual: Pátio / Base'}</small></div></div>`}${latest?`<button class="public-checklist-link" onclick="openInspectionRecord('${latest.id}')">${icon('file')}<span><strong>Último formulário de verificação</strong><small>${fullDate(latest.inspection.inspectedAt)} · ${latest.inspection.mode==='devolucao'?'Devolução':'Retirada'}</small></span>${icon('chevron')}</button>`:''}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button>${eq.status==='available'?`<button class="button button-green" onclick="openCheckoutModal('${id}')">${icon('check')} Retirar com checklist</button>`:''}${eq.status==='in-use'?`<button class="button button-outline" onclick="openDailyInspectionModal('${id}')">${icon('plus')} Inspeção Diária (Novo Dia)</button><button class="button button-green" onclick="openReturnModal('${id}')">${icon('return')} Registrar devolução</button>`:''}</div>`,'modal-large');
+  const statusNotice=operationalStatus==='maintenance'
+    ? { icon:'tool', title:'Equipamento bloqueado', detail:'Aguardando manutenção e nova liberação.' }
+    : operationalStatus==='in-use'
+      ? { icon:'clock', title:'Equipamento em uso', detail:'Os dados da utilização ainda não estão disponíveis neste aparelho.' }
+      : { icon:'check', title:'Equipamento disponível', detail:'Local atual: Pátio / Base' };
+  const usageSection=usage
+    ? `<section class="public-use-card"><h3>Utilização atual</h3><div class="public-use-grid"><span><small>Responsável</small><strong>${esc(usage.responsible)}</strong><em>${esc(usage.company)}</em></span><span><small>Atividade</small><strong>${esc(usage.activity||'—')}</strong></span><span><small>DH e local</small><strong>${esc(usage.dataHall)} · ${esc(usage.location)}</strong></span><span><small>Previsão de devolução</small><strong>${fullDate(usage.expectedAt)}</strong></span></div></section>`
+    : `<div class="public-availability">${icon(statusNotice.icon)}<div><strong>${statusNotice.title}</strong><small>${statusNotice.detail}</small></div></div>`;
+  modal(`${modalHead('Informações do equipamento','Acesso público pelo QR Code')}<div class="modal-body"><section class="public-equipment-head"><span>${equipmentIcon(eq)}</span><div><small>${esc(eq.code)} · <strong style="color:#206b49;">Nº AF: ${esc(afVal)}</strong></small><h2>${esc(eq.name)}</h2><p>${esc(eq.model)} · Série ${esc(eq.serial)} · Empreiteiro: <strong>${esc(contractor)}</strong></p></div>${statusBadge(operationalStatus)}</section><div class="public-specs"><span><small>Nº AF (Afonso França)</small><strong style="color:#206b49;">${esc(afVal)}</strong></span><span><small>Empreiteiro</small><strong>${esc(contractor)}</strong></span><span><small>Horímetro</small><strong>${esc(eq.hourmeter??'—')} h</strong></span><span><small>Bateria</small><strong>${esc(eq.battery||'—')}</strong></span></div>${usageSection}${latest?`<button class="public-checklist-link" onclick="openInspectionRecord('${latest.id}')">${icon('file')}<span><strong>Último formulário de verificação</strong><small>${fullDate(latest.inspection.inspectedAt)} · ${latest.inspection.mode==='devolucao'?'Devolução':'Retirada'}</small></span>${icon('chevron')}</button>`:''}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button>${operationalStatus==='available'?`<button class="button button-green" onclick="openCheckoutModal('${id}')">${icon('check')} Retirar com checklist</button>`:''}${operationalStatus==='in-use'&&usage?`<button class="button button-outline" onclick="openDailyInspectionModal('${id}')">${icon('plus')} Inspeção Diária (Novo Dia)</button><button class="button button-green" onclick="openReturnModal('${id}')">${icon('return')} Registrar devolução</button>`:''}</div>`,'modal-large');
 }
 
 function exportCSV() {
