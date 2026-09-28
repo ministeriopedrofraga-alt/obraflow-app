@@ -2022,9 +2022,12 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOp
       const hasPendingEvent = localEquipment && pendingEquipmentIds.has(String(localEquipment.id));
       const localIsNewer = localEquipment
         && equipmentSyncTimestamp(localEquipment) > equipmentSyncTimestamp(remoteEquipment);
+      const localHasUsageRemoteDoesNot = localEquipment?.usage
+        && (!remoteEquipment || !remoteEquipment.usage)
+        && equipmentSyncTimestamp(localEquipment) >= equipmentSyncTimestamp(remoteEquipment);
       // A fotografia mais nova vence por inteiro. Isso impede que uma importação
       // recente seja rebaixada pelo status operacional antigo da base compartilhada.
-      const localWins = hasPendingEvent || (localIsNewer && !preferRemoteOperationalState);
+      const localWins = hasPendingEvent || localHasUsageRemoteDoesNot || (localIsNewer && !preferRemoteOperationalState);
       const localCatalogWins = localIsNewer && !!remoteEquipment && !localWins;
       const merged = mergeEquipmentSnapshots(localEquipment, remoteEquipment, localWins, localCatalogWins);
       if (localWins && merged) {
