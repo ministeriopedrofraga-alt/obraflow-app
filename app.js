@@ -75,7 +75,7 @@ const seedEquipments = [
 ];
 
 const equipmentCatalogRevision = '2026-09-21-aff-1';
-const equipmentOperationalRevision = '2026-09-28-planilha-25-10-em-uso-v2';
+const equipmentOperationalRevision = '2026-09-28-planilha-25-10-em-uso-v3';
 const equipmentOperationalCutoff = Date.parse('2026-09-26T00:00:00.000Z');
 const verifiedAfNumbers = {
   TPTA00845:'626', TPTA02796:'686', TPTA02797:'687', TPTA02798:'683', TPTA02799:'685',
@@ -1389,9 +1389,12 @@ function migrateVerifiedEquipmentOperationalStates() {
     const desiredStatus = verifiedEquipmentOperationalStates[code];
     if (!desiredStatus) return equipment;
 
-    // Checkouts, devoluções e inspeções posteriores à planilha continuam soberanos.
-    const equipmentTime = equipmentSyncTimestamp(equipment);
-    if (equipmentTime > equipmentOperationalCutoff) return equipment;
+    // Checkouts, devoluções e inspeções manuais posteriores à planilha continuam soberanos.
+    const hasManualEventAfterCutoff = history.some(h =>
+      String(h.equipmentCode || h.equipmentId || '').toUpperCase() === code &&
+      recordTimestamp(h) > equipmentOperationalCutoff
+    );
+    if (hasManualEventAfterCutoff) return equipment;
 
     const usage = desiredStatus === 'in-use'
       ? (normalizeEquipmentUsage(equipment.usage) || {
