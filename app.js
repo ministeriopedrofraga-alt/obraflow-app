@@ -64,14 +64,34 @@ const seedEquipments = [
   { id:'tpta02162', code:'TPTA02162', afNumber:'617', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501S010034', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:111.5, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
   { id:'tpta00984', code:'TPTA00984', afNumber:'659', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501N010148', productCode:'931-000236', invoice:'2571', emissionDate:'2026-08-25', hourmeter:131, battery:'Lítio', contractor:'A.LA', status:'available', inspection:'', usage:null },
   // 12M
-  { id:'tpta01095', code:'TPTA01095', afNumber:'949', name:'Plataforma Tesoura 12m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 12m 4x2 Li', serial:'0775500500N010105', productCode:'931-000238', invoice:'2623', emissionDate:'2026-09-10', hourmeter:112.4, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null }
+  { id:'tpta01095', code:'TPTA01095', afNumber:'949', name:'Plataforma Tesoura 12m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 12m 4x2 Li', serial:'0775500500N010105', productCode:'931-000238', invoice:'2623', emissionDate:'2026-09-10', hourmeter:112.4, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
+  // 14M
+  { id:'tpta01122', code:'TPTA01122', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', serial:'', productCode:'', invoice:'2669', emissionDate:'2026-09-19', hourmeter:0, battery:'Lítio', contractor:'SIP', status:'maintenance', inspection:'', usage:null },
+  { id:'tpta01667', code:'TPTA01667', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', serial:'', productCode:'', invoice:'2669', emissionDate:'2026-09-19', hourmeter:0, battery:'Lítio', contractor:'SIP', status:'maintenance', inspection:'', usage:null },
+  { id:'tpta02233', code:'TPTA02233', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', serial:'', productCode:'', invoice:'2669', emissionDate:'2026-09-19', hourmeter:0, battery:'Lítio', contractor:'', status:'maintenance', inspection:'', usage:null },
+  { id:'tpta02236', code:'TPTA02236', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', serial:'', productCode:'', invoice:'2669', emissionDate:'2026-09-19', hourmeter:0, battery:'Lítio', contractor:'', status:'maintenance', inspection:'', usage:null },
+  { id:'tpta02240', code:'TPTA02240', afNumber:'968', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', serial:'', productCode:'', invoice:'2669', emissionDate:'2026-09-19', hourmeter:0, battery:'Lítio', contractor:'A.L.A', status:'in-use', inspection:'', usage:{ responsible:'A.L.A', company:'A.L.A', phone:'', dataHall:'—', location:'—', activity:'Em uso via planilha', expectedAt:'', startedAt:'2026-09-25T16:36:06.000Z' } },
+  { id:'tpta02664', code:'TPTA02664', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', serial:'', productCode:'', invoice:'2669', emissionDate:'2026-09-19', hourmeter:0, battery:'Lítio', contractor:'', status:'maintenance', inspection:'', usage:null }
 ];
 
 const equipmentCatalogRevision = '2026-09-21-aff-1';
+const equipmentOperationalRevision = '2026-09-28-planilha-25-10-em-uso-1';
+const equipmentOperationalCutoff = Date.parse('2026-09-26T00:00:00.000Z');
 const verifiedAfNumbers = {
   TPTA00845:'626', TPTA02796:'686', TPTA02797:'687', TPTA02798:'683', TPTA02799:'685',
-  TPTA00389:'955', TPTA00664:'953', TPTA00674:'948', TPTA00823:'954', TPTA00254:'615',
-  TPTA00984:'659', TPTA01868:'618', TPTA02019:'947', TPTA02162:'617', TPTA01095:'949'
+  TPTA00389:'955', TPTA00408:'969', TPTA00664:'953', TPTA00674:'948', TPTA00823:'954', TPTA00254:'615',
+  TPTA00984:'659', TPTA01868:'618', TPTA02019:'947', TPTA02162:'617', TPTA01095:'949', TPTA02240:'968'
+};
+
+// Retrato confirmado na planilha "controle-ptas-omnia-2026-09-25 atualizado.xlsx".
+// A revisão é aplicada uma única vez e nunca substitui uma movimentação posterior.
+const verifiedEquipmentOperationalStates = {
+  TPTA00845:'in-use', TPTA01333:'maintenance', TPTA01604:'maintenance', TPTA01605:'maintenance',
+  TPTA02796:'in-use', TPTA02797:'in-use', TPTA02798:'in-use', TPTA02799:'available',
+  TPTA00389:'available', TPTA00408:'available', TPTA00664:'available', TPTA00674:'available', TPTA00823:'available',
+  TPTA00254:'in-use', TPTA00984:'in-use', TPTA01868:'in-use', TPTA02019:'in-use', TPTA02162:'in-use',
+  TPTA01095:'available', TPTA01122:'maintenance', TPTA01667:'maintenance', TPTA02233:'maintenance',
+  TPTA02236:'maintenance', TPTA02240:'in-use', TPTA02664:'maintenance'
 };
 
 const seedHistory = [
@@ -1188,6 +1208,49 @@ function migrateVerifiedEquipmentCatalog() {
   return changed;
 }
 
+function migrateVerifiedEquipmentOperationalStates() {
+  if (localStorage.getItem('obraflow_equipment_operational_revision') === equipmentOperationalRevision) return false;
+
+  let changed = false;
+  const knownCodes = new Set(equipments.map(equipment => String(equipment.code || '').toUpperCase()));
+  seedEquipments.forEach(seed => {
+    const code = String(seed.code || '').toUpperCase();
+    if (!verifiedEquipmentOperationalStates[code] || knownCodes.has(code)) return;
+    equipments.push(sanitizeEquipment(seed));
+    knownCodes.add(code);
+    changed = true;
+  });
+
+  const migratedAt = new Date().toISOString();
+  equipments = equipments.map(equipment => {
+    const code = String(equipment.code || '').toUpperCase();
+    const desiredStatus = verifiedEquipmentOperationalStates[code];
+    if (!desiredStatus) return equipment;
+
+    // Checkouts, devoluções e inspeções posteriores à planilha continuam soberanos.
+    const equipmentTime = equipmentSyncTimestamp(equipment);
+    if (equipmentTime > equipmentOperationalCutoff) return equipment;
+
+    const usage = desiredStatus === 'in-use'
+      ? (normalizeEquipmentUsage(equipment.usage) || {
+          responsible: equipment.contractor || 'Em uso (Planilha)',
+          company: equipment.contractor || '',
+          phone: '',
+          dataHall: '—',
+          location: '—',
+          activity: 'Em uso via planilha',
+          expectedAt: '',
+          startedAt: '2026-09-25T16:36:06.000Z'
+        })
+      : null;
+    changed = true;
+    return { ...equipment, status: desiredStatus, usage, updatedAt: migratedAt };
+  });
+
+  localStorage.setItem('obraflow_equipment_operational_revision', equipmentOperationalRevision);
+  return changed;
+}
+
 function loadLocalStorageBackup() {
   try {
     const localEq = localStorage.getItem('obraflow_equipments');
@@ -1197,6 +1260,16 @@ function loadLocalStorageBackup() {
         equipments = parsed.map(sanitizeEquipment);
       }
     }
+    // Garante que equipamentos novos do seed (ex: plataformas de 14m)
+    // sejam preservados mesmo se o backup local do celular for de uma versão anterior.
+    const knownCodes = new Set(equipments.map(e => String(e.code || e.id || '').toUpperCase()));
+    seedEquipments.forEach(seed => {
+      const codeUpper = String(seed.code || seed.id || '').toUpperCase();
+      if (!knownCodes.has(codeUpper)) {
+        equipments.push(sanitizeEquipment(seed));
+        knownCodes.add(codeUpper);
+      }
+    });
     const localHs = localStorage.getItem('obraflow_history');
     if (localHs) {
       const parsed = JSON.parse(localHs);
@@ -1244,7 +1317,9 @@ function loadLocalStorageBackup() {
   } catch (e) {
     console.warn('Erro ao carregar do localStorage:', e);
   }
-  if (migrateVerifiedEquipmentCatalog()) saveLocalBackup();
+  const catalogChanged = migrateVerifiedEquipmentCatalog();
+  const operationalStateChanged = migrateVerifiedEquipmentOperationalStates();
+  if (catalogChanged || operationalStateChanged) saveLocalBackup();
 }
 
 function saveLocalBackup() {
@@ -1755,6 +1830,7 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOp
       console.warn('Não foi possível recuperar o cadastro local de equipamentos na base compartilhada:', error);
     }
 
+    const seedEquipmentMap = new Map(seedEquipments.map(item => [String(item.code || item.id || '').toUpperCase(), sanitizeEquipment(item)]));
     const remoteEquipmentMap = new Map((remoteEquipments || []).map(item => [
       String(item.code || item.id || '').toUpperCase(),
       item
@@ -1771,24 +1847,25 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOp
       .map(localEquipment => String(localEquipment.code || localEquipment.id || '').toUpperCase()));
     let equipmentKeys;
     if (Array.isArray(remoteEquipments)) {
-      equipmentKeys = new Set([...remoteEquipmentMap.keys(), ...recoverableLocalKeys]);
+      equipmentKeys = new Set([...seedEquipmentMap.keys(), ...remoteEquipmentMap.keys(), ...recoverableLocalKeys]);
     } else {
-      equipmentKeys = new Set([...localEquipmentMap.keys()]);
+      equipmentKeys = new Set([...seedEquipmentMap.keys(), ...localEquipmentMap.keys()]);
     }
     const localRecordsToRecover = [];
     const localCatalogToRecover = [];
     equipments = Array.from(equipmentKeys).map(key => {
-      const localEquipment = localEquipmentMap.get(key);
+      const seedEquipment = seedEquipmentMap.get(key);
+      const localEquipment = localEquipmentMap.get(key) || seedEquipment;
       const remoteEquipment = remoteEquipmentMap.get(key);
       const hasPendingEvent = localEquipment && pendingEquipmentIds.has(String(localEquipment.id));
       const localIsNewer = localEquipment
         && equipmentSyncTimestamp(localEquipment) > equipmentSyncTimestamp(remoteEquipment);
-      // Status, uso e horimetro nunca podem ser rebaixados por um cache antigo.
-      // Somente uma operacao explicitamente enfileirada neste aparelho vence a base.
-      const localWins = hasPendingEvent;
-      const localCatalogWins = localIsNewer && !!remoteEquipment && !hasPendingEvent;
+      // A fotografia mais nova vence por inteiro. Isso impede que uma importação
+      // recente seja rebaixada pelo status operacional antigo da base compartilhada.
+      const localWins = hasPendingEvent || (localIsNewer && !preferRemoteOperationalState);
+      const localCatalogWins = localIsNewer && !!remoteEquipment && !localWins;
       const merged = mergeEquipmentSnapshots(localEquipment, remoteEquipment, localWins, localCatalogWins);
-      if ((hasPendingEvent || (localIsNewer && !remoteEquipment && !preferRemoteOperationalState)) && merged) {
+      if (localWins && merged) {
         localRecordsToRecover.push(merged);
       } else if (localCatalogWins) {
         localCatalogToRecover.push({ ...localEquipment, id: remoteEquipment.id, code: remoteEquipment.code });
