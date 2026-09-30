@@ -388,15 +388,15 @@ async function syncUserApprovalsFromSupabase() {
   try {
     const rows = await supabaseRestRequest('user_approvals?select=*&order=created_at.desc');
     if (Array.isArray(rows)) {
-      const map = new Map();
-      userApprovals.forEach(u => u && u.email && map.set(u.email.toLowerCase(), u));
+      const serverMap = new Map();
       rows.forEach(r => {
-        if (!r || !r.email) return;
-        const key = r.email.toLowerCase();
-        const existing = map.get(key) || {};
-        map.set(key, { ...existing, ...r });
+        if (!r) return;
+        if (r.id) serverMap.set(r.id, r);
+        if (r.email) serverMap.set(r.email.toLowerCase(), r);
       });
-      userApprovals = Array.from(map.values());
+      // Mantém itens locais que ainda não foram gravados no servidor
+      const localOnly = userApprovals.filter(u => u && ((u.id && !serverMap.has(u.id)) || (u.email && !serverMap.has(u.email.toLowerCase()))));
+      userApprovals = [...rows, ...localOnly];
       localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
       updateAppShellAccess();
       // Não recria a tela se o gestor estiver na aba convidar ou preenchendo qualquer campo
@@ -412,23 +412,61 @@ async function syncUserApprovalsFromSupabase() {
 async function saveUserApprovalToSupabase(record) {
   if (!record || !record.email) return null;
   const payload = userApprovalDatabasePayload(record);
-  try {
-    return await supabaseRestRequest('user_approvals?on_conflict=email', {
+
+  async function trySave(p) {
+    // 1. Se tem ID válido, tenta atualizar o registro existente (PATCH por ID)
+    if (p.id && isValidUUID(p.id)) {
+      try {
+        const patchById = await supabaseRestRequest(`user_approvals?id=eq.${encodeURIComponent(p.id)}`, {
+          method: 'PATCH',
+          headers: { 'Prefer': 'return=representation' },
+          body: JSON.stringify(p)
+        });
+        if (Array.isArray(patchById) && patchById.length > 0) {
+          return patchById;
+        }
+      } catch (errId) {
+        if (String(errId).includes('column') || String(errId).includes('42703')) {
+          throw errId;
+        }
+      }
+    }
+
+    // 2. Se não atualizou por ID, tenta atualizar por e-mail (PATCH por e-mail)
+    if (p.email) {
+      try {
+        const patchByEmail = await supabaseRestRequest(`user_approvals?email=eq.${encodeURIComponent(p.email.toLowerCase())}`, {
+          method: 'PATCH',
+          headers: { 'Prefer': 'return=representation' },
+          body: JSON.stringify(p)
+        });
+        if (Array.isArray(patchByEmail) && patchByEmail.length > 0) {
+          return patchByEmail;
+        }
+      } catch (errEmail) {
+        if (String(errEmail).includes('column') || String(errEmail).includes('42703')) {
+          throw errEmail;
+        }
+      }
+    }
+
+    // 3. Se não existia ainda nem por ID nem por e-mail, insere (POST)
+    return await supabaseRestRequest('user_approvals', {
       method: 'POST',
       headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(p)
     });
+  }
+
+  try {
+    return await trySave(payload);
   } catch(e) {
     console.warn('Erro ao salvar no Supabase, tentando fallback sem campos de senha/foto:', e);
     try {
       const fallbackPayload = { ...payload };
       delete fallbackPayload.password;
       delete fallbackPayload.photo;
-      return await supabaseRestRequest('user_approvals?on_conflict=email', {
-        method: 'POST',
-        headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' },
-        body: JSON.stringify(fallbackPayload)
-      });
+      return await trySave(fallbackPayload);
     } catch(err2) {
       console.error('Falha crítica ao salvar usuário no Supabase:', err2);
     }
@@ -837,20 +875,7 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', pre
               <div id="inviteAvatarPreview" style="width:48px; height:48px; border-radius:50%; background:#eaf3fb; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; overflow:hidden;">
                 ${icon('user')}
               </div>
-              <input type="file" name="photo" accept="image/*" style="flex:1; font-size:13px;" onchange="
-                const file = this.files[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onload = e => {
-                    document.getElementById('inviteAvatarPreview').innerHTML = '<img src=\\'' + e.target.result + '\\' style=\\'width:100%; height:100%; object-fit:cover;\\'/>';
-                    document.getElementById('invitePhotoBase64').value = e.target.result;
-                  };
-                  reader.readAsDataURL(file);
-                } else {
-                  document.getElementById('inviteAvatarPreview').innerHTML = '${icon('user')}';
-                  document.getElementById('invitePhotoBase64').value = '';
-                }
-              " />
+              <input type="file" name="photo" accept="image/*" style="flex:1; font-size:13px;" onchange="handleInvitePhotoChange(this)" />
               <input type="hidden" name="photo_base64" id="invitePhotoBase64" />
             </div>
           </div>
@@ -878,6 +903,31 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', pre
   }
 
   modal(`${modalHead('Autenticação ObraFlow', 'Acesse o sistema por e-mail e senha, solicite liberação ao gestor ou ative seu convite.')}${modalBody}`, 'modal-medium');
+}
+
+function handleInvitePhotoChange(input) {
+  const file = input && input.files ? input.files[0] : null;
+  const preview = document.getElementById('inviteAvatarPreview');
+  const hidden = document.getElementById('invitePhotoBase64');
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      if (preview) {
+        preview.innerHTML = '<img src="' + e.target.result + '" style="width:100%; height:100%; object-fit:cover;"/>';
+      }
+      if (hidden) {
+        hidden.value = e.target.result;
+      }
+    };
+    reader.readAsDataURL(file);
+  } else {
+    if (preview) {
+      preview.innerHTML = icon('user');
+    }
+    if (hidden) {
+      hidden.value = '';
+    }
+  }
 }
 
 async function submitUserLogin(event) {
@@ -912,6 +962,11 @@ async function submitUserLogin(event) {
       return;
     }
     if (match.status === 'approved' || match.status === 'active') {
+      if (!match.password && match.invite_token) {
+        toast(`Seu e-mail possui um convite pendente. Crie sua senha na aba "Ativar Convite".`);
+        openLoginModal('invite', match.email, match.invite_token, match.company, match.name);
+        return;
+      }
       if (match.password && match.password !== password) {
         toast('Senha incorreta. Tente novamente.', true);
         return;
@@ -921,7 +976,8 @@ async function submitUserLogin(event) {
         email: match.email,
         name: match.name,
         role: match.role || 'gestor',
-        company: match.company || 'Obra'
+        company: match.company || 'Obra',
+        photo: match.photo || undefined
       };
       localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
       closeModal();
@@ -931,6 +987,14 @@ async function submitUserLogin(event) {
       toast(`Bem-vindo, ${currentUser.name}! Acesso liberado.`);
       return;
     }
+  }
+
+  // Verificar se o usuário digitou o código de convite (token) no campo de e-mail
+  const tokenMatch = userApprovals.find(u => u.invite_token && u.invite_token.toUpperCase() === email.toUpperCase());
+  if (tokenMatch) {
+    openLoginModal('invite', tokenMatch.email, tokenMatch.invite_token, tokenMatch.company, tokenMatch.name);
+    toast('Código de convite identificado! Crie sua senha na aba "Ativar Convite".');
+    return;
   }
 
   const client = getSupabase();
@@ -958,7 +1022,7 @@ async function submitUserLogin(event) {
     }
   }
 
-  toast('E-mail não encontrado ou pendente de aprovação. Utilize a aba "Solicitar Cadastro".', true);
+  toast('E-mail não encontrado ou pendente de ativação/aprovação. Utilize a aba "Ativar Convite" ou "Solicitar Cadastro".', true);
 }
 
 async function submitUserSignup(event) {
@@ -1012,20 +1076,35 @@ async function submitInviteActivation(event) {
   const name = (data.name || '').trim();
   const company = (data.company || '').trim();
   const password = String(data.password || '').trim();
+  const photo = data.photo_base64 || '';
 
-  let match = userApprovals.find(u => (u.email && u.email.toLowerCase() === email) || (u.invite_token && u.invite_token === token));
+  if (!email) {
+    toast('Informe seu e-mail para ativar o acesso.', true);
+    return;
+  }
+  if (!password) {
+    toast('Defina uma senha de acesso.', true);
+    return;
+  }
+
+  await syncUserApprovalsFromSupabase();
+
+  let match = userApprovals.find(u =>
+    (token && u.invite_token && u.invite_token.toUpperCase() === token.toUpperCase()) ||
+    (email && u.email && u.email.toLowerCase() === email)
+  );
 
   if (!match) {
     match = {
       id: generateUUID(),
       email: email,
-      name: name,
+      name: name || (email.split('@')[0]),
       company: company || 'Obra',
       password: password,
-      photo: data.photo_base64 || undefined,
+      photo: photo || undefined,
       role: 'gestor',
       status: 'approved',
-      invite_token: token,
+      invite_token: token || undefined,
       approved_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -1036,7 +1115,7 @@ async function submitInviteActivation(event) {
     match.name = name || match.name;
     if (company) match.company = company;
     match.password = password;
-    if (data.photo_base64) match.photo = data.photo_base64;
+    if (photo) match.photo = photo;
     match.status = 'approved';
     if (!match.role) match.role = 'gestor';
     match.approved_at = new Date().toISOString();
@@ -1051,7 +1130,8 @@ async function submitInviteActivation(event) {
     email: match.email,
     name: match.name,
     role: match.role || 'gestor',
-    company: match.company || 'Obra'
+    company: match.company || 'Obra',
+    photo: match.photo || undefined
   };
   localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
 
@@ -2089,6 +2169,7 @@ async function initializeApp() {
   setTimeout(() => syncReceivingInspectionsFromSupabase(), 200);
   if (typeof syncRadiosFromSupabase === 'function') setTimeout(() => syncRadiosFromSupabase(), 250);
   setTimeout(() => syncUserApprovalsFromSupabase(), 300);
+  setInterval(() => syncFromSupabase({ renderAfter: true, pushAfter: false }), 12000);
   setInterval(() => syncUserApprovalsFromSupabase(), 15000);
   setInterval(() => {
     syncWorkforceFromSupabase().then(updated => {
@@ -3237,7 +3318,7 @@ function renderEquipments() {
   document.getElementById('app').innerHTML = `
     ${pageHeader('Controle de PTAs e paleteiras', 'Consulte rapidamente quem está usando, onde está e quando será devolvida.', 'MÓDULO DE EQUIPAMENTOS', `<button class="button button-outline" onclick="openScanModal()">${icon('scan')} Ler QR</button><button class="button button-green" onclick="openEquipmentModal()">${icon('plus')} Cadastrar</button>`)}
     ${equipmentModuleTabs('equipamentos')}
-    <section class="control-summary"><span><b>${equipments.length}</b> equipamentos</span><span class="summary-green"><i></i><b>${equipments.filter(e=>e.status==='available').length}</b> disponíveis</span><span class="summary-amber"><i></i><b>${equipments.filter(e=>e.status==='in-use').length}</b> em uso</span><div class="summary-actions"><button onclick="openEquipmentImportModal()">${icon('download')} Atualizar PTAs</button><button onclick="printAllQRCodes()">${icon('print')} QR Codes</button></div></section>
+    <section class="control-summary"><span><b>${equipments.length}</b> equipamentos</span><span class="summary-green"><i></i><b>${equipments.filter(e=>e.status==='available').length}</b> disponíveis</span><span class="summary-amber"><i></i><b>${equipments.filter(e=>e.status==='in-use').length}</b> em uso</span><div class="summary-actions"><button onclick="syncFromSupabase().then(() => { renderEquipments(); toast('Equipamentos e paleteiras sincronizados com a nuvem!'); })">${icon('refresh')} Sincronizar</button><button onclick="openEquipmentImportModal()">${icon('download')} Atualizar PTAs</button><button onclick="printAllQRCodes()">${icon('print')} QR Codes</button></div></section>
     <div class="simple-filters">
       <label class="search-box">${icon('search')}<input id="assetSearch" type="search" placeholder="Buscar patrimônio, código AFF, empreiteiro, série..." oninput="filterAssets()"></label>
       <label class="filter-field"><span>Nº AF</span><input id="afFilter" type="search" placeholder="Filtrar AF..." oninput="filterAssets()"></label>
@@ -5211,15 +5292,22 @@ function modalHead(title, subtitle='') { return `<div class="modal-head"><div><h
 
 function openEquipmentModal(id = null) {
   const eq = id ? equipments.find(e=>e.id===id) : null;
-  modal(`<form id="equipmentForm" onsubmit="saveEquipment(event,'${id||''}')">${modalHead(eq?'Editar equipamento':'Novo equipamento',eq?'Atualize os dados do ativo':'Cadastre um ativo e gere seu QR Code')}<div class="modal-body"><div class="form-grid"><div class="field"><label>Tipo de equipamento <em>*</em></label><select name="type" required><option value="">Selecione...</option>${['PTA Tesoura','PTA Articulada','PTA Mastro','Paleteira Elétrica'].map(v=>`<option ${eq?.type===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Código de identificação (Patrimônio) <em>*</em></label><input name="code" required placeholder="Ex.: TPTA00674" value="${esc(eq?.code||'')}"></div><div class="field"><label>Nº AF (Afonso França)</label><input name="afNumber" placeholder="Ex.: AF-001" value="${esc(eq?.afNumber||'')}"></div><div class="field full"><label>Nome do equipamento <em>*</em></label><input name="name" required placeholder="Ex.: Plataforma Tesoura 10m" value="${esc(eq?.name||'')}"></div><div class="field"><label>Fabricante <em>*</em></label><input name="brand" required placeholder="Ex.: JLG" value="${esc(eq?.brand||'')}"></div><div class="field"><label>Modelo <em>*</em></label><input name="model" required placeholder="Ex.: 2646ES" value="${esc(eq?.model||'')}"></div><div class="field"><label>Número de série</label><input name="serial" placeholder="Número do fabricante" value="${esc(eq?.serial||'')}"></div><div class="field"><label>Capacidade</label><input name="capacity" placeholder="Ex.: 450 kg" value="${esc(eq?.capacity||'')}"></div><div class="field"><label>Status inicial</label><select name="status"><option value="available" ${!eq||eq.status==='available'?'selected':''}>Disponível</option><option value="maintenance" ${eq?.status==='maintenance'?'selected':''}>Indisponível</option></select></div><div class="field"><label>Data da última inspeção</label><input name="inspection" type="date" value="${eq?.inspection||new Date().toISOString().slice(0,10)}"></div></div></div><div class="modal-foot">${eq ? `<button type="button" class="button button-ghost" style="color:var(--danger,#ef4444);margin-right:auto;" onclick="deleteEquipment('${id}')">${icon('trash')} Excluir equipamento</button>` : ''}<button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} ${eq?'Salvar alterações':'Cadastrar equipamento'}</button></div></form>`, 'modal-large');
+  modal(`<form id="equipmentForm" onsubmit="saveEquipment(event,'${id||''}')">${modalHead(eq?'Editar equipamento':'Novo equipamento',eq?'Atualize os dados do ativo':'Cadastre um ativo e gere seu QR Code')}<div class="modal-body"><div class="form-grid"><div class="field"><label>Tipo de equipamento <em>*</em></label><select name="type" required><option value="">Selecione...</option>${['PTA Tesoura','PTA Articulada','PTA Mastro','Paleteira Elétrica'].map(v=>`<option ${eq?.type===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Código de identificação (Patrimônio) <em>*</em></label><input name="code" required placeholder="Ex.: TPTA00674" value="${esc(eq?.code||'')}"></div><div class="field"><label>Nº AF (Afonso França)</label><input name="afNumber" placeholder="Ex.: AF-001" value="${esc(eq?.afNumber||'')}"></div><div class="field full"><label>Nome do equipamento <em>*</em></label><input name="name" required placeholder="Ex.: Plataforma Tesoura 10m" value="${esc(eq?.name||'')}"></div><div class="field"><label>Fabricante <em>*</em></label><input name="brand" required placeholder="Ex.: JLG" value="${esc(eq?.brand||'')}"></div><div class="field"><label>Modelo <em>*</em></label><input name="model" required placeholder="Ex.: 2646ES" value="${esc(eq?.model||'')}"></div><div class="field"><label>Número de série</label><input name="serial" placeholder="Número do fabricante" value="${esc(eq?.serial||'')}"></div><div class="field"><label>Capacidade</label><input name="capacity" placeholder="Ex.: 450 kg" value="${esc(eq?.capacity||'')}"></div><div class="field"><label>Status do equipamento</label><select name="status"><option value="available" ${(!eq||eq.status==='available')?'selected':''}>Disponível (Pronto para retirada)</option><option value="in-use" ${eq?.status==='in-use'?'selected':''}>Em uso (Operação na obra)</option><option value="maintenance" ${eq?.status==='maintenance'?'selected':''}>Indisponível / Manutenção</option></select></div><div class="field"><label>Data da última inspeção</label><input name="inspection" type="date" value="${eq?.inspection||new Date().toISOString().slice(0,10)}"></div></div></div><div class="modal-foot">${eq ? `<button type="button" class="button button-ghost" style="color:var(--danger,#ef4444);margin-right:auto;" onclick="deleteEquipment('${id}')">${icon('trash')} Excluir equipamento</button>` : ''}<button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} ${eq?'Salvar alterações':'Cadastrar equipamento'}</button></div></form>`, 'modal-large');
 }
 async function saveEquipment(event, id) {
   event.preventDefault(); const data = Object.fromEntries(new FormData(event.target));
   if (equipments.some(e => e.code.toLowerCase() === data.code.toLowerCase() && e.id !== id)) return toast('Este código já está cadastrado.', true);
   if (id) {
-    const index = equipments.findIndex(e=>e.id===id); equipments[index] = { ...equipments[index], ...data, status: equipments[index].status==='in-use' ? 'in-use' : data.status };
+    const index = equipments.findIndex(e=>e.id===id);
+    const prevStatus = equipments[index].status;
+    const newStatus = data.status || prevStatus;
+    // Se o gestor alterou de 'in-use' para outro status manualmente, remove o uso ativo
+    const updatedUsage = (newStatus !== 'in-use') ? null : (equipments[index].usage || { responsible: currentUser?.name || 'Gestor', company: currentUser?.company || 'Obra', dataHall: 'Pátio', location: 'Base', startedAt: new Date().toISOString() });
+    equipments[index] = { ...equipments[index], ...data, status: newStatus, usage: updatedUsage };
   } else {
-    const newId = `${data.type.includes('Paleteira')?'pal':'pta'}-${Date.now()}`; equipments.unshift({ id:newId, ...data, usage:null });
+    const newId = `${data.type.includes('Paleteira')?'pal':'pta'}-${Date.now()}`;
+    const initialUsage = data.status === 'in-use' ? { responsible: currentUser?.name || 'Gestor', company: currentUser?.company || 'Obra', dataHall: 'Pátio', location: 'Base', startedAt: new Date().toISOString() } : null;
+    equipments.unshift({ id:newId, ...data, status: data.status || 'available', usage: initialUsage });
   }
   const changedEquipment = equipments.find(e => e.id === (id || equipments[0]?.id));
   if (changedEquipment) changedEquipment.updatedAt = new Date().toISOString();

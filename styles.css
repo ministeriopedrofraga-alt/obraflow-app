@@ -1076,9 +1076,15 @@ h3 { font-size: 14px; }
   .mobile-company-tag { display: inline; }
   .workforce-control-mode-tabs { width: 100%; display: flex; }
   .workforce-control-mode-tabs .mode-tab { flex: 1; justify-content: center; }
-  .workforce-control-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; }
+  .workforce-control-table-wrap { max-height: 75vh !important; overflow-x: auto !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; padding-bottom: 24px; border-top: 1px solid var(--line); }
+  .workforce-control-table { width: max-content !important; min-width: 100% !important; table-layout: auto !important; }
   .workforce-control-table .workforce-sticky-company, .workforce-control-table .workforce-col-vinculo { display: none !important; }
-  .workforce-control-table .workforce-sticky-person { left: 0 !important; width: 135px !important; min-width: 135px !important; max-width: 135px !important; padding-left: 8px !important; padding-right: 4px !important; }
+  .workforce-control-table .workforce-sticky-person { left: 0 !important; width: 140px !important; min-width: 140px !important; max-width: 140px !important; padding: 6px 8px !important; white-space: normal !important; text-align: left !important; }
+  .workforce-control-table .workforce-sticky-person strong { font-size: 11px !important; line-height: 1.25 !important; white-space: normal !important; display: block; }
+  .workforce-control-table .workforce-sticky-person small { font-size: 9px !important; line-height: 1.2 !important; white-space: normal !important; display: block; color: var(--muted); margin-top: 2px; }
+  .workforce-control-table th, .workforce-control-table td { height: auto !important; min-height: 48px !important; padding: 6px 4px !important; vertical-align: middle !important; }
+  .workforce-control-table tfoot td { position: sticky; bottom: 0; z-index: 6; font-size: 11px; padding: 8px 4px !important; }
+  .attendance-cell { width: 32px !important; height: 32px !important; font-size: 11px !important; font-weight: 800 !important; touch-action: manipulation; }
   .workforce-mobile-card { flex-direction: column; align-items: stretch; gap: 8px; }
   .workforce-mobile-card-actions { justify-content: space-between; }
   .workforce-mobile-card-actions .mobile-att-btn { flex: 1; text-align: center; padding: 8px 4px; font-size: 11px; }
