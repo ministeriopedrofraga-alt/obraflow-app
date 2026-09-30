@@ -1318,6 +1318,14 @@ async function persistEquipmentSnapshotRemote() {
       updatedAt: new Date().toISOString(),
       equipments: equipments.map(e => sanitizeEquipment(e))
     };
+    const client = getSupabase();
+    if (client) {
+      try {
+        await client.from('app_metadata').upsert({ key: 'equipment_registry', value: payload });
+      } catch (clientErr) {
+        console.warn('Upsert client app_metadata falhou:', clientErr);
+      }
+    }
     await supabaseRestRequest('app_metadata?on_conflict=key', {
       method: 'POST',
       body: JSON.stringify({ key: 'equipment_registry', value: payload }),
@@ -2062,6 +2070,7 @@ let activeDataSync = null;
 function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOperationalState = false } = {}) {
   if (activeDataSync) return activeDataSync;
   activeDataSync = (async () => {
+    const stateBeforeSync = JSON.stringify({ equipments, history });
     const revisionAtStart = localDataRevision;
     const localEquipments = equipments.map(item => ({ ...item, usage: item.usage ? { ...item.usage } : null }));
     const localHistory = [...history];
@@ -2119,11 +2128,12 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOp
       .filter(localEquipment => {
         const key = String(localEquipment.code || localEquipment.id || '').toUpperCase();
         const remoteEquipment = remoteEquipmentMap.get(key);
-        return pendingEquipmentIds.has(String(localEquipment.id))
-          || equipmentSyncTimestamp(localEquipment) > equipmentSyncTimestamp(remoteEquipment);
+        return !remoteEquipment
+          || pendingEquipmentIds.has(String(localEquipment.id))
+          || equipmentSyncTimestamp(localEquipment) >= equipmentSyncTimestamp(remoteEquipment);
       })
       .map(localEquipment => String(localEquipment.code || localEquipment.id || '').toUpperCase()));
-    const equipmentKeys = new Set([...seedEquipmentMap.keys(), ...remoteEquipmentMap.keys(), ...recoverableLocalKeys]);
+    const equipmentKeys = new Set([...seedEquipmentMap.keys(), ...remoteEquipmentMap.keys(), ...recoverableLocalKeys, ...localEquipmentMap.keys()]);
     const localRecordsToRecover = [];
     const localCatalogToRecover = [];
     equipments = Array.from(equipmentKeys).map(key => {
@@ -2138,7 +2148,7 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOp
         && equipmentSyncTimestamp(localEquipment) >= equipmentSyncTimestamp(remoteEquipment);
       // A fotografia mais nova vence por inteiro. Isso impede que uma importação
       // recente seja rebaixada pelo status operacional antigo da base compartilhada.
-      const localWins = hasPendingEvent || localHasUsageRemoteDoesNot || (localIsNewer && !preferRemoteOperationalState);
+      const localWins = !remoteEquipment || hasPendingEvent || localHasUsageRemoteDoesNot || (localIsNewer && !preferRemoteOperationalState);
       const localCatalogWins = localIsNewer && !!remoteEquipment && !localWins;
       const merged = mergeEquipmentSnapshots(localEquipment, remoteEquipment, localWins, localCatalogWins);
       if (localWins && merged) {
@@ -2151,10 +2161,9 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOp
 
     const stateChanged = JSON.stringify({ equipments, history }) !== stateBeforeSync;
     if (stateChanged) saveLocalBackup();
-    // Recupera automaticamente importações mais novas que ficaram somente
-    // neste aparelho por falhas de sincronização em versões anteriores.
-    if (pushAfter && localRecordsToRecover.length) {
-      await persistEquipmentRecords(localRecordsToRecover);
+    // Recupera automaticamente cadastros e importações locais persistindo na nuvem para todos os aparelhos
+    if (pushAfter && (localRecordsToRecover.length > 0 || equipments.length > remoteEquipmentMap.size)) {
+      await persistEquipmentRecords(equipments);
     }
     if (pushAfter && localCatalogToRecover.length) {
       await persistEquipmentCatalog(localCatalogToRecover);
@@ -2163,7 +2172,7 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOp
       ? await save()
       : { local: true, remote: true };
     // Nunca substitui um formulário que a pessoa já está preenchendo no celular ou na tela.
-    if (renderAfter && stateChanged && canSafelyAutoRender(['dashboard', 'equipamentos', 'relatorios', 'formularios'])) render();
+    if (renderAfter && (stateChanged || equipments.length !== localEquipments.length) && canSafelyAutoRender(['dashboard', 'equipamentos', 'relatorios', 'formularios'])) render();
     return saveResult;
   })().catch(error => {
     console.warn('Sincronização com Supabase falhou; mantendo os dados locais:', error);
