@@ -350,6 +350,29 @@ h3 { font-size: 14px; }
 .attendance-cell.empty { color: #aeb8b2; border-color: #e5ebe7; background: white; }
 .workforce-control-table tfoot td { position: sticky; bottom: 0; z-index: 4; border-top: 1px solid #cbdcd2; background: #eaf2ed; font-weight: 800; }
 .attendance-total { color: var(--green-dark); }
+
+/* Subview toolbar & Mobile Quick Attendance Cards */
+.workforce-subview-toolbar { padding: 10px 14px; border-top: 1px solid var(--line); background: #f8faf9; }
+.workforce-control-mode-tabs { display: inline-flex; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+.workforce-control-mode-tabs .mode-tab { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 0; border-radius: 6px; color: var(--muted); background: transparent; font: 700 10px DM Sans,sans-serif; cursor: pointer; transition: background .15s ease,color .15s ease; }
+.workforce-control-mode-tabs .mode-tab svg { width: 14px; height: 14px; }
+.workforce-control-mode-tabs .mode-tab.active { color: white; background: var(--green); }
+.mobile-company-tag { display: none; }
+
+.workforce-mobile-cards-wrap { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: #fdfdfd; }
+.workforce-mobile-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: white; }
+.workforce-mobile-card-info { display: grid; gap: 2px; min-width: 0; }
+.workforce-mobile-card-info strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workforce-mobile-card-info small { color: var(--muted); font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workforce-mobile-card-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.mobile-att-btn { padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: #f7faf8; color: var(--muted); font: 800 10px DM Sans,sans-serif; cursor: pointer; touch-action: manipulation; transition: all .12s ease; }
+.mobile-att-btn.att-present.active { color: #17613f; border-color: #b5dec8; background: #ddf3e7; }
+.mobile-att-btn.att-absent.active { color: #a02b2b; border-color: #efc0c0; background: #fde2e2; }
+.mobile-att-btn.att-off.active { color: #8a6108; border-color: #ead18d; background: #fff0c9; }
+.mobile-att-btn.att-clear { padding: 6px 7px; color: #a0aab3; background: transparent; }
+
+.workforce-control-table th.selected-day { background: #d4ebd8 !important; box-shadow: inset 0 -3px 0 var(--green); }
+.workforce-control-table th.selected-day span { color: var(--green-dark) !important; font-weight: 800 !important; }
 .upload-zone { display: flex; align-items: center; gap: 12px; padding: 17px; border: 1.5px dashed #a8c9b8; border-radius: 11px; background: #f6faf8; cursor: pointer; }
 .upload-zone > span { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border-radius: 10px; color: var(--green); background: var(--green-soft); }
 .upload-zone div { display: grid; flex: 1; gap: 3px; }
@@ -1050,10 +1073,15 @@ h3 { font-size: 14px; }
   .month-switcher label { flex: 1; }
   .month-switcher input { width: 100%; }
   .attendance-guide small { width: 100%; margin-left: 0; }
-  .workforce-tabs { display: flex; }
-  .workforce-tabs button { flex: 1; justify-content: center; }
-  .workforce-control-table .workforce-sticky-company { width: 110px; min-width: 110px; max-width: 110px; }
-  .workforce-control-table .workforce-sticky-person { left: 110px; width: 190px; min-width: 190px; max-width: 190px; }
+  .mobile-company-tag { display: inline; }
+  .workforce-control-mode-tabs { width: 100%; display: flex; }
+  .workforce-control-mode-tabs .mode-tab { flex: 1; justify-content: center; }
+  .workforce-control-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; }
+  .workforce-control-table .workforce-sticky-company, .workforce-control-table .workforce-col-vinculo { display: none !important; }
+  .workforce-control-table .workforce-sticky-person { left: 0 !important; width: 135px !important; min-width: 135px !important; max-width: 135px !important; padding-left: 8px !important; padding-right: 4px !important; }
+  .workforce-mobile-card { flex-direction: column; align-items: stretch; gap: 8px; }
+  .workforce-mobile-card-actions { justify-content: space-between; }
+  .workforce-mobile-card-actions .mobile-att-btn { flex: 1; text-align: center; padding: 8px 4px; font-size: 11px; }
   .checklist-filters { grid-template-columns: 1fr 1fr; }
   .checklist-filters label:nth-child(2) { grid-column: auto; }
   .packing-filters, .forms-filters { grid-template-columns: 1fr 1fr; }

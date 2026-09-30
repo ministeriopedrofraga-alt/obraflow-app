@@ -309,6 +309,7 @@ let workforceMeta = { source: 'Nenhuma base', updatedAt: '' };
 let workforceAttendance = {};
 let workforceControlMeta = { updatedAt: '' };
 let workforceView = 'control';
+let workforceControlSubView = 'table';
 let workforceControlMonth = new Date().toISOString().slice(0, 7);
 let workforceSummaryDate = new Date().toISOString().slice(0, 10);
 let workforceRemoteSaveTimer = null;
@@ -4430,20 +4431,146 @@ function workforceDailySummaryHTML(date = workforceSummaryDate) {
   return renderWorkforceQuadroTableHTML(date);
 }
 
+function renderWorkforceDailyCardsHTML(companies) {
+  const date = workforceSummaryDate;
+  const cards = workforce.map(person => {
+    const encodedKey = encodeURIComponent(workforcePersonKey(person)).replace(/'/g, '%27');
+    const val = workforceAttendanceValue(person, date);
+    return `
+      <div class="workforce-mobile-card" data-company="${esc(person.company)}" data-search="${esc(`${person.name} ${person.company} ${person.role || ''}`.toLowerCase())}">
+        <div class="workforce-mobile-card-info">
+          <strong>${esc(person.name)}</strong>
+          <small>${esc(person.company)} · ${esc(person.role || 'Sem função')}</small>
+        </div>
+        <div class="workforce-mobile-card-actions">
+          <button type="button" class="mobile-att-btn att-present ${val === '1' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', '1')">1 Pres.</button>
+          <button type="button" class="mobile-att-btn att-absent ${val === '0' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', '0')">0 Aus.</button>
+          <button type="button" class="mobile-att-btn att-off ${val === 'FOLGA' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', 'FOLGA')">F Folga</button>
+          <button type="button" class="mobile-att-btn att-clear" onclick="setWorkforceAttendance('${encodedKey}', '${date}', '')" title="Limpar marcação">✕</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `<div class="workforce-mobile-cards-wrap">${cards || '<div class="empty-state"><p>Nenhum colaborador cadastrado.</p></div>'}</div>`;
+}
+
+function scrollToSelectedDateColumn(date = workforceSummaryDate) {
+  setTimeout(() => {
+    const wrap = document.querySelector('.workforce-control-table-wrap');
+    const th = document.querySelector(`th[data-date-col="${date}"]`);
+    if (wrap && th) {
+      const isMobile = window.innerWidth <= 760;
+      const stickyOffset = isMobile ? 135 : 380;
+      const thLeft = th.offsetLeft;
+      wrap.scrollTo({
+        left: Math.max(0, thLeft - stickyOffset - 15),
+        behavior: 'smooth'
+      });
+    }
+  }, 150);
+}
+
+function setWorkforceControlSubView(subView) {
+  workforceControlSubView = subView === 'daily' ? 'daily' : 'table';
+  renderCompanies();
+  if (workforceControlSubView === 'table') {
+    scrollToSelectedDateColumn(workforceSummaryDate);
+  }
+}
+
+function setWorkforceAttendance(encodedKey, date, value) {
+  const key = decodeURIComponent(encodedKey);
+  if (!workforceAttendance[key]) workforceAttendance[key] = {};
+  if (value) workforceAttendance[key][date] = value;
+  else delete workforceAttendance[key][date];
+  if (!Object.keys(workforceAttendance[key]).length) delete workforceAttendance[key];
+  workforceControlMeta = { updatedAt: new Date().toISOString() };
+  saveLocalBackup();
+  scheduleWorkforceRemoteSave();
+  
+  if (workforceControlSubView === 'daily') {
+    renderCompanies();
+  } else {
+    const cellBtn = document.querySelector(`button.attendance-cell[data-date="${date}"][onclick*="${encodedKey}"]`);
+    if (cellBtn) {
+      cellBtn.dataset.value = value;
+      cellBtn.className = `attendance-cell ${value === '1' ? 'present' : value === '0' ? 'absent' : value === 'FOLGA' ? 'off' : 'empty'}`;
+      cellBtn.textContent = value === 'FOLGA' ? 'F' : value || '·';
+    }
+    filterWorkforceControl();
+    if (date === workforceSummaryDate) changeWorkforceSummaryDate(date);
+  }
+}
+
 function renderWorkforceControl(companies) {
   const dates = workforceMonthDates();
-  const rows = workforce.map(person => `<tr class="workforce-control-row" data-company="${esc(person.company)}" data-search="${esc(`${person.name} ${person.company} ${person.role || ''}`.toLowerCase())}"><td class="workforce-sticky-company">${esc(person.company)}</td><td class="workforce-sticky-person"><strong>${esc(person.name)}</strong><small>${esc(person.role || '—')}</small></td><td>${esc(person.status || '—')}</td>${dates.map(date => `<td>${workforceAttendanceCell(person, date)}</td>`).join('')}</tr>`).join('');
+  const rows = workforce.map(person => {
+    const encodedKey = encodeURIComponent(workforcePersonKey(person)).replace(/'/g, '%27');
+    return `<tr class="workforce-control-row" data-company="${esc(person.company)}" data-search="${esc(`${person.name} ${person.company} ${person.role || ''}`.toLowerCase())}">
+      <td class="workforce-sticky-company">${esc(person.company)}</td>
+      <td class="workforce-sticky-person"><strong>${esc(person.name)}</strong><small><span class="mobile-company-tag">${esc(person.company)} · </span>${esc(person.role || '—')}</small></td>
+      <td class="workforce-col-vinculo">${esc(person.status || '—')}</td>
+      ${dates.map(date => `<td>${workforceAttendanceCell(person, date)}</td>`).join('')}
+    </tr>`;
+  }).join('');
   const totals = dates.map(date => `<td class="attendance-total" data-total-date="${date}">${workforce.filter(person => workforceAttendanceValue(person, date) === '1').length}</td>`).join('');
+  
+  const formattedSummaryDate = new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`));
+
   return `<section class="workforce-control-panel">
     <div class="workforce-control-toolbar">
       <div class="month-switcher"><button class="icon-button" type="button" title="Mês anterior" onclick="shiftWorkforceMonth(-1)">${icon('chevron')}</button><label><span>Mês do controle</span><input id="workforceMonth" type="month" value="${workforceControlMonth}" onchange="changeWorkforceMonth(this.value)"></label><button class="icon-button next" type="button" title="Próximo mês" onclick="shiftWorkforceMonth(1)">${icon('chevron')}</button></div>
       <label class="search-box">${icon('search')}<input id="workforceControlSearch" type="search" placeholder="Buscar pessoa ou função..." oninput="filterWorkforceControl()"></label>
       <label class="filter-field"><span>Empresa</span><select id="workforceControlCompany" onchange="filterWorkforceControl()"><option value="">Todas</option>${companies.map(company => `<option value="${esc(company)}">${esc(company)}</option>`).join('')}</select></label>
     </div>
-    <div class="attendance-guide"><span><i class="present">1</i> Presente</span><span><i class="absent">0</i> Ausente</span><span><i class="off">F</i> Folga</span><small>Clique em uma marcação para alternar. As alterações são salvas automaticamente.</small></div>
-    <div class="workforce-daily-head"><div><strong>Resumo do dia</strong><small>Presentes / cadastrados por empresa</small></div><input type="date" id="workforceSummaryDate" value="${workforceSummaryDate}" onchange="changeWorkforceSummaryDate(this.value)"></div>
+    <div class="attendance-guide">
+      <span><i class="present">1</i> Presente</span>
+      <span><i class="absent">0</i> Ausente</span>
+      <span><i class="off">F</i> Folga</span>
+      <small>Clique em uma marcação para alternar. As alterações são salvas automaticamente.</small>
+    </div>
+    <div class="workforce-daily-head">
+      <div><strong>Resumo do dia</strong><small>Presentes / cadastrados por empresa</small></div>
+      <input type="date" id="workforceSummaryDate" value="${workforceSummaryDate}" onchange="changeWorkforceSummaryDate(this.value)">
+    </div>
     <div class="workforce-daily-summary" id="workforceDailySummary">${workforceDailySummaryHTML()}</div>
-    <div class="table-wrap workforce-control-table-wrap"><table class="data-table workforce-control-table"><thead><tr><th class="workforce-sticky-company">Empresa</th><th class="workforce-sticky-person">Nome / função</th><th>Vínculo</th>${dates.map(date => { const label = workforceDayLabel(date); return `<th class="${['sáb','dom'].includes(label.weekday) ? 'weekend' : ''}"><span>${label.day}</span><small>${label.weekday}</small></th>`; }).join('')}</tr></thead><tbody>${rows}</tbody><tfoot><tr><td class="workforce-sticky-company"></td><td class="workforce-sticky-person"><strong>Total presente</strong></td><td></td>${totals}</tr></tfoot></table></div>
+    
+    <div class="workforce-subview-toolbar">
+      <div class="workforce-control-mode-tabs">
+        <button type="button" class="mode-tab ${workforceControlSubView === 'table' ? 'active' : ''}" onclick="setWorkforceControlSubView('table')">${icon('chart')} Grade Mensal</button>
+        <button type="button" class="mode-tab ${workforceControlSubView === 'daily' ? 'active' : ''}" onclick="setWorkforceControlSubView('daily')">${icon('check')} Marcação Diária (${formattedSummaryDate})</button>
+      </div>
+    </div>
+
+    ${workforceControlSubView === 'daily' ? renderWorkforceDailyCardsHTML(companies) : `
+      <div class="table-wrap workforce-control-table-wrap">
+        <table class="data-table workforce-control-table">
+          <thead>
+            <tr>
+              <th class="workforce-sticky-company">Empresa</th>
+              <th class="workforce-sticky-person">Nome / função</th>
+              <th class="workforce-col-vinculo">Vínculo</th>
+              ${dates.map(date => {
+                const label = workforceDayLabel(date);
+                const isSelected = date === workforceSummaryDate;
+                const isWeekend = ['sáb','dom'].includes(label.weekday);
+                return `<th class="${isWeekend ? 'weekend' : ''} ${isSelected ? 'selected-day' : ''}" data-date-col="${date}"><span>${label.day}</span><small>${label.weekday}</small></th>`;
+              }).join('')}
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr>
+              <td class="workforce-sticky-company"></td>
+              <td class="workforce-sticky-person"><strong>Total presente</strong></td>
+              <td class="workforce-col-vinculo"></td>
+              ${totals}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    `}
     <div class="no-filter-results" id="noWorkforceControlResults">Nenhuma pessoa encontrada.</div>
   </section>`;
 }
@@ -4468,6 +4595,10 @@ function renderCompanies() {
   const presentToday = workforce.filter(person => workforceAttendanceValue(person, workforceSummaryDate) === '1').length;
   const view = workforceView === 'directory' ? renderWorkforceDirectory(companies) : renderWorkforceControl(companies);
   document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Controle o cadastro e a presença diária da equipe dentro do app.', 'CADASTRO CENTRAL', `<button class="button button-outline" onclick="syncWorkforceFromSupabase().then(() => { renderCompanies(); toast('Marcações e efetivo sincronizados com a nuvem!'); })">${icon('refresh')} Sincronizar</button><button class="button button-outline" onclick="openWorkforceModal()">${icon('download')} Importar Excel</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar modelo</button><button class="button button-green" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>`)}<section class="workforce-summary"><div><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas</small></p></div><div><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div><span>${icon('check')}</span><p><strong>${presentToday}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`))}</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source||'Cadastro manual')}</strong><span>${workforceMeta.updatedAt?`${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}`:''}</span></p></div></section><div class="workforce-tabs"><button class="${workforceView === 'control' ? 'active' : ''}" onclick="setWorkforceView('control')">${icon('chart')} Controle diário</button><button class="${workforceView === 'directory' ? 'active' : ''}" onclick="setWorkforceView('directory')">${icon('user')} Cadastro de pessoas</button></div>${view}`;
+  
+  if (workforceView === 'control' && workforceControlSubView === 'table') {
+    scrollToSelectedDateColumn(workforceSummaryDate);
+  }
 }
 
 function setWorkforceView(view) {
@@ -4489,6 +4620,11 @@ function filterWorkforceControl() {
     const show = (!search || row.dataset.search.includes(search)) && (!company || row.dataset.company === company);
     row.style.display = show ? '' : 'none';
     if (show) visible++;
+  });
+  document.querySelectorAll('.workforce-mobile-card').forEach(card => {
+    const show = (!search || card.dataset.search.includes(search)) && (!company || card.dataset.company === company);
+    card.style.display = show ? '' : 'none';
+    if (show && workforceControlSubView === 'daily') visible++;
   });
   document.querySelectorAll('[data-total-date]').forEach(cell => {
     const date = cell.dataset.totalDate;
@@ -4520,6 +4656,16 @@ function changeWorkforceSummaryDate(date) {
   if (summary) summary.innerHTML = workforceDailySummaryHTML(date);
   const metric = document.querySelector('.workforce-summary > div:nth-child(3) p');
   if (metric) metric.innerHTML = `<strong>${workforce.filter(person => workforceAttendanceValue(person, date) === '1').length}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${date}T12:00:00`))}</small>`;
+  
+  if (workforceControlSubView === 'daily') {
+    renderCompanies();
+  } else {
+    document.querySelectorAll('.workforce-control-table th[data-date-col]').forEach(th => {
+      if (th.dataset.dateCol === date) th.classList.add('selected-day');
+      else th.classList.remove('selected-day');
+    });
+    scrollToSelectedDateColumn(date);
+  }
 }
 
 function cycleWorkforceAttendance(encodedKey, date, button) {
