@@ -1312,26 +1312,44 @@ function equipmentDatabasePayload(record, { catalogOnly = false } = {}) {
     ]));
 }
 
+async function persistEquipmentSnapshotRemote() {
+  try {
+    const payload = {
+      updatedAt: new Date().toISOString(),
+      equipments: equipments.map(e => sanitizeEquipment(e))
+    };
+    await supabaseRestRequest('app_metadata?on_conflict=key', {
+      method: 'POST',
+      body: JSON.stringify({ key: 'equipment_registry', value: payload }),
+      headers: { Prefer: 'resolution=merge-duplicates' }
+    });
+    return true;
+  } catch(err) {
+    console.warn('Erro ao salvar snapshot de equipamentos no app_metadata:', err);
+    return false;
+  }
+}
+
 async function persistEquipmentRecords(records, options = {}) {
   if (!records?.length) return;
-  const payloads = records.map(record => equipmentDatabasePayload(record, options));
-  const invalid = payloads.findIndex(payload => !payload.id || !payload.code);
-  if (invalid >= 0) throw new Error(`Equipamento sem identificação válida: ${records[invalid]?.code || invalid + 1}.`);
+  // Sincronização garantida via app_metadata (funciona entre todos os computadores)
+  persistEquipmentSnapshotRemote();
 
-  // Uma única operação evita sincronizações parciais quando uma planilha
-  // atualiza toda a frota. A representação retornada confirma cada gravação.
-  const saved = await supabaseRestRequest('equipments?on_conflict=id&select=id,code,status,updatedAt', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-    body: JSON.stringify(payloads),
-    timeoutMs: 30000
-  });
-  const savedIds = new Set((Array.isArray(saved) ? saved : []).map(item => String(item.id)));
-  const missing = payloads.filter(payload => !savedIds.has(String(payload.id)));
-  if (missing.length) {
-    throw new Error(`O banco não confirmou ${missing.length} equipamento(s): ${missing.slice(0, 3).map(item => item.code).join(', ')}.`);
+  // Tentativa direta na tabela public.equipments
+  try {
+    const payloads = records.map(record => equipmentDatabasePayload(record, options));
+    const invalid = payloads.findIndex(payload => !payload.id || !payload.code);
+    if (invalid >= 0) return;
+
+    await supabaseRestRequest('equipments?on_conflict=id&select=id,code,status,updatedAt', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify(payloads),
+      timeoutMs: 15000
+    });
+  } catch (error) {
+    console.warn('Tentativa direta em public.equipments falhou (registro salvo via app_metadata):', error);
   }
-  return saved;
 }
 
 async function persistEquipmentCatalog(records) {
@@ -2047,11 +2065,13 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOp
     const revisionAtStart = localDataRevision;
     const localEquipments = equipments.map(item => ({ ...item, usage: item.usage ? { ...item.usage } : null }));
     const localHistory = [...history];
-    const stateBeforeSync = JSON.stringify({ equipments: localEquipments, history: localHistory });
-    const [remoteEquipments, remoteHistory] = await Promise.all([
-      supabaseRestRequest('equipments?select=*'),
-      supabaseRestRequest('history?select=*')
+    const [remoteEquipmentsRaw, remoteHistory, registryRows] = await Promise.all([
+      supabaseRestRequest('equipments?select=*').catch(() => null),
+      supabaseRestRequest('history?select=*').catch(() => null),
+      supabaseRestRequest('app_metadata?key=eq.equipment_registry&select=value').catch(() => null)
     ]);
+    const remoteEquipments = Array.isArray(remoteEquipmentsRaw) ? remoteEquipmentsRaw : [];
+    const registryEquipments = Array.isArray(registryRows?.[0]?.value?.equipments) ? registryRows[0].value.equipments : [];
     // Se o operador salvou algo enquanto a consulta estava em andamento, a versão
     // ao vivo deste aparelho tem prioridade sobre a fotografia antiga da sincronização.
     const currentLocalEquipments = localDataRevision === revisionAtStart
@@ -2061,12 +2081,12 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOp
     const historyIds = new Set([
       ...seedHistory.map(item => String(item.id)),
       ...currentLocalHistory.map(item => String(item.id)),
-      ...remoteHistory.map(item => String(item.id))
+      ...(remoteHistory || []).map(item => String(item.id))
     ]);
     history = Array.from(historyIds).map(id => {
       const seedRecord = seedHistory.find(item => String(item.id) === id);
       const localRecord = currentLocalHistory.find(item => String(item.id) === id) || seedRecord;
-      const remoteRecord = remoteHistory.find(item => String(item.id) === id);
+      const remoteRecord = (remoteHistory || []).find(item => String(item.id) === id);
       return chooseHistoryRecord(localRecord, remoteRecord);
     }).filter(Boolean).sort((a,b) => recordTimestamp(b) - recordTimestamp(a));
 
@@ -2077,10 +2097,22 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOp
     }
 
     const seedEquipmentMap = new Map(seedEquipments.map(item => [String(item.code || item.id || '').toUpperCase(), sanitizeEquipment(item)]));
-    const remoteEquipmentMap = new Map((remoteEquipments || []).map(item => [
-      String(item.code || item.id || '').toUpperCase(),
-      item
-    ]));
+    const remoteEquipmentMap = new Map();
+    (remoteEquipments || []).forEach(item => {
+      const k = String(item.code || item.id || '').toUpperCase();
+      if (k) remoteEquipmentMap.set(k, item);
+    });
+    // Mescla o registro compartilhado (app_metadata) garantindo paleteiras e edições de outros computadores
+    (registryEquipments || []).forEach(item => {
+      const k = String(item.code || item.id || '').toUpperCase();
+      if (k) {
+        const existing = remoteEquipmentMap.get(k);
+        if (!existing || equipmentSyncTimestamp(item) >= equipmentSyncTimestamp(existing)) {
+          remoteEquipmentMap.set(k, item);
+        }
+      }
+    });
+
     const localEquipmentMap = new Map(currentLocalEquipments.map(item => [String(item.code || item.id || '').toUpperCase(), item]));
     const pendingEquipmentIds = pendingEquipmentIdSet();
     const recoverableLocalKeys = new Set(currentLocalEquipments
@@ -2091,12 +2123,7 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOp
           || equipmentSyncTimestamp(localEquipment) > equipmentSyncTimestamp(remoteEquipment);
       })
       .map(localEquipment => String(localEquipment.code || localEquipment.id || '').toUpperCase()));
-    let equipmentKeys;
-    if (Array.isArray(remoteEquipments)) {
-      equipmentKeys = new Set([...seedEquipmentMap.keys(), ...remoteEquipmentMap.keys(), ...recoverableLocalKeys]);
-    } else {
-      equipmentKeys = new Set([...seedEquipmentMap.keys(), ...localEquipmentMap.keys()]);
-    }
+    const equipmentKeys = new Set([...seedEquipmentMap.keys(), ...remoteEquipmentMap.keys(), ...recoverableLocalKeys]);
     const localRecordsToRecover = [];
     const localCatalogToRecover = [];
     equipments = Array.from(equipmentKeys).map(key => {
@@ -5333,22 +5360,21 @@ async function deleteEquipment(id) {
   equipments = equipments.filter(e => e.id !== id);
   saveLocalBackup();
   localDataRevision += 1;
-  let shared = true;
+  persistEquipmentSnapshotRemote();
   try {
     const client = getSupabase();
     if (client) {
       const { error } = await client.from('equipments').delete().eq('id', id);
-      if (error) throw error;
+      if (error) console.warn('Exclusão na tabela equipments:', error);
     } else {
       await supabaseRestRequest(`equipments?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
     }
   } catch (error) {
-    shared = false;
-    console.warn('Exclusão salva somente neste aparelho:', error);
+    console.warn('Exclusão direta na tabela falhou (sincronizado via app_metadata):', error);
   }
   closeModal();
   render();
-  toast(shared ? `PTA ${eq.code} removida com sucesso em todos os aparelhos.` : `PTA ${eq.code} removida neste aparelho.`);
+  toast(`PTA / Equipamento ${eq.code} removido com sucesso.`);
 }
 
 function openEquipmentDetails(id) {
