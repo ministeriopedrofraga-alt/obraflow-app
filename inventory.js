@@ -167,7 +167,8 @@ function inventoryProduct(code) {
 function materialModuleTabs(active = 'estoque') {
   const entryCount = receivingInspections.filter(record => ['entrada_nf', 'entrada_planilha', 'entrada_manual'].includes(record?.operation)).length;
   const checkoutCount = typeof cautelasList !== 'undefined' ? cautelasList.length : 0;
-  return `<nav class="module-tabs material-tabs" aria-label="Seções do controle de materiais e saídas"><a href="#materiais" class="${active === 'estoque' ? 'active' : ''}">${icon('pallet')} Saldo atual <b>${inventorySnapshot().length}</b></a><a href="#notas-entrada" class="${active === 'entradas' ? 'active' : ''}">${icon('file')} Entradas <b>${entryCount}</b></a><a href="#movimentacoes-materiais" class="${active === 'movimentacoes' ? 'active' : ''}">${icon('swap')} Movimentações <b>${inventoryMovements().length}</b></a><a href="#romaneios" class="${active === 'romaneios' ? 'active' : ''}">${icon('truck')} Documentos <b>${packingSlips.length}</b></a><a href="#cautelas" class="${active === 'saidas' ? 'active' : ''}">${icon('tool')} Saídas e cautelas <b>${checkoutCount}</b></a></nav>`;
+  const documentCount = typeof packingSlips !== 'undefined' ? packingSlips.length : 0;
+  return `<nav class="module-tabs material-tabs" aria-label="Áreas principais do controle de materiais"><a href="#materiais" class="${active === 'estoque' ? 'active' : ''}">${icon('pallet')} Estoque <b>${inventorySnapshot().length}</b></a><a href="#notas-entrada" class="${active === 'entradas' ? 'active' : ''}">${icon('download')} Entradas <b>${entryCount}</b></a><a href="#cautelas" class="${active === 'saidas' ? 'active' : ''}">${icon('swap')} Saídas <b>${documentCount + checkoutCount}</b></a></nav>`;
 }
 
 function renderMaterials() {
@@ -180,6 +181,7 @@ function renderMaterials() {
     <section class="inventory-toolbar">
       <label class="search-box">${icon('search')}<input id="materialSearch" type="search" placeholder="Buscar código Heating ou descrição..." oninput="filterMaterials()"></label>
       <label class="filter-field"><span>Situação</span><select id="materialStatus" onchange="filterMaterials()"><option value="">Todos</option><option value="positive">Com saldo</option><option value="empty">Sem saldo</option></select></label>
+      <a class="button button-outline" href="#movimentacoes-materiais">${icon('swap')} Histórico</a>
       <button class="button button-outline" onclick="exportInventoryExcel()">${icon('download')} Exportar estoque</button>
       <button class="button button-dark" onclick="openInventoryReport()">${icon('print')} Imprimir estoque</button>
     </section>
@@ -213,13 +215,18 @@ function renderMaterialEntries() {
       <label class="filter-field"><span>Data final</span><input id="entryEnd" type="date" onchange="filterMaterialEntries()"></label>
     </section>
     <article class="panel inventory-panel"><div class="table-wrap"><table class="data-table material-entry-table"><thead><tr><th>Data de entrada</th><th>NF / documento</th><th>Fornecedor</th><th>Materiais recebidos</th><th>Arquivo original</th><th></th></tr></thead><tbody>
-      ${records.map(record => {
+      ${records.map((record, recordIndex) => {
         const documentNumber = record.control || record.invoiceNumber || record.number || 'SEM-NF';
-        const itemsText = (record.items || []).map(item => `${item.code || ''} ${item.description || ''}`).join(' ');
-        const quantity = (record.items || []).reduce((sum, item) => sum + materialNumber(item.quantity), 0);
+        const items = record.items || [];
+        const itemsText = items.map(item => `${item.code || ''} ${item.description || ''}`).join(' ');
+        const quantity = items.reduce((sum, item) => sum + materialNumber(item.quantity), 0);
         const search = `${documentNumber} ${record.supplier || ''} ${itemsText}`.toLocaleLowerCase('pt-BR');
         const hasAttachment = hasMaterialInvoiceAttachment(record);
-        return `<tr class="material-entry-row" data-document="${esc(documentNumber)}" data-supplier="${esc(record.supplier || '')}" data-attachment="${hasAttachment ? 'yes' : 'no'}" data-date="${esc(String(record.entryDate || record.inspectedAt || record.createdAt || '').slice(0, 10))}" data-search="${esc(search)}"><td><strong>${record.entryDate || record.inspectedAt ? fullDate(record.entryDate || record.inspectedAt) : '—'}</strong><small class="table-sub">Lançado por ${esc(record.inspectedBy || 'Almoxarifado')}</small></td><td><strong class="document-number">${esc(documentNumber)}</strong><small class="table-sub">${esc(record.number || '')}</small></td><td>${esc(record.supplier || 'Não informado')}</td><td><strong>${record.items?.length || 0} item(ns)</strong><small class="table-sub">${materialQuantity(quantity)} em quantidade total</small></td><td>${hasAttachment ? `<span class="invoice-file-status available">${icon('check')} PDF arquivado</span><small class="table-sub">${esc(record.attachment.name || 'Nota fiscal.pdf')} · ${materialInvoiceLocation(record.attachment)}</small>` : `<span class="invoice-file-status missing">${icon('alert')} Sem PDF</span>`}</td><td><div class="entry-row-actions"><button class="table-action" onclick="openMaterialEntryRecord('${esc(record.id)}')">${icon('file')} Abrir</button>${hasAttachment ? `<button class="table-action" onclick="openMaterialInvoiceAttachment('${esc(record.id)}','download')">${icon('download')} Baixar NF</button>` : ''}<button class="table-action danger-text" title="Excluir entrada" onclick="deleteReceivingInspectionRecord('${esc(record.id)}')">${icon('trash')}</button></div></td></tr>`;
+        const isSpreadsheet = record.operation === 'entrada_planilha';
+        const visibleDocument = isSpreadsheet && documentNumber === 'SEM-NF' ? 'Planilha importada' : documentNumber;
+        const preview = items.slice(0, 2).map(item => `<span><b>${esc(item.code || '—')}</b> ${esc(item.description || 'Sem descrição')}</span>`).join('');
+        const remaining = Math.max(0, items.length - 2);
+        return `<tr class="material-entry-row ${recordIndex === 0 ? 'latest-entry' : ''}" data-document="${esc(documentNumber)}" data-supplier="${esc(record.supplier || '')}" data-attachment="${hasAttachment ? 'yes' : 'no'}" data-date="${esc(String(record.entryDate || record.inspectedAt || record.createdAt || '').slice(0, 10))}" data-search="${esc(search)}"><td>${recordIndex === 0 ? '<span class="entry-latest-badge">Entrada mais recente</span>' : ''}<strong>${record.entryDate || record.inspectedAt ? fullDate(record.entryDate || record.inspectedAt) : '—'}</strong><small class="table-sub">Lançado por ${esc(record.inspectedBy || 'Almoxarifado')}</small></td><td><strong class="document-number">${esc(visibleDocument)}</strong><small class="table-sub">${esc(isSpreadsheet ? record.source || record.number || '' : record.number || '')}</small></td><td>${esc(record.supplier || 'Não informado')}</td><td><strong>${items.length} item(ns)</strong><small class="table-sub">${materialQuantity(quantity)} em quantidade total</small><div class="entry-item-preview">${preview}${remaining ? `<em>+ ${remaining} outro(s)</em>` : ''}</div></td><td>${hasAttachment ? `<span class="invoice-file-status available">${icon('check')} PDF arquivado</span><small class="table-sub">${esc(record.attachment.name || 'Nota fiscal.pdf')} · ${materialInvoiceLocation(record.attachment)}</small>` : `<span class="invoice-file-status missing">${icon('alert')} Sem PDF</span>`}</td><td><div class="entry-row-actions"><button class="table-action" onclick="openMaterialEntryRecord('${esc(record.id)}')">${icon('file')} Ver itens</button>${hasAttachment ? `<button class="table-action" onclick="openMaterialInvoiceAttachment('${esc(record.id)}','download')">${icon('download')} Baixar NF</button>` : ''}<button class="table-action danger-text" title="Excluir entrada" onclick="deleteReceivingInspectionRecord('${esc(record.id)}')">${icon('trash')}</button></div></td></tr>`;
       }).join('')}
     </tbody></table></div>${records.length ? '' : `<div class="empty-state"><div><span>${icon('file')}</span><h2>Nenhuma nota de entrada registrada</h2><p>Envie a primeira nota fiscal em PDF ou registre uma entrada manual.</p><button class="button button-green" onclick="openReceivingInvoiceModal()">${icon('plus')} Nova entrada</button></div></div>`}<div class="no-filter-results" id="noMaterialEntryResults">Nenhuma nota encontrada com estes filtros.</div></article>`;
 }
@@ -296,8 +303,7 @@ function renderMaterialMovements() {
   const entryCount = movements.filter(item => item.type === 'in').length;
   const outputCount = movements.filter(item => item.type === 'out').length;
   document.getElementById('app').innerHTML = `
-    ${pageHeader('Movimentações de materiais', 'Consulte tudo o que entrou, saiu ou retornou, com data, código, documento e responsável.', 'ALMOXARIFADO · HEATING COOLING', `<button class="button button-outline" onclick="openMaterialActionMenu('entry')">${icon('download')} Nova entrada</button><button class="button button-green" onclick="openUnifiedOutputMenu()">${icon('swap')} Nova saída</button>`)}
-    ${materialModuleTabs('movimentacoes')}
+    ${pageHeader('Histórico de materiais', 'Consulte tudo o que entrou, saiu ou retornou, com data, código, documento e responsável.', 'ALMOXARIFADO · HEATING COOLING', `<a class="button button-outline" href="#materiais">${icon('pallet')} Voltar ao estoque</a><button class="button button-outline" onclick="openMaterialActionMenu('entry')">${icon('download')} Nova entrada</button><button class="button button-green" onclick="openUnifiedOutputMenu()">${icon('swap')} Nova saída</button>`)}
     <section class="metrics-grid material-metrics">${metric('MOVIMENTAÇÕES', movements.length, 'registros no razão', 'blue', 'swap', 100)}${metric('ENTRADAS', entryCount, 'lançamentos', 'green', 'download', movements.length ? entryCount / movements.length * 100 : 0)}${metric('SAÍDAS', outputCount, 'lançamentos', 'amber', 'truck', movements.length ? outputCount / movements.length * 100 : 0)}${metric('DOCUMENTOS', new Set(movements.map(item => item.document).filter(Boolean)).size, 'NF, planilhas e romaneios', 'blue', 'file', 100)}</section>
     <section class="movement-filters"><label class="search-box">${icon('search')}<input id="movementSearch" type="search" placeholder="Código, material, documento, destino ou responsável..." oninput="filterMaterialMovements()"></label><label class="filter-field"><span>Operação</span><select id="movementType" onchange="filterMaterialMovements()"><option value="">Todas</option><option value="in">Entradas e retornos</option><option value="out">Saídas</option></select></label><label class="filter-field"><span>Data inicial</span><input id="movementStart" type="date" onchange="filterMaterialMovements()"></label><label class="filter-field"><span>Data final</span><input id="movementEnd" type="date" onchange="filterMaterialMovements()"></label></section>
     <article class="panel inventory-panel"><div class="table-wrap"><table class="data-table movement-table"><thead><tr><th>Data</th><th>Operação</th><th>Código Heating</th><th>Material</th><th>Quantidade</th><th>Documento</th><th>Fornecedor / destino</th><th></th></tr></thead><tbody>${movements.map(movement => `<tr class="material-movement-row" data-type="${movement.type}" data-date="${esc(String(movement.date || '').slice(0, 10))}" data-search="${esc(`${movement.code} ${movement.description} ${movement.document} ${movement.party} ${movement.destination}`.toLowerCase())}"><td>${movement.date ? fullDate(movement.date) : '—'}</td><td><span class="movement-badge ${movement.type}">${movement.type === 'in' ? 'Entrada' : 'Saída'}</span></td><td><strong class="material-code">${esc(movement.code)}</strong></td><td><strong>${esc(movement.description)}</strong><small class="table-sub">${esc(movement.unit)}</small></td><td class="${movement.type === 'in' ? 'quantity-in' : 'quantity-out'}">${movement.type === 'in' ? '+' : '−'} ${materialQuantity(movement.quantity)} ${esc(movement.unit)}</td><td><strong>${esc(movement.document || '—')}</strong><small class="table-sub">${esc(movement.source || '')}</small></td><td><strong>${esc(movement.type === 'in' ? movement.party || 'Almoxarifado' : movement.destination || '—')}</strong><small class="table-sub">${esc(movement.type === 'out' ? movement.party || '' : '')}</small></td><td><div style="display:flex;gap:4px;"><button class="table-action" onclick="${movement.recordType === 'receiving' ? `openMaterialEntryRecord('${esc(movement.recordId)}')` : movement.tracked === false ? `openPackingSlipRecord('${esc(movement.recordId)}')` : `openMaterialHistory('${esc(movement.code)}')`}">${icon('file')} ${movement.recordType === 'receiving' ? 'Ver nota' : movement.tracked === false ? 'Documento' : 'Ficha'}</button><button class="table-action" style="color:var(--red);" title="Excluir lançamento" onclick="${movement.recordType === 'receiving' ? `deleteReceivingInspectionRecord('${esc(movement.recordId)}')` : `deletePackingSlipRecord('${esc(movement.recordId)}')`}">${icon('trash')}</button></div></td></tr>`).join('')}</tbody></table></div>${movements.length ? '' : `<div class="empty-state"><div><span>${icon('swap')}</span><h2>Nenhuma movimentação registrada</h2><p>As entradas e saídas aparecerão aqui automaticamente.</p></div></div>`}<div class="no-filter-results" id="noMovementResults">Nenhuma movimentação encontrada com esses filtros.</div></article>`;
@@ -645,36 +651,88 @@ async function submitInvoiceEntry(event) {
 
 function openMaterialSpreadsheetModal() {
   modal(`${modalHead('Importar entrada por planilha', 'Use o relatório de entrada com o código de produto da Heating')}
-    <div class="modal-body"><div class="upload-zone" onclick="document.getElementById('materialSpreadsheet').click()"><span>${icon('download')}</span><div><h3>Selecionar planilha de materiais</h3><p>.xlsx, .xls ou .xlsm · o cabeçalho pode estar em qualquer uma das primeiras 20 linhas</p></div><button type="button" class="button button-green compact">Escolher arquivo</button><input id="materialSpreadsheet" type="file" accept=".xlsx,.xls,.xlsm" hidden onchange="handleMaterialSpreadsheet(event)"></div>
+    <div class="modal-body"><div class="upload-zone" onclick="document.getElementById('materialSpreadsheet').click()"><span>${icon('download')}</span><div><h3>Selecionar planilha de materiais</h3><p>.xlsx, .xls ou .xlsm · o cabeçalho pode estar em qualquer uma das primeiras 100 linhas</p></div><button type="button" class="button button-green compact">Escolher arquivo</button><input id="materialSpreadsheet" type="file" accept=".xlsx,.xls,.xlsm" hidden onchange="handleMaterialSpreadsheet(event)"></div>
     <div class="import-columns"><span>Código Produto</span><span>Data</span><span>NF</span><span>Fornecedor</span><span>Descrição do Item</span><span>Qtde</span><span>Unidade</span><span>Valor Unit.</span><span>Valor Total</span></div>
-    <div class="notice">${icon('alert')} Cada código Heating vira um único produto no estoque. Uma nova importação gera entradas; ela não substitui nem apaga movimentações anteriores.</div></div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Cancelar</button></div>`, 'modal-large');
+    <div class="notice">${icon('alert')} Cada código Heating vira um único produto no estoque. Uma nova importação gera entradas; ela não substitui nem apaga movimentações anteriores.</div></div><div class="modal-foot"><button class="button button-outline" onclick="downloadMaterialEntryTemplate()">${icon('download')} Baixar modelo de entrada</button><button class="button button-outline" onclick="closeModal()">Cancelar</button></div>`, 'modal-large');
 }
 
 function normalizedMaterialHeader(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+function materialHeaderField(value) {
+  const header = normalizedMaterialHeader(value);
+  if (!header) return '';
+  const codeSubjects = ['produto', 'material', 'item', 'peca', 'insumo', 'heating', 'hc', 'mega', 'interno'];
+  const hasCodePrefix = header.startsWith('codigo') || header.startsWith('cod') || header.includes('digo');
+  if (
+    header === 'codigo' || header === 'cod' || header === 'sku' || header === 'referencia' || header === 'ref' ||
+    (hasCodePrefix && codeSubjects.some(subject => header.includes(subject)))
+  ) return 'code';
+  if (header.includes('dataentrega')) return 'deliveryDate';
+  if (header.includes('datapedido') || header.includes('datasolicitacao')) return 'requestDate';
+  if (header === 'data' || header.includes('dataentrada') || header.includes('datamovimento') || header.includes('emissao')) return 'date';
+  if (header === 'nf' || header.startsWith('nfnumero') || header.startsWith('numeronf') || header.includes('notafiscal')) return 'invoice';
+  if (header.includes('fornecedor') || header.includes('fabricante')) return 'supplier';
+  if (
+    header.includes('descricao') || header.startsWith('descr') || header.includes('denominacao') ||
+    header.includes('especificacao') || header === 'item' || header === 'material' || header === 'produto' ||
+    header.includes('nomedoitem') || header.includes('nomeitem') || header.includes('nomedomaterial') ||
+    header.includes('nomematerial') || header.includes('nomedoproduto') || header.includes('nomeproduto')
+  ) return 'description';
+  if (
+    header.includes('quantidade') || header.startsWith('quant') || header.startsWith('qtd') ||
+    header.startsWith('qtde') || header.startsWith('qte') || header.startsWith('qde') || header.startsWith('qnt') ||
+    header === 'saldo' || header.includes('saldoatual') || header.includes('estoqueatual')
+  ) return 'quantity';
+  if (header.includes('valorunit') || header.includes('precounit') || header === 'vlrunit') return 'unitValue';
+  if (header.includes('valortotal') || header.includes('precototal') || header.includes('valorestimado') || header === 'vlrtotal') return 'totalValue';
+  if (header.includes('unidade') || header === 'un' || header === 'und' || header === 'um') return 'unit';
+  if (header === 'dh' || header.includes('datahall')) return 'dataHall';
+  if (header === 'local' || header.includes('localentrega')) return 'location';
+  if (header.includes('rmvinculada') || header === 'rm') return 'linkedRequest';
+  if (header.includes('observ')) return 'observation';
+  return '';
+}
+
 function materialColumnMap(row) {
   const map = {};
+  const priorities = {};
   row.forEach((value, index) => {
+    const field = materialHeaderField(value);
+    if (!field) return;
     const header = normalizedMaterialHeader(value);
-    if (((header.includes('codigo') || header.includes('digo')) && (header.includes('produto') || header.includes('mega') || header.includes('material'))) || header === 'codigo' || header === 'cod' || header === 'codproduto' || header === 'codigomega') map.code = index;
-    else if (header === 'data' || header.includes('dataentrada') || header.includes('emissao')) map.date = index;
-    else if (header === 'nf' || header.includes('notafiscal')) map.invoice = index;
-    else if (header.includes('fornecedor')) map.supplier = index;
-    else if (header.includes('descr') || header === 'item' || header === 'material' || header === 'produto' || header.endsWith('doitem')) map.description = index;
-    else if (header.includes('qtde') || header.includes('quantidade') || header === 'qtd' || header.startsWith('qtd')) map.quantity = index;
-    else if (header.includes('unidade') || header === 'un' || header === 'und') map.unit = index;
-    else if (header.includes('valorunit')) map.unitValue = index;
-    else if (header.includes('valortotal')) map.totalValue = index;
-    else if (header === 'dh' || header.includes('datahall')) map.dataHall = index;
-    else if (header === 'local' || header.includes('localentrega')) map.location = index;
-    else if (header.includes('datapedido')) map.requestDate = index;
-    else if (header.includes('dataentrega')) map.deliveryDate = index;
-    else if (header.includes('rmvinculada') || header === 'rm') map.linkedRequest = index;
-    else if (header.includes('observ')) map.observation = index;
+    let priority = 2;
+    if (field === 'description') priority = ['item', 'material', 'produto'].includes(header) ? 1 : 3;
+    if (field === 'quantity') {
+      if (header.includes('recebid') || header.includes('entreg') || header.includes('entrada')) priority = 3;
+      if (header.includes('solicit') || header.includes('pedid')) priority = 1;
+    }
+    if (map[field] === undefined || priority > priorities[field]) {
+      map[field] = index;
+      priorities[field] = priority;
+    }
   });
   return map;
+}
+
+function materialSpreadsheetHeader(rows, maxRows = 100) {
+  const limit = Math.min(maxRows, rows.length);
+  let best = { index: -1, columns: {}, matched: 0 };
+  for (let index = 0; index < limit; index++) {
+    const current = Array.isArray(rows[index]) ? rows[index] : [];
+    const previous = index > 0 && Array.isArray(rows[index - 1]) ? rows[index - 1] : [];
+    const width = Math.max(current.length, previous.length);
+    const combined = Array.from({ length: width }, (_, column) => [previous[column], current[column]]
+      .filter(value => String(value || '').trim()).join(' '));
+    const candidates = [materialColumnMap(current), materialColumnMap(combined)];
+    for (const columns of candidates) {
+      const matched = ['code', 'description', 'quantity'].filter(field => columns[field] !== undefined).length;
+      if (matched > best.matched) best = { index, columns, matched };
+      if (matched === 3) return { index, columns, matched };
+    }
+  }
+  return best;
 }
 
 function materialExcelDate(value) {
@@ -689,6 +747,17 @@ function materialExcelDate(value) {
   return /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : new Date().toISOString().slice(0, 10);
 }
 
+async function downloadMaterialEntryTemplate() {
+  if (!await ensureExcelLibrary()) return toast('Gerador de planilha indisponível. Verifique a conexão.', true);
+  const headers = ['Código Produto', 'Data', 'NF', 'Fornecedor', 'Descrição do Item', 'Qtde', 'Unidade', 'Valor Unit.', 'Valor Total'];
+  const sheet = XLSX.utils.aoa_to_sheet([headers]);
+  sheet['!cols'] = [18, 14, 16, 30, 62, 12, 12, 16, 16].map(width => ({ wch: width }));
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, 'Entradas');
+  XLSX.writeFile(book, `modelo-entrada-materiais-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  toast('Modelo de entrada baixado. Preencha uma linha por material.');
+}
+
 async function handleMaterialSpreadsheet(event) {
   const file = event.target.files?.[0];
   if (!file) return;
@@ -696,37 +765,49 @@ async function handleMaterialSpreadsheet(event) {
     if (!await ensureExcelLibrary()) throw new Error('Leitor de Excel indisponível.');
     const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
     const imported = [];
+    let headerFound = false;
+    let rowsWithContent = 0;
     workbook.SheetNames.forEach(sheetName => {
       const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '', raw: true });
-      let headerIndex = -1;
-      let columns = {};
-      for (let index = 0; index < Math.min(20, rows.length); index++) {
-        const candidate = materialColumnMap(rows[index]);
-        if (candidate.code !== undefined && candidate.description !== undefined && candidate.quantity !== undefined) {
-          headerIndex = index;
-          columns = candidate;
-          break;
-        }
-      }
+      const header = materialSpreadsheetHeader(rows);
+      const headerIndex = header.index;
+      const columns = header.columns;
+      if (header.matched === 3) headerFound = true;
       if (headerIndex < 0) return;
       rows.slice(headerIndex + 1).forEach(row => {
         const code = materialCode(row[columns.code]);
-        const description = String(row[columns.description] || '').trim();
-        const quantity = materialNumber(row[columns.quantity]);
+        const description = String(row[columns.description] || '').replace(/\s+/g, ' ').trim();
+        const quantityCell = row[columns.quantity];
+        const unitCell = row[columns.unit];
+        let quantity = materialNumber(quantityCell);
+        let unit = String(unitCell || 'UN').trim().toUpperCase();
+        const quantityCellIsEmpty = quantityCell === undefined || quantityCell === null || String(quantityCell).trim() === '';
+        const unitCellIsNumeric = typeof unitCell === 'number' || /^[+-]?\d+(?:[.,]\d+)?$/.test(String(unitCell || '').trim());
+        // Compatibilidade com relatórios de estoque preenchidos como entrada: algumas versões
+        // colocavam a quantidade na coluna Unidade e deixavam Saldo atual em branco.
+        if (quantity <= 0 && quantityCellIsEmpty && unitCellIsNumeric) {
+          quantity = materialNumber(unitCell);
+          unit = 'UN';
+        }
+        if (row.some(value => String(value || '').trim())) rowsWithContent++;
         if (!code || !description || quantity <= 0) return;
         imported.push({
-          code, description, quantity, unit: String(row[columns.unit] || 'UN').toUpperCase(),
+          code, description, quantity, unit,
           unitValue: materialNumber(row[columns.unitValue]), totalValue: materialNumber(row[columns.totalValue]),
           invoice: String(row[columns.invoice] || 'SEM-NF').trim(), date: materialExcelDate(row[columns.date]),
           supplier: String(row[columns.supplier] || '').trim(), sheet: sheetName
         });
       });
     });
-    if (!imported.length) throw new Error('Nenhum item válido encontrado. Confira Código Produto, Descrição do Item e Qtde.');
+    if (!headerFound) throw new Error('Não encontrei as colunas Código, Descrição e Quantidade. O cabeçalho pode estar em qualquer uma das primeiras 100 linhas.');
+    if (!imported.length) throw new Error(rowsWithContent
+      ? 'Encontrei o cabeçalho, mas nenhuma linha tem Código, Descrição e Quantidade maior que zero.'
+      : 'Encontrei o cabeçalho, mas não há itens preenchidos abaixo dele.');
     pendingMaterialImport = { fileName: file.name, rows: imported };
     showMaterialImportPreview();
   } catch (error) {
     console.error(error);
+    event.target.value = '';
     toast(error.message || 'Não foi possível ler a planilha.', true);
   }
 }

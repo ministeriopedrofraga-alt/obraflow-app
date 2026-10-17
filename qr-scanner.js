@@ -38,25 +38,42 @@
 
   function showScannedEquipment(text) {
     if (!text) return;
-    let target = String(text).trim();
-    if (target.includes('#scan/')) target = target.split('#scan/')[1];
+    let raw = String(text).trim();
+    let target = raw;
+    if (target.includes('#scan/spool/')) target = target.split('#scan/spool/')[1];
+    else if (target.includes('#spool/')) target = target.split('#spool/')[1];
+    else if (target.includes('#scan/')) target = target.split('#scan/')[1];
     else if (target.includes('/')) target = target.split('/').pop();
-    target = target.split(/[?#]/)[0].toLowerCase().trim();
+    target = target.split(/[?#]/)[0].trim();
 
-    const equipment = equipments.find(item =>
-      (item.id && item.id.toLowerCase() === target) ||
-      (item.code && item.code.toLowerCase() === target) ||
-      (item.afNumber && item.afNumber.toLowerCase() === target) ||
-      (item.serial && item.serial.toLowerCase() === target)
-    );
-    if (!equipment) return toast(`Equipamento não encontrado para o código "${text}".`, true);
-    openPublicEquipmentModal(equipment.id);
+    // 1. Tenta encontrar no módulo de Spools
+    if (typeof spoolFindAnywhere === 'function') {
+      const spoolMatch = spoolFindAnywhere(target) || spoolFindAnywhere(raw);
+      if (spoolMatch && typeof spoolOpenTrackingModal === 'function') {
+        return spoolOpenTrackingModal(spoolMatch.spool.id, spoolMatch.project.id);
+      }
+    }
+
+    // 2. Tenta encontrar no cadastro de Equipamentos (PTAs)
+    const lowerTarget = target.toLowerCase();
+    const equipment = (typeof equipments !== 'undefined' && Array.isArray(equipments)) ? equipments.find(item =>
+      (item.id && item.id.toLowerCase() === lowerTarget) ||
+      (item.code && item.code.toLowerCase() === lowerTarget) ||
+      (item.afNumber && item.afNumber.toLowerCase() === lowerTarget) ||
+      (item.serial && item.serial.toLowerCase() === lowerTarget)
+    ) : null;
+
+    if (equipment && typeof openPublicEquipmentModal === 'function') {
+      return openPublicEquipmentModal(equipment.id);
+    }
+
+    toast(`Código "${text}" não encontrado em spools nem em equipamentos.`, true);
   }
 
   window.openScanModal = async function openQrScannerModal() {
     await stopQrScanner();
     scanHandled = false;
-    modal(`${modalHead('Ler QR Code do Equipamento','Aponte a câmera para o QR Code impresso no equipamento')}<div class="modal-body"><div id="qrCameraContainer" style="width:100%;min-height:220px;background:#14201b;border-radius:12px;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;color:#fff;"><div id="reader" style="width:100%;"></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;"><button type="button" class="button button-outline" onclick="initQrCamera()">${icon('scan')} Ativar câmera</button><label class="button button-outline" style="cursor:pointer;justify-content:center;">${icon('qr')} Ler pela foto<input type="file" accept="image/*" capture="environment" hidden onchange="scanQrImage(event)"></label></div><div style="margin:14px 0 10px;text-align:center;color:#67736d;font-size:11px;font-weight:600;letter-spacing:0.5px;">OU DIGITE O CÓDIGO DO ATIVO</div><form class="scan-input" onsubmit="findEquipment(event)"><input id="scanCode" required autocomplete="off" placeholder="Ex.: TPTA00674, 686..."><button class="button button-green">Localizar</button></form><div class="notice">${icon('qr')} Autorize o uso da câmera quando o navegador solicitar.</div></div>`, 'modal-small');
+    modal(`${modalHead('Ler QR Code de Spool ou Equipamento','Aponte a câmera para o QR Code impresso no spool ou equipamento')}<div class="modal-body"><div id="qrCameraContainer" style="width:100%;min-height:220px;background:#14201b;border-radius:12px;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;color:#fff;"><div id="reader" style="width:100%;"></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;"><button type="button" class="button button-outline" onclick="initQrCamera()">${icon('scan')} Ativar câmera</button><label class="button button-outline" style="cursor:pointer;justify-content:center;">${icon('qr')} Ler pela foto<input type="file" accept="image/*" capture="environment" hidden onchange="scanQrImage(event)"></label></div><div style="margin:14px 0 10px;text-align:center;color:#67736d;font-size:11px;font-weight:600;letter-spacing:0.5px;">OU DIGITE O NÚMERO DO SPOOL / CÓDIGO DO ATIVO</div><form class="scan-input" onsubmit="findEquipment(event)"><input id="scanCode" required autocomplete="off" placeholder="Ex.: SP-1762, 1761, TPTA00674, 686..."><button class="button button-green">Localizar</button></form><div class="notice">${icon('qr')} Autorize o uso da câmera quando o navegador solicitar.</div></div>`, 'modal-small');
     setTimeout(window.initQrCamera, 100);
   };
 

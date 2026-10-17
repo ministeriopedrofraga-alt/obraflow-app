@@ -40,6 +40,7 @@ const icons = {
   ,lock: '<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
   ,mail: '<svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>'
   ,key: '<svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3M18 5l3 3"/></svg>'
+  ,spool: '<svg viewBox="0 0 24 24"><path d="M4 8h11a4 4 0 0 1 4 4v1a4 4 0 0 1-4 4H9"/><path d="M4 5v6m0 4v4M2 5h4m-4 6h4m1 4h4v4H7z"/></svg>'
 };
 
 const seedEquipments = [
@@ -279,6 +280,12 @@ async function ensureExcelLibrary() {
 
 async function ensureExcelExportLibrary() {
   if (window.ExcelJS) return true;
+  try {
+    await loadExternalScript('exceljs.min.js', 'exceljs-library');
+    if (window.ExcelJS) return true;
+  } catch (e) {
+    // fallback to CDN
+  }
   try {
     await loadExternalScript('https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js', 'exceljs-library');
     return !!window.ExcelJS;
@@ -1930,7 +1937,11 @@ function workforceSnapshot() {
   };
 }
 
+let isSavingWorkforce = false;
+
 async function persistWorkforceControlRemote() {
+  if (isSavingWorkforce) return;
+  isSavingWorkforce = true;
   try {
     const snapshot = workforceSnapshot();
     await supabaseRestRequest('app_metadata?on_conflict=key', {
@@ -1959,10 +1970,12 @@ async function persistWorkforceControlRemote() {
   } catch (error) {
     console.warn('Controle de efetivo salvo somente neste aparelho:', error);
     return false;
+  } finally {
+    isSavingWorkforce = false;
   }
 }
 
-function scheduleWorkforceRemoteSave(delay = 700) {
+function scheduleWorkforceRemoteSave(delay = 500) {
   clearTimeout(workforceRemoteSaveTimer);
   workforceRemoteSaveTimer = setTimeout(() => persistWorkforceControlRemote(), delay);
 }
@@ -2205,11 +2218,17 @@ async function initializeApp() {
   setTimeout(() => syncReceivingInspectionsFromSupabase(), 200);
   if (typeof syncRadiosFromSupabase === 'function') setTimeout(() => syncRadiosFromSupabase(), 250);
   setTimeout(() => syncUserApprovalsFromSupabase(), 300);
+  if (typeof syncSpoolProjectsFromSupabase === 'function') setTimeout(() => syncSpoolProjectsFromSupabase({ force: true }), 350);
   setInterval(() => syncFromSupabase({ renderAfter: true, pushAfter: false }), 12000);
   setInterval(() => syncUserApprovalsFromSupabase(), 15000);
+  if (typeof syncSpoolProjectsFromSupabase === 'function') {
+    setInterval(() => syncSpoolProjectsFromSupabase({ force: true }), 15000);
+  }
   setInterval(() => {
     syncWorkforceFromSupabase().then(updated => {
-      if (updated && currentPage === 'empresas' && canSafelyAutoRender(['empresas'])) renderCompanies();
+      if (updated && currentPage === 'empresas') {
+        if (typeof updateWorkforceSummaryUI === 'function') updateWorkforceSummaryUI();
+      }
     });
   }, 15000);
 }
@@ -2279,7 +2298,14 @@ function dateTime(value) {
 }
 function fullDate(value) {
   if (!value) return '—';
-  return new Intl.DateTimeFormat('pt-BR', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }).format(new Date(value));
+  const raw = String(value);
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+  const parsed = new Date(dateOnly ? `${raw}T12:00:00` : value);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  const options = dateOnly
+    ? { day:'2-digit', month:'short', year:'numeric' }
+    : { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' };
+  return new Intl.DateTimeFormat('pt-BR', options).format(parsed);
 }
 function nowLocal() {
   const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,16);
@@ -2456,7 +2482,7 @@ function confirmSignature() {
     preview.innerHTML = `<img src="${dataUrl}" class="sign-preview-img" alt="Rubrica"><span class="sign-status-text">Rubrica confirmada (clique para alterar)</span>`;
   }
   closeSignatureModal();
-  toast('Rubrica do operador registrada com sucesso.');
+  toast('Rubrica registrada com sucesso.');
 }
 
 function inspectionFromData(data, mode) {
@@ -2563,13 +2589,20 @@ function render() {
       setTimeout(() => openLoginModal('signup'), 50);
     }
 
-    if (!currentUser && ['dashboard', 'empresas', 'relatorios', 'romaneios', 'formularios', 'materiais', 'notas-entrada', 'movimentacoes-materiais', 'cautelas', 'radios', 'usuarios'].includes(hash) && !hash.startsWith('scan/')) {
+    if (!currentUser && ['dashboard', 'empresas', 'relatorios', 'romaneios', 'formularios', 'materiais', 'notas-entrada', 'movimentacoes-materiais', 'cautelas', 'radios', 'spools', 'usuarios'].includes(hash) && !hash.startsWith('scan/')) {
       currentPage = 'equipamentos';
       renderEquipments();
     } else if (hash === 'usuarios' && !isAdmin()) {
       toast('Acesso a Usuários & Aprovações é exclusivo de Gestores.', true);
       currentPage = 'dashboard';
       renderDashboard();
+    } else if (hash.startsWith('scan/spool/') || hash.startsWith('spool/')) {
+      currentPage = 'spools';
+      if (typeof renderSpools === 'function') renderSpools();
+      const id = hash.replace(/^scan\//, '').split('/')[1] || hash.split('/')[1];
+      setTimeout(() => {
+        if (typeof spoolOpenTrackingModal === 'function') spoolOpenTrackingModal(id);
+      }, 50);
     } else if (hash.startsWith('scan/')) {
       currentPage = 'equipamentos';
       renderEquipments();
@@ -2579,7 +2612,7 @@ function render() {
       currentPage = 'equipamentos';
       renderMovements();
     } else {
-      currentPage = ['dashboard','equipamentos','romaneios','formularios','empresas','relatorios','materiais','notas-entrada','movimentacoes-materiais','usuarios','cautelas','radios'].includes(hash) ? hash : 'equipamentos';
+      currentPage = ['dashboard','equipamentos','romaneios','formularios','empresas','relatorios','materiais','notas-entrada','movimentacoes-materiais','usuarios','cautelas','radios','spools'].includes(hash) ? hash : 'equipamentos';
       const views = {
         dashboard: renderDashboard,
         equipamentos: renderEquipments,
@@ -2589,6 +2622,7 @@ function render() {
         relatorios: renderReports,
         cautelas: (typeof renderCautelas === 'function' ? renderCautelas : renderEquipments),
         radios: (typeof renderRadios === 'function' ? renderRadios : renderEquipments),
+        spools: (typeof renderSpools === 'function' ? renderSpools : renderEquipments),
         materiais: typeof renderMaterials === 'function' ? renderMaterials : renderEquipments,
         'notas-entrada': typeof renderMaterialEntries === 'function' ? renderMaterialEntries : renderEquipments,
         'movimentacoes-materiais': typeof renderMaterialMovements === 'function' ? renderMaterialMovements : renderEquipments,
@@ -2607,6 +2641,8 @@ function render() {
     if (matNavCount && typeof inventorySnapshot === 'function') matNavCount.textContent = inventorySnapshot().length;
     const radioNavCount = document.getElementById('navRadioCount');
     if (radioNavCount && typeof radioAssets !== 'undefined') radioNavCount.textContent = radioAssets.length;
+    const spoolNavCount = document.getElementById('navSpoolCount');
+    if (spoolNavCount && typeof spoolTotalCount === 'function') spoolNavCount.textContent = spoolTotalCount();
     closeMobileMenu();
     hydrateIcons();
   } catch (err) {
@@ -3958,9 +3994,9 @@ function openMaterialActionMenu(type, returnPage = '') {
       importTitle: 'Importar planilha de entrada', importText: 'Carregue vários materiais de uma vez para aumentar o saldo.', importAction: 'openMaterialSpreadsheetModal()'
     },
     output: {
-      title: 'Nova saída simples', subtitle: 'Escolha como deseja informar os materiais retirados', iconName: 'swap',
-      manualTitle: 'Preencher manualmente', manualText: 'Selecione ou digite cada material e quantidade da retirada.', manualAction: 'openSimpleOutputModal(false)',
-      importTitle: 'Importar planilha de saída', importText: 'Carregue uma planilha com vários materiais e confira antes de baixar o estoque.', importAction: 'openSimpleOutputModal(true)'
+      title: 'Nova saída simples', subtitle: 'Informe os materiais e colha a rubrica de quem retirou', iconName: 'swap',
+      manualTitle: 'Preencher manualmente', manualText: 'Selecione os materiais e finalize com a rubrica obrigatória do recebedor.', manualAction: 'openSimpleOutputModal(false)',
+      importTitle: 'Importar planilha de saída', importText: 'Carregue os materiais, confira os dados e finalize com a rubrica do recebedor.', importAction: 'openSimpleOutputModal(true)'
     },
     packing_slip: {
       title: 'Novo romaneio', subtitle: 'Escolha como deseja preencher os materiais do documento', iconName: 'truck',
@@ -3995,9 +4031,9 @@ function collectMaterialOutputItems(form) {
 }
 
 function openSimpleOutputModal(importSpreadsheet = false) {
-  modal(`<form onsubmit="submitSimpleOutput(event)">${modalHead('Registrar saída simples','Retirada interna rápida, sem necessidade de assinatura ou foto')}
+  modal(`<form onsubmit="submitSimpleOutput(event)">${modalHead('Registrar saída simples','Retirada interna com rubrica obrigatória de quem recebe')}
     <div class="modal-body">
-      <div class="section-title"><span>${icon('swap')}</span><div><h3>Dados da retirada</h3><small>Use o romaneio quando precisar de transporte, assinatura, foto e impressão formal</small></div></div>
+      <div class="section-title"><span>${icon('swap')}</span><div><h3>Dados da retirada</h3><small>A pessoa que retirar o material deve confirmar a entrega com uma rubrica</small></div></div>
       <div class="form-grid packing-header-grid">
         <div class="field"><label>Número da saída</label><input name="number" value="${nextSimpleOutputNumber()}" readonly></div>
         <div class="field"><label>Data e hora <em>*</em></label><input name="issuedAt" type="datetime-local" required value="${nowLocal()}"></div>
@@ -4009,6 +4045,9 @@ function openSimpleOutputModal(importSpreadsheet = false) {
       <div id="packingItems" class="packing-items">${materialOutputRow({}, 0)}</div>
       <div id="packingSpreadsheetPreview"></div>
       <div class="field full packing-notes"><label>Observação</label><textarea name="notes" placeholder="Motivo, atividade ou informação complementar..."></textarea></div>
+      <div class="packing-evidence-grid simple-output-evidence">
+        <label class="operator-sign-field"><span>Rubrica de quem retirou <em>*</em></span><input type="hidden" name="operatorSign" id="operatorSignInput" data-signature-label="Pessoa que retirou o material"><div id="signPreviewContainer" class="sign-preview-box" onclick="openSignatureModal()"><span class="sign-placeholder-text">✍️ Clique para fazer a rubrica</span></div></label>
+      </div>
     </div>
     <div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Registrar saída</button></div>
   </form>`, 'modal-inspection');
@@ -4021,11 +4060,16 @@ async function submitSimpleOutput(event) {
   const data = new FormData(form);
   const items = collectMaterialOutputItems(form);
   if (!items.length) return toast('Adicione pelo menos um material com descrição e quantidade.', true);
+  const signature = data.get('operatorSign');
+  if (!signature) {
+    toast('A pessoa que retirou o material precisa fazer a rubrica.', true);
+    return openSignatureModal();
+  }
   const slip = {
     id: crypto.randomUUID?.() || `sai-${Date.now()}`,
     recordType: 'output', number: data.get('number'), issuedAt: data.get('issuedAt'), origin: 'Almoxarifado',
     destination: data.get('destination'), sentBy: data.get('sentBy'), requestedBy: data.get('requestedBy'),
-    carrier: '', vehicle: '', notes: data.get('notes') || '', items, signature: '', photos: [],
+    carrier: '', vehicle: '', notes: data.get('notes') || '', items, signature, photos: [],
     status: 'sent', createdAt: new Date().toISOString(), createdBy: currentUser?.name || ''
   };
   packingSlips.unshift(slip);
@@ -4135,8 +4179,7 @@ function renderPackingSlips() {
   }));
   const people = [...new Set(packingSlips.flatMap(slip => [slip.sentBy, slip.requestedBy]).concat(workforce.map(person => person?.name)).filter(Boolean))].sort(safeSort);
   document.getElementById('app').innerHTML = `
-    ${pageHeader('Documentos de saída', 'Consulte saídas rápidas e romaneios formais no mesmo histórico.', 'ALMOXARIFADO E LOGÍSTICA', `<button class="button button-outline" onclick="openPackingSlipModal(true)">${icon('download')} Importar romaneio</button><button class="button button-outline" onclick="exportFilteredPackingSlipsExcel()">${icon('download')} Exportar planilha</button><button class="button button-outline" onclick="printFilteredPackingSlips()">${icon('print')} Imprimir relatório</button><button class="button button-green" onclick="openUnifiedOutputMenu()">${icon('swap')} Nova saída</button>`)}
-    ${typeof materialModuleTabs === 'function' ? materialModuleTabs('romaneios') : ''}
+    ${pageHeader('Documentos de saída', 'Consulte saídas rápidas e romaneios formais no mesmo histórico.', 'ALMOXARIFADO E LOGÍSTICA', `<a class="button button-outline" href="#cautelas">${icon('swap')} Todas as saídas</a><button class="button button-outline" onclick="openPackingSlipModal(true)">${icon('download')} Importar romaneio</button><button class="button button-outline" onclick="exportFilteredPackingSlipsExcel()">${icon('download')} Exportar planilha</button><button class="button button-outline" onclick="printFilteredPackingSlips()">${icon('print')} Imprimir relatório</button><button class="button button-green" onclick="openUnifiedOutputMenu()">${icon('swap')} Nova saída</button>`)}
     <datalist id="packingPersonOptions">${people.map(value => `<option value="${esc(value)}"></option>`).join('')}</datalist>
     <div class="packing-filters">
       <label class="search-box">${icon('search')}<input id="packingSearch" type="search" placeholder="Buscar número, material, destino ou responsável..." oninput="filterPackingSlips()"></label>
@@ -4263,7 +4306,7 @@ function printablePackingSlip(slip) {
     <table class="packing-document-table"><thead><tr><th>Item</th><th>Código</th><th>Descrição do material</th><th>Un.</th><th>Qtd. retirada</th><th>Observação</th></tr></thead><tbody>${(slip.items || []).map((item,index)=>`<tr><td>${index+1}</td><td>${esc(item.code||'AVULSO')}</td><td>${esc(item.description)}</td><td>${esc(item.unit || 'UN')}</td><td><strong>${materialQuantity(item.quantity)}</strong></td><td>${esc(item.observation || '')}</td></tr>`).join('')}</tbody></table>
     ${slip.notes ? `<div class="packing-document-notes"><strong>Observações do envio</strong><p>${esc(slip.notes)}</p></div>` : ''}
     ${!isSimple && (slip.photos || []).length ? `<section class="packing-photo-record"><strong>Fotos da retirada</strong><div>${slip.photos.map((photo,index) => `<figure><img src="${esc(photo)}" alt="Foto ${index+1} da retirada"><figcaption>Foto ${index+1}</figcaption></figure>`).join('')}</div></section>` : ''}
-    ${isSimple ? `<section class="packing-simple-auth"><span><small>Registrado por</small><strong>${esc(slip.sentBy)}</strong></span><span><small>Retirado por</small><strong>${esc(slip.requestedBy)}</strong></span></section>` : `<section class="packing-signatures"><span>${slip.signature ? `<img src="${esc(slip.signature)}" alt="Assinatura de quem retirou">` : '<br><br>________________________________'}<br>Responsável pela retirada</span><span><br><br>________________________________<br>Transportador</span><span><br><br>________________________________<br>Controle da obra</span></section>`}
+    ${isSimple ? `<section class="packing-signatures simple-output-signatures"><span>${slip.signature ? `<img src="${esc(slip.signature)}" alt="Rubrica de quem retirou">` : '<br><br>________________________________'}<br>${esc(slip.requestedBy || 'Pessoa que retirou')}<small>Rubrica do recebedor</small></span><span><br><br>________________________________<br>${esc(slip.sentBy || 'Responsável pelo registro')}<small>Responsável pelo almoxarifado</small></span></section>` : `<section class="packing-signatures"><span>${slip.signature ? `<img src="${esc(slip.signature)}" alt="Assinatura de quem retirou">` : '<br><br>________________________________'}<br>Responsável pela retirada</span><span><br><br>________________________________<br>Transportador</span><span><br><br>________________________________<br>Controle da obra</span></section>`}
     <footer class="report-footer">Documento gerado pelo ObraFlow · Gestão HVAC · ${fullDate(new Date().toISOString())}</footer>
   </article>`;
 }
@@ -4554,7 +4597,7 @@ function renderWorkforceDailyCardsHTML(companies) {
     const encodedKey = encodeURIComponent(workforcePersonKey(person)).replace(/'/g, '%27');
     const val = workforceAttendanceValue(person, date);
     return `
-      <div class="workforce-mobile-card" data-company="${esc(person.company)}" data-search="${esc(`${person.name} ${person.company} ${person.role || ''}`.toLowerCase())}">
+      <div class="workforce-mobile-card" data-person-key="${encodedKey}" data-company="${esc(person.company)}" data-search="${esc(`${person.name} ${person.company} ${person.role || ''}`.toLowerCase())}">
         <div class="workforce-mobile-card-info">
           <strong>${esc(person.name)}</strong>
           <small>${esc(person.company)} · ${esc(person.role || 'Sem função')}</small>
@@ -4596,6 +4639,19 @@ function setWorkforceControlSubView(subView) {
   }
 }
 
+function updateWorkforceSummaryUI(date = workforceSummaryDate) {
+  const summary = document.getElementById('workforceDailySummary');
+  if (summary) summary.innerHTML = workforceDailySummaryHTML(date);
+  const presentCount = workforce.filter(person => workforceAttendanceValue(person, date) === '1').length;
+  const metric = document.querySelector('.workforce-summary > div:nth-child(3) p');
+  if (metric) {
+    metric.innerHTML = `<strong>${presentCount}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${date}T12:00:00`))}</small>`;
+  }
+  document.querySelectorAll('[data-total-date="' + date + '"]').forEach(cell => {
+    cell.textContent = presentCount;
+  });
+}
+
 function setWorkforceAttendance(encodedKey, date, value) {
   const key = decodeURIComponent(encodedKey);
   if (!workforceAttendance[key]) workforceAttendance[key] = {};
@@ -4606,18 +4662,26 @@ function setWorkforceAttendance(encodedKey, date, value) {
   saveLocalBackup();
   scheduleWorkforceRemoteSave();
   
-  if (workforceControlSubView === 'daily') {
-    renderCompanies();
-  } else {
-    const cellBtn = document.querySelector(`button.attendance-cell[data-date="${date}"][onclick*="${encodedKey}"]`);
-    if (cellBtn) {
-      cellBtn.dataset.value = value;
-      cellBtn.className = `attendance-cell ${value === '1' ? 'present' : value === '0' ? 'absent' : value === 'FOLGA' ? 'off' : 'empty'}`;
-      cellBtn.textContent = value === 'FOLGA' ? 'F' : value || '·';
-    }
-    filterWorkforceControl();
-    if (date === workforceSummaryDate) changeWorkforceSummaryDate(date);
+  // Atualiza visualmente o card mobile/diário de forma cirúrgica (sem perder rolagem)
+  const card = document.querySelector(`.workforce-mobile-card[data-person-key="${encodedKey}"]`);
+  if (card) {
+    card.querySelectorAll('.mobile-att-btn').forEach(btn => btn.classList.remove('active'));
+    if (value === '1') card.querySelector('.att-present')?.classList.add('active');
+    else if (value === '0') card.querySelector('.att-absent')?.classList.add('active');
+    else if (value === 'FOLGA') card.querySelector('.att-off')?.classList.add('active');
   }
+
+  // Atualiza a célula correspondente na tabela mensal se estiver presente
+  const cellBtn = document.querySelector(`button.attendance-cell[data-date="${date}"][onclick*="${encodedKey}"]`);
+  if (cellBtn) {
+    cellBtn.dataset.value = value;
+    cellBtn.className = `attendance-cell ${value === '1' ? 'present' : value === '0' ? 'absent' : value === 'FOLGA' ? 'off' : 'empty'}`;
+    cellBtn.textContent = value === 'FOLGA' ? 'F' : value || '·';
+    cellBtn.title = `${value === '1' ? 'Presente' : value === '0' ? 'Ausente' : value === 'FOLGA' ? 'Folga' : 'Sem marcação'} · clique para alterar`;
+  }
+
+  updateWorkforceSummaryUI(date);
+  filterWorkforceControl();
 }
 
 function renderWorkforceControl(companies) {
@@ -4627,7 +4691,7 @@ function renderWorkforceControl(companies) {
     return `<tr class="workforce-control-row" data-company="${esc(person.company)}" data-search="${esc(`${person.name} ${person.company} ${person.role || ''}`.toLowerCase())}">
       <td class="workforce-sticky-company">${esc(person.company)}</td>
       <td class="workforce-sticky-person"><strong>${esc(person.name)}</strong><small><span class="mobile-company-tag">${esc(person.company)} · </span>${esc(person.role || '—')}</small></td>
-      <td class="workforce-col-vinculo">${esc(person.status || '—')}</td>
+      <td class="workforce-col-vinculo" title="${esc(person.status || '')}">${esc(person.status === 'DIRETA' ? 'DIR' : person.status === 'INDIRETA' ? 'IND' : person.status === 'TERCEIRO' ? 'TER' : person.status || '—')}</td>
       ${dates.map(date => `<td>${workforceAttendanceCell(person, date)}</td>`).join('')}
     </tr>`;
   }).join('');
@@ -4697,15 +4761,6 @@ function renderWorkforceDirectory(companies) {
 }
 
 function renderCompanies() {
-  if (Date.now() - lastWorkforceSyncTime > 4000) {
-    lastWorkforceSyncTime = Date.now();
-    syncWorkforceFromSupabase().then(updated => {
-      if (updated && currentPage === 'empresas' && canSafelyAutoRender(['empresas'])) {
-        renderCompanies();
-      }
-    });
-  }
-
   workforce = normalizeWorkforcePeople(workforce);
   const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
   if (!workforceSummaryDate.startsWith(workforceControlMonth)) workforceSummaryDate = `${workforceControlMonth}-01`;
@@ -4769,13 +4824,16 @@ function changeWorkforceSummaryDate(date) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return;
   workforceSummaryDate = date;
   saveLocalBackup();
-  const summary = document.getElementById('workforceDailySummary');
-  if (summary) summary.innerHTML = workforceDailySummaryHTML(date);
-  const metric = document.querySelector('.workforce-summary > div:nth-child(3) p');
-  if (metric) metric.innerHTML = `<strong>${workforce.filter(person => workforceAttendanceValue(person, date) === '1').length}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${date}T12:00:00`))}</small>`;
+  updateWorkforceSummaryUI(date);
   
   if (workforceControlSubView === 'daily') {
-    renderCompanies();
+    const cardsWrap = document.querySelector('.workforce-mobile-cards-wrap');
+    if (cardsWrap) {
+      const companies = [...new Set(workforce.map(person => person?.company).filter(Boolean))].sort(safeSort);
+      cardsWrap.outerHTML = renderWorkforceDailyCardsHTML(companies);
+    } else {
+      renderCompanies();
+    }
   } else {
     document.querySelectorAll('.workforce-control-table th[data-date-col]').forEach(th => {
       if (th.dataset.dateCol === date) th.classList.add('selected-day');
@@ -4803,8 +4861,17 @@ function cycleWorkforceAttendance(encodedKey, date, button) {
     button.textContent = next === 'FOLGA' ? 'F' : next || '·';
     button.title = `${next === '1' ? 'Presente' : next === '0' ? 'Ausente' : next === 'FOLGA' ? 'Folga' : 'Sem marcação'} · clique para alterar`;
   }
+  
+  const card = document.querySelector(`.workforce-mobile-card[data-person-key="${encodedKey}"]`);
+  if (card) {
+    card.querySelectorAll('.mobile-att-btn').forEach(btn => btn.classList.remove('active'));
+    if (next === '1') card.querySelector('.att-present')?.classList.add('active');
+    else if (next === '0') card.querySelector('.att-absent')?.classList.add('active');
+    else if (next === 'FOLGA') card.querySelector('.att-off')?.classList.add('active');
+  }
+
+  updateWorkforceSummaryUI(date);
   filterWorkforceControl();
-  if (date === workforceSummaryDate) changeWorkforceSummaryDate(date);
 }
 function openPersonModal(index=null) {
   const person=index===null?null:workforce[index]; const companies=[...new Set(workforce.map(item=>item?.company).filter(Boolean))].sort(safeSort);
@@ -5826,6 +5893,12 @@ document.addEventListener('visibilitychange',()=>{
 setInterval(()=>{
   if(document.visibilityState==='visible') syncFromSupabase({ pushAfter: hasPendingRemoteSave });
 },5000);
+window.addEventListener('beforeunload', () => {
+  if (typeof workforceRemoteSaveTimer !== 'undefined' && workforceRemoteSaveTimer) persistWorkforceControlRemote();
+});
+window.addEventListener('pagehide', () => {
+  if (typeof workforceRemoteSaveTimer !== 'undefined' && workforceRemoteSaveTimer) persistWorkforceControlRemote();
+});
 hydrateIcons(); initializeApp();
 
 

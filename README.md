@@ -15,6 +15,7 @@ Os dados são persistidos no `localStorage` do navegador. O QR Code aponta para 
 - Entrada por leitura de Nota Fiscal em PDF, lançamento manual ou importação de Excel
 - Saída por romaneio com baixa automática e bloqueio de quantidade acima do saldo
 - Controle de rádios com cadastro, entrega assinada, devolução, manutenção e histórico
+- Controle visual de spools por projeto e Data Hall com lista oficial em Excel/CSV, atualização de status pela planilha, leitor CAD integrado (DXF/DWG/PDF) e coloração automática dos números no desenho (não iniciado, em fabricação, fabricado, trânsito, recebido, reprovado)
 - Entrega de ferramentas e EPIs com assinatura obrigatória e comprovante imprimível
 - Romaneio formal com múltiplas fotos e assinatura incorporadas ao documento impresso
 - Posição de estoque com total recebido, retirado, saldo e histórico por produto

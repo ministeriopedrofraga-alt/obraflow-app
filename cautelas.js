@@ -60,6 +60,14 @@ function checkoutStatusLabel(status) {
 function unifiedOutputRecords() {
   const materialRecords = (typeof packingSlips !== 'undefined' ? packingSlips : []).map(slip => {
     const items = Array.isArray(slip.items) ? slip.items : [];
+    const itemFilters = items.map(item => {
+      const code = String(item.code || '').trim();
+      const description = String(item.description || '').trim();
+      return {
+        key: `${code} ${description}`.trim().toLocaleLowerCase('pt-BR'),
+        label: [code, description].filter(Boolean).join(' — ') || 'Material não informado'
+      };
+    });
     const itemsHtml = items.length
       ? items.slice(0, 2).map(item => `<span class="unified-output-item"><strong>${esc(item.description || item.code || 'Material')}</strong><small>${materialQuantity(item.quantity)} ${esc(item.unit || 'UN')}</small></span>`).join('')
       : '<span class="unified-output-item"><strong>Material não informado</strong></span>';
@@ -74,6 +82,8 @@ function unifiedOutputRecords() {
       person: slip.requestedBy || 'Não informado',
       secondary: slip.sentBy ? `Registrado por ${slip.sentBy}` : '',
       itemHtml: `${itemsHtml}${extra}`,
+      itemFilters,
+      hasSignature: Boolean(slip.signature),
       destination: slip.destination || 'Não informado',
       status: slip.status || 'sent',
       statusLabel: slip.status === 'received' ? 'Recebido' : slip.status === 'divergence' ? 'Divergência' : 'Saída registrada',
@@ -82,21 +92,26 @@ function unifiedOutputRecords() {
     };
   });
 
-  const checkoutRecords = cautelasList.map(checkout => ({
-    id: `checkout-${checkout.id}`,
-    sourceId: checkout.id,
-    date: checkout.checkout_date || checkout.created_at,
-    type: String(checkout.checkout_type || 'OTHER').toUpperCase(),
-    typeLabel: cautelaTypeLabel(String(checkout.checkout_type || 'OTHER').toUpperCase()),
-    person: checkout.collaborator_name || 'Não informado',
-    secondary: '',
-    itemHtml: `<span class="unified-output-item"><strong>${esc(checkout.item_description || 'Item não informado')}</strong><small>${materialQuantity(checkout.quantity || 1)} UN</small></span>`,
-    destination: checkout.status === 'PENDING_RETURN' ? 'Retorno ao almoxarifado' : 'Entrega ao colaborador',
-    status: checkout.status,
-    statusLabel: checkoutStatusLabel(checkout.status),
-    search: `${checkout.collaborator_name || ''} ${checkout.item_description || ''} ${cautelaTypeLabel(checkout.checkout_type)}`,
-    action: `<button onclick="openCautelaReceipt('${esc(checkout.id)}')" class="table-action">${icon('print')} Comprovante</button>${checkout.status === 'PENDING_RETURN' ? `<button onclick="returnCautela('${esc(checkout.id)}')" class="table-action">${icon('return')} Registrar devolução</button>` : ''}`
-  }));
+  const checkoutRecords = cautelasList.map(checkout => {
+    const itemDescription = String(checkout.item_description || 'Item não informado').trim();
+    return {
+      id: `checkout-${checkout.id}`,
+      sourceId: checkout.id,
+      date: checkout.checkout_date || checkout.created_at,
+      type: String(checkout.checkout_type || 'OTHER').toUpperCase(),
+      typeLabel: cautelaTypeLabel(String(checkout.checkout_type || 'OTHER').toUpperCase()),
+      person: checkout.collaborator_name || 'Não informado',
+      secondary: '',
+      itemHtml: `<span class="unified-output-item"><strong>${esc(itemDescription)}</strong><small>${materialQuantity(checkout.quantity || 1)} UN</small></span>`,
+      itemFilters: [{ key: itemDescription.toLocaleLowerCase('pt-BR'), label: itemDescription }],
+      hasSignature: Boolean(checkout.signature_url),
+      destination: checkout.status === 'PENDING_RETURN' ? 'Retorno ao almoxarifado' : 'Entrega ao colaborador',
+      status: checkout.status,
+      statusLabel: checkoutStatusLabel(checkout.status),
+      search: `${checkout.collaborator_name || ''} ${itemDescription} ${cautelaTypeLabel(checkout.checkout_type)}`,
+      action: `<button onclick="openCautelaReceipt('${esc(checkout.id)}')" class="table-action">${icon('print')} Comprovante</button>${checkout.status === 'PENDING_RETURN' ? `<button onclick="returnCautela('${esc(checkout.id)}')" class="table-action">${icon('return')} Registrar devolução</button>` : ''}`
+    };
+  });
 
   return [...materialRecords, ...checkoutRecords]
     .sort((a, b) => (Date.parse(b.date || '') || 0) - (Date.parse(a.date || '') || 0));
@@ -110,6 +125,13 @@ async function renderCautelas() {
   const records = unifiedOutputRecords();
   const pending = cautelasList.filter(item => item.status === 'PENDING_RETURN').length;
   const materialCount = records.filter(item => ['material', 'packing_slip'].includes(item.type)).length;
+  const people = [...new Set(records.map(record => record.person).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const itemOptions = [...new Map(records
+    .flatMap(record => record.itemFilters || [])
+    .filter(item => item.key)
+    .map(item => [item.key, item])).values()]
+    .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
   const navCount = document.getElementById('navCautelasCount');
   if (navCount) navCount.textContent = records.length;
 
@@ -120,19 +142,19 @@ async function renderCautelas() {
         ? 'maintenance'
         : 'in-use';
     const typeClass = record.type === 'packing_slip' ? 'formal' : record.type === 'material' ? 'simple' : 'checkout';
-    return `<tr class="unified-output-row" data-type="${esc(record.type)}" data-status="${esc(record.status)}" data-search="${esc(record.search.toLocaleLowerCase('pt-BR'))}">
+    return `<tr class="unified-output-row" data-type="${esc(record.type)}" data-status="${esc(record.status)}" data-person="${esc(record.person)}" data-items="${esc((record.itemFilters || []).map(item => item.key).join('||'))}" data-date="${esc(String(record.date || '').slice(0, 10))}" data-search="${esc(record.search.toLocaleLowerCase('pt-BR'))}">
       <td><strong>${record.date ? fullDate(record.date) : '—'}</strong></td>
       <td><span class="document-type ${typeClass}">${esc(record.typeLabel)}</span></td>
       <td><strong>${esc(record.person)}</strong>${record.secondary ? `<small class="table-sub">${esc(record.secondary)}</small>` : ''}</td>
       <td><div class="unified-output-items">${record.itemHtml}</div></td>
       <td>${esc(record.destination)}</td>
-      <td><span class="status ${statusClass}">${esc(record.statusLabel)}</span></td>
+      <td><span class="status ${statusClass}">${esc(record.statusLabel)}</span><small class="output-signature-state ${record.hasSignature ? 'signed' : 'missing'}">${icon(record.hasSignature ? 'check' : 'alert')} ${record.hasSignature ? 'Rubrica registrada' : 'Sem rubrica'}</small></td>
       <td><div class="entry-row-actions">${record.action}</div></td>
     </tr>`;
   }).join('');
 
   app.innerHTML = `
-    ${pageHeader('Saídas e cautelas', 'Materiais, romaneios, ferramentas e EPIs em uma única consulta.', 'MATERIAIS E SAÍDAS · ALMOXARIFADO', `<button class="button button-green" onclick="openUnifiedOutputMenu()">${icon('plus')} Nova saída</button>`)}
+    ${pageHeader('Saídas', 'Materiais, romaneios, ferramentas e EPIs em uma única consulta.', 'MATERIAIS · ALMOXARIFADO', `<a class="button button-outline" href="#romaneios">${icon('file')} Documentos e relatórios</a><button class="button button-green" onclick="openUnifiedOutputMenu()">${icon('plus')} Nova saída</button>`)}
     ${typeof materialModuleTabs === 'function' ? materialModuleTabs('saidas') : ''}
     <section class="metrics-grid material-metrics unified-output-metrics">
       ${metric('TOTAL DE SAÍDAS', records.length, 'registros consolidados', 'blue', 'swap', 100)}
@@ -143,8 +165,13 @@ async function renderCautelas() {
     <section class="packing-filters unified-output-filters">
       <label class="search-box">${icon('search')}<input id="unifiedOutputSearch" type="search" placeholder="Buscar item, pessoa, destino ou documento..." oninput="filterUnifiedOutputs()"></label>
       <label class="filter-field"><span>Tipo de saída</span><select id="unifiedOutputType" onchange="filterUnifiedOutputs()"><option value="">Todos os tipos</option><option value="material">Material</option><option value="packing_slip">Romaneio</option><option value="TOOL">Ferramenta</option><option value="EPI">EPI</option><option value="OTHER">Outro item</option></select></label>
-      <label class="filter-field"><span>Situação</span><select id="unifiedOutputStatus" onchange="filterUnifiedOutputs()"><option value="">Todas</option><option value="PENDING_RETURN">Devolução pendente</option><option value="RETURNED">Devolvido</option><option value="NO_RETURN_NEEDED">Sem devolução</option><option value="sent">Saída registrada</option></select></label>
+      <label class="filter-field"><span>Situação</span><select id="unifiedOutputStatus" onchange="filterUnifiedOutputs()"><option value="">Todas as situações</option><option value="sent">Saída registrada</option><option value="received">Recebido</option><option value="divergence">Divergência</option><option value="PENDING_RETURN">Devolução pendente</option><option value="RETURNED">Devolvido</option><option value="NO_RETURN_NEEDED">Sem devolução</option></select></label>
+      <label class="filter-field"><span>Item / material</span><select id="unifiedOutputItem" onchange="filterUnifiedOutputs()"><option value="">Todos os itens</option>${itemOptions.map(item => `<option value="${esc(item.key)}">${esc(item.label)}</option>`).join('')}</select></label>
+      <label class="filter-field"><span>Colaborador / recebedor</span><select id="unifiedOutputPerson" onchange="filterUnifiedOutputs()"><option value="">Todas as pessoas</option>${people.map(person => `<option value="${esc(person)}">${esc(person)}</option>`).join('')}</select></label>
+      <label class="filter-field"><span>Data inicial</span><input id="unifiedOutputStart" type="date" onchange="filterUnifiedOutputs()"></label>
+      <label class="filter-field"><span>Data final</span><input id="unifiedOutputEnd" type="date" onchange="filterUnifiedOutputs()"></label>
     </section>
+    <div class="unified-output-filter-summary"><span id="unifiedOutputFilterSummary"><strong>${records.length}</strong> de ${records.length} saída(s)</span><button type="button" class="button-link" onclick="clearUnifiedOutputFilters()">Limpar filtros</button></div>
     <article class="panel inventory-panel unified-output-panel">
       <div class="table-wrap"><table class="data-table unified-output-table"><thead><tr><th>Data</th><th>Tipo</th><th>Colaborador / recebedor</th><th>Item(ns)</th><th>Destino / controle</th><th>Situação</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="unified-output-empty">Nenhuma saída registrada.</td></tr>'}</tbody></table></div>
       <div class="no-filter-results" id="noUnifiedOutputResults">Nenhuma saída encontrada com esses filtros.</div>
@@ -157,23 +184,44 @@ window.filterUnifiedOutputs = function() {
   const search = (document.getElementById('unifiedOutputSearch')?.value || '').trim().toLocaleLowerCase('pt-BR');
   const type = document.getElementById('unifiedOutputType')?.value || '';
   const status = document.getElementById('unifiedOutputStatus')?.value || '';
+  const item = document.getElementById('unifiedOutputItem')?.value || '';
+  const person = document.getElementById('unifiedOutputPerson')?.value || '';
+  const start = document.getElementById('unifiedOutputStart')?.value || '';
+  const end = document.getElementById('unifiedOutputEnd')?.value || '';
+  const rows = document.querySelectorAll('.unified-output-row');
   let visible = 0;
-  document.querySelectorAll('.unified-output-row').forEach(row => {
+  rows.forEach(row => {
     const show = (!search || row.dataset.search.includes(search))
       && (!type || row.dataset.type === type)
-      && (!status || row.dataset.status === status);
+      && (!status || row.dataset.status === status)
+      && (!item || (row.dataset.items || '').split('||').includes(item))
+      && (!person || row.dataset.person === person)
+      && (!start || row.dataset.date >= start)
+      && (!end || row.dataset.date <= end);
     row.style.display = show ? '' : 'none';
     if (show) visible++;
   });
   const empty = document.getElementById('noUnifiedOutputResults');
-  if (empty) empty.style.display = document.querySelectorAll('.unified-output-row').length && !visible ? 'block' : 'none';
+  if (empty) empty.style.display = rows.length && !visible ? 'block' : 'none';
+  const summary = document.getElementById('unifiedOutputFilterSummary');
+  const activeFilters = [search, type, status, item, person, start, end].filter(Boolean).length;
+  if (summary) summary.innerHTML = `<strong>${visible}</strong> de ${rows.length} saída(s)${activeFilters ? ` · ${activeFilters} filtro(s) ativo(s)` : ''}`;
+};
+
+window.clearUnifiedOutputFilters = function() {
+  ['unifiedOutputSearch', 'unifiedOutputType', 'unifiedOutputStatus', 'unifiedOutputItem', 'unifiedOutputPerson', 'unifiedOutputStart', 'unifiedOutputEnd'].forEach(id => {
+    const field = document.getElementById(id);
+    if (field) field.value = '';
+  });
+  filterUnifiedOutputs();
+  document.getElementById('unifiedOutputSearch')?.focus();
 };
 
 window.openUnifiedOutputMenu = function() {
   modal(`${modalHead('Nova saída', 'Escolha o tipo de saída que deseja registrar')}
     <div class="modal-body">
       <section class="output-type-grid">
-        <button type="button" class="material-method-card" onclick="openMaterialActionMenu('output', 'cautelas')"><span>${icon('pallet')}</span><div><strong>Material</strong><small>Retirada rápida de materiais, com baixa no estoque.</small></div><b>${icon('arrow')}</b></button>
+        <button type="button" class="material-method-card" onclick="openMaterialActionMenu('output', 'cautelas')"><span>${icon('pallet')}</span><div><strong>Material</strong><small>Retirada de materiais com baixa no estoque e rubrica de quem recebeu.</small></div><b>${icon('arrow')}</b></button>
         <button type="button" class="material-method-card formal-output" onclick="openMaterialActionMenu('packing_slip', 'cautelas')"><span>${icon('truck')}</span><div><strong>Romaneio</strong><small>Saída formal com transporte, assinatura, foto e impressão.</small></div><b>${icon('arrow')}</b></button>
         <button type="button" class="material-method-card tool-output" onclick="openNewCautelaModal('TOOL')"><span>${icon('tool')}</span><div><strong>Ferramenta</strong><small>Entrega controlada, normalmente com devolução obrigatória.</small></div><b>${icon('arrow')}</b></button>
         <button type="button" class="material-method-card epi-output" onclick="openNewCautelaModal('EPI')"><span>${icon('shield')}</span><div><strong>EPI</strong><small>Entrega ao colaborador, normalmente sem devolução.</small></div><b>${icon('arrow')}</b></button>
