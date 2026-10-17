@@ -55,111 +55,769 @@ const SPOOL_SECTORS = {
 };
 
 // 34 Spools Oficiais do SUPERCORE DH 04 (Identificados a partir do esquema do tablet)
-const SUPERCORE_DH04_INITIAL_SPOOLS = [
-  // Conjunto 1 - Alimentação (9 spools)
-  { circuit: 'C1A1', number: '1873', status: 'not-started', notes: 'Conjunto 1 - Alimentação (C1A1)' },
-  { circuit: 'C1A2', number: '1833', status: 'installed', notes: 'Conjunto 1 - Alimentação (C1A2)' },
-  { circuit: 'C1A3', number: '1831', status: 'installed', notes: 'Conjunto 1 - Alimentação (C1A3)' },
-  { circuit: 'C1A4', number: '1829', status: 'installed', notes: 'Conjunto 1 - Alimentação (C1A4)' },
-  { circuit: 'C1A5', number: '1865', status: 'installed', notes: 'Conjunto 1 - Alimentação (C1A5)' },
-  { circuit: 'C1A6', number: '1861', status: 'installed', notes: 'Conjunto 1 - Alimentação (C1A6)' },
-  { circuit: 'C1A7', number: '1867', status: 'not-started', notes: 'Conjunto 1 - Alimentação (C1A7)' },
-  { circuit: 'C1A8', number: '1877', status: 'installed', notes: 'Conjunto 1 - Alimentação (C1A8)' },
-  { circuit: 'C1A9', number: '1879', status: 'installed', notes: 'Conjunto 1 - Alimentação (C1A9)' },
-  // Conjunto 1 - Retorno (9 spools)
-  { circuit: 'C1R1', number: '1874', status: 'installed', notes: 'Conjunto 1 - Retorno (C1R1)' },
-  { circuit: 'C1R2', number: '1832', status: 'not-started', notes: 'Conjunto 1 - Retorno (C1R2)' },
-  { circuit: 'C1R3', number: '1830', status: 'installed', notes: 'Conjunto 1 - Retorno (C1R3)' },
-  { circuit: 'C1R4', number: '1828', status: 'installed', notes: 'Conjunto 1 - Retorno (C1R4)' },
-  { circuit: 'C1R5', number: '1863', status: 'installed', notes: 'Conjunto 1 - Retorno (C1R5)' },
-  { circuit: 'C1R6', number: '1870', status: 'installed', notes: 'Conjunto 1 - Retorno (C1R6)' },
-  { circuit: 'C1R7', number: '1868', status: 'installed', notes: 'Conjunto 1 - Retorno (C1R7)' },
-  { circuit: 'C1R8', number: '1878', status: 'installed', notes: 'Conjunto 1 - Retorno (C1R8)' },
-  { circuit: 'C1R9', number: '1879', status: 'installed', notes: 'Conjunto 1 - Retorno (C1R9)' },
-  // Conjunto 2 - Alimentação (8 spools)
-  { circuit: 'C2A1', number: '1879', status: 'not-started', notes: 'Conjunto 2 - Alimentação (C2A1)' },
-  { circuit: 'C2A2', number: '1876', status: 'installed', notes: 'Conjunto 2 - Alimentação (C2A2)' },
-  { circuit: 'C2A3', number: '1872', status: 'not-started', notes: 'Conjunto 2 - Alimentação (C2A3)' },
-  { circuit: 'C2A4', number: '1871', status: 'installed', notes: 'Conjunto 2 - Alimentação (C2A4)' },
-  { circuit: 'C2A5', number: '1838', status: 'installed', notes: 'Conjunto 2 - Alimentação (C2A5)' },
-  { circuit: 'C2A6', number: '1836', status: 'installed', notes: 'Conjunto 2 - Alimentação (C2A6)' },
-  { circuit: 'C2A7', number: '1834', status: 'installed', notes: 'Conjunto 2 - Alimentação (C2A7)' },
-  { circuit: 'C2A8', number: '1869', status: 'installed', notes: 'Conjunto 2 - Alimentação (C2A8)' },
-  // Conjunto 2 - Retorno (8 spools)
-  { circuit: 'C2R1', number: '1879', status: 'not-started', notes: 'Conjunto 2 - Retorno (C2R1)' },
-  { circuit: 'C2R2', number: '1875', status: 'installed', notes: 'Conjunto 2 - Retorno (C2R2)' },
-  { circuit: 'C2R3', number: '1864', status: 'installed', notes: 'Conjunto 2 - Retorno (C2R3)' },
-  { circuit: 'C2R4', number: '1862', status: 'not-started', notes: 'Conjunto 2 - Retorno (C2R4)' },
-  { circuit: 'C2R5', number: '1839', status: 'installed', notes: 'Conjunto 2 - Retorno (C2R5)' },
-  { circuit: 'C2R6', number: '1837', status: 'installed', notes: 'Conjunto 2 - Retorno (C2R6)' },
-  { circuit: 'C2R7', number: '1835', status: 'not-started', notes: 'Conjunto 2 - Retorno (C2R7)' },
-  { circuit: 'C2R8', number: '1866', status: 'installed', notes: 'Conjunto 2 - Retorno (C2R8)' }
+// 45 Spools Oficiais do Projeto (34 SUPERCORE DH 04 + 11 Corredor FW A DH 08)
+const DEFAULT_OFFICIAL_SPOOLS = [
+  {
+    "id": "spool-DH08-fw-a-3900",
+    "number": "3900",
+    "dh": "DH 08",
+    "area": "fw-a",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": ""
+  },
+  {
+    "id": "spool-DH08-fw-a-3901",
+    "number": "3901",
+    "dh": "DH 08",
+    "area": "fw-a",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": ""
+  },
+  {
+    "id": "spool-DH08-fw-a-3902",
+    "number": "3902",
+    "dh": "DH 08",
+    "area": "fw-a",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": ""
+  },
+  {
+    "id": "spool-DH08-fw-a-3903",
+    "number": "3903",
+    "dh": "DH 08",
+    "area": "fw-a",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "installed",
+    "installedDate": "2026-10-17",
+    "installedAt": "2026-10-17T21:14:59.765Z",
+    "installedBy": "Pedro Alves",
+    "receivedDate": "2026-10-17",
+    "receivedAt": "2026-10-17T21:14:59.765Z",
+    "notes": ""
+  },
+  {
+    "id": "spool-DH08-fw-a-3904",
+    "number": "3904",
+    "dh": "DH 08",
+    "area": "fw-a",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": ""
+  },
+  {
+    "id": "spool-DH08-fw-a-3905",
+    "number": "3905",
+    "dh": "DH 08",
+    "area": "fw-a",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": ""
+  },
+  {
+    "id": "spool-DH08-fw-a-3906",
+    "number": "3906",
+    "dh": "DH 08",
+    "area": "fw-a",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": ""
+  },
+  {
+    "id": "spool-DH08-fw-a-3907",
+    "number": "3907",
+    "dh": "DH 08",
+    "area": "fw-a",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": ""
+  },
+  {
+    "id": "spool-DH08-fw-a-3908",
+    "number": "3908",
+    "dh": "DH 08",
+    "area": "fw-a",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": ""
+  },
+  {
+    "id": "spool-DH08-fw-a-3909",
+    "number": "3909",
+    "dh": "DH 08",
+    "area": "fw-a",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": ""
+  },
+  {
+    "id": "spool-DH08-fw-a-3910",
+    "number": "3910",
+    "dh": "DH 08",
+    "area": "fw-a",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1873",
+    "number": "1873",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "received",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "2026-10-17",
+    "receivedAt": "2026-10-17T20:48:45.456Z",
+    "notes": "Conjunto 1 - Alimentação (C1A1)",
+    "circuit": "C1A1",
+    "receivedBy": "Equipe SUPERCORE"
+  },
+  {
+    "id": "spool-DH04-supercore-1833",
+    "number": "1833",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "received",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "2026-10-17",
+    "receivedAt": "2026-10-17T20:48:47.672Z",
+    "notes": "Conjunto 1 - Alimentação (C1A2)",
+    "circuit": "C1A2",
+    "receivedBy": "Equipe SUPERCORE"
+  },
+  {
+    "id": "spool-DH04-supercore-1831",
+    "number": "1831",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "installed",
+    "installedDate": "2026-10-17",
+    "installedAt": "2026-10-17T21:07:51.284Z",
+    "installedBy": "Pedro Alves",
+    "receivedDate": "2026-10-17",
+    "receivedAt": "2026-10-17T21:07:51.284Z",
+    "notes": "Conjunto 1 - Alimentação (C1A3)",
+    "circuit": "C1A3",
+    "receivedBy": "Equipe SUPERCORE"
+  },
+  {
+    "id": "spool-DH04-supercore-1829",
+    "number": "1829",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Alimentação (C1A4)",
+    "circuit": "C1A4",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1865",
+    "number": "1865",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Alimentação (C1A5)",
+    "circuit": "C1A5",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1861",
+    "number": "1861",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Alimentação (C1A6)",
+    "circuit": "C1A6",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1867",
+    "number": "1867",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Alimentação (C1A7)",
+    "circuit": "C1A7",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1877",
+    "number": "1877",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Alimentação (C1A8)",
+    "circuit": "C1A8",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1879",
+    "number": "1879",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Alimentação (C1A9)",
+    "circuit": "C1A9",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1874",
+    "number": "1874",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Retorno (C1R1)",
+    "circuit": "C1R1",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1832",
+    "number": "1832",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Retorno (C1R2)",
+    "circuit": "C1R2",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1830",
+    "number": "1830",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "installed",
+    "installedDate": "2026-10-17",
+    "installedAt": "2026-10-17T20:47:57.201Z",
+    "installedBy": "Pedro Alves",
+    "receivedDate": "2026-10-17",
+    "receivedAt": "2026-10-17T20:47:57.201Z",
+    "notes": "Conjunto 1 - Retorno (C1R3)",
+    "circuit": "C1R3",
+    "receivedBy": "Equipe SUPERCORE"
+  },
+  {
+    "id": "spool-DH04-supercore-1828",
+    "number": "1828",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Retorno (C1R4)",
+    "circuit": "C1R4",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1863",
+    "number": "1863",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Retorno (C1R5)",
+    "circuit": "C1R5",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1870",
+    "number": "1870",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Retorno (C1R6)",
+    "circuit": "C1R6",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1868",
+    "number": "1868",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Retorno (C1R7)",
+    "circuit": "C1R7",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1878",
+    "number": "1878",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Retorno (C1R8)",
+    "circuit": "C1R8",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1879",
+    "number": "1879",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Alimentação (C1A9)",
+    "circuit": "C1R9",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1879",
+    "number": "1879",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Alimentação (C1A9)",
+    "circuit": "C2A1",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1876",
+    "number": "1876",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Alimentação (C2A2)",
+    "circuit": "C2A2",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1872",
+    "number": "1872",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Alimentação (C2A3)",
+    "circuit": "C2A3",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1871",
+    "number": "1871",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Alimentação (C2A4)",
+    "circuit": "C2A4",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1838",
+    "number": "1838",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Alimentação (C2A5)",
+    "circuit": "C2A5",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1836",
+    "number": "1836",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Alimentação (C2A6)",
+    "circuit": "C2A6",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1834",
+    "number": "1834",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Alimentação (C2A7)",
+    "circuit": "C2A7",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1869",
+    "number": "1869",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Alimentação (C2A8)",
+    "circuit": "C2A8",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1879",
+    "number": "1879",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 1 - Alimentação (C1A9)",
+    "circuit": "C2R1",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1875",
+    "number": "1875",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Retorno (C2R2)",
+    "circuit": "C2R2",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1864",
+    "number": "1864",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Retorno (C2R3)",
+    "circuit": "C2R3",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1862",
+    "number": "1862",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Retorno (C2R4)",
+    "circuit": "C2R4",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1839",
+    "number": "1839",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Retorno (C2R5)",
+    "circuit": "C2R5",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1837",
+    "number": "1837",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Retorno (C2R6)",
+    "circuit": "C2R6",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1835",
+    "number": "1835",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Retorno (C2R7)",
+    "circuit": "C2R7",
+    "receivedBy": ""
+  },
+  {
+    "id": "spool-DH04-supercore-1866",
+    "number": "1866",
+    "dh": "DH 04",
+    "area": "supercore",
+    "type": "straight",
+    "diameter": "10\"",
+    "status": "not-started",
+    "installedDate": "",
+    "installedAt": "",
+    "installedBy": "",
+    "receivedDate": "",
+    "receivedAt": "",
+    "notes": "Conjunto 2 - Retorno (C2R8)",
+    "circuit": "C2R8",
+    "receivedBy": ""
+  }
 ];
+const SUPERCORE_DH04_INITIAL_SPOOLS = DEFAULT_OFFICIAL_SPOOLS.filter(s => s.area === 'supercore');
+
+function spoolEnsureOfficialSpools(list) {
+  DEFAULT_OFFICIAL_SPOOLS.forEach(def => {
+    let match = list.find(s => s.id === def.id);
+    if (!match) {
+      match = list.find(s => s.number === def.number && normalizeDh(s.dh) === normalizeDh(def.dh) && normalizeSector(s.area) === normalizeSector(def.area));
+    }
+    if (!match) {
+      list.push({ ...def });
+    }
+  });
+  return true;
+}
 
 function spoolEnsureSupercoreDh04Spools(list) {
-  const today = '2026-10-17';
-
-  // 1. Manter intactos todos os spools de outros setores e de outros Data Halls
-  const otherSpools = list.filter(s => !(normalizeDh(s.dh) === 'DH 04' && s.area === 'supercore'));
-
-  // 2. Coletar os spools atuais de SUPERCORE DH 04
-  const currentSc = list.filter(s => normalizeDh(s.dh) === 'DH 04' && s.area === 'supercore');
-
-  // 3. Montar a lista dos 34 spools do SUPERCORE DH 04:
-  // Se o usuário JÁ POSSUI o spool (ou subiu via planilha), RESPEITA 100% O STATUS DO USUÁRIO!
-  const resolvedSc = SUPERCORE_DH04_INITIAL_SPOOLS.map(sc => {
-    let match = currentSc.find(s => s.circuit === sc.circuit || s.id === `spool-DH04-supercore-${sc.circuit}-${sc.number}`);
-    if (!match) {
-      match = currentSc.find(s => s.number === sc.number && (!s.circuit || s.circuit === sc.circuit));
-    }
-
-    if (match) {
-      // PRESERVA RIGOROSAMENTE O STATUS DO USUÁRIO (Pendente, Recebido ou Instalado)
-      const userStatus = match.status || 'not-started';
-      return {
-        ...match,
-        id: match.id || `spool-DH04-supercore-${sc.circuit}-${sc.number}`,
-        number: sc.number,
-        dh: 'DH 04',
-        area: 'supercore',
-        circuit: sc.circuit,
-        diameter: match.diameter || '10"',
-        type: match.type || 'straight',
-        status: userStatus,
-        installedDate: userStatus === 'installed' ? (match.installedDate || today) : '',
-        installedAt: userStatus === 'installed' ? (match.installedAt || `${today}T10:00:00.000Z`) : '',
-        installedBy: userStatus === 'installed' ? (match.installedBy || 'Equipe SUPERCORE') : '',
-        receivedDate: (userStatus === 'installed' || userStatus === 'received') ? (match.receivedDate || '2026-10-15') : (match.receivedDate || ''),
-        receivedAt: (userStatus === 'installed' || userStatus === 'received') ? (match.receivedAt || '2026-10-15T08:00:00.000Z') : (match.receivedAt || ''),
-        receivedBy: (userStatus === 'installed' || userStatus === 'received') ? (match.receivedBy || 'Equipe SUPERCORE') : (match.receivedBy || ''),
-        notes: match.notes || sc.notes
-      };
-    }
-
-    // Se o spool nunca existiu no sistema, cadastra com os valores iniciais da foto
-    return {
-      id: `spool-DH04-supercore-${sc.circuit}-${sc.number}`,
-      number: sc.number,
-      dh: 'DH 04',
-      area: 'supercore',
-      circuit: sc.circuit,
-      type: 'straight',
-      diameter: '10"',
-      status: sc.status,
-      installedDate: sc.status === 'installed' ? today : '',
-      installedAt: sc.status === 'installed' ? `${today}T10:00:00.000Z` : '',
-      installedBy: sc.status === 'installed' ? 'Equipe SUPERCORE' : '',
-      receivedDate: '2026-10-15',
-      receivedAt: '2026-10-15T08:00:00.000Z',
-      receivedBy: 'Equipe SUPERCORE',
-      notes: sc.notes
-    };
-  });
-
-  // 4. Substitui a lista com a união dos outros spools + os 34 do SUPERCORE DH 04
-  list.length = 0;
-  list.push(...otherSpools, ...resolvedSc);
-  return true;
+  return spoolEnsureOfficialSpools(list);
 }
 
 // Carregar Spools do LocalStorage com auto-cura e sanitização de DH e Setores
@@ -205,10 +863,145 @@ function spoolSaveAll(spools) {
   }
 }
 
-// Sync com Supabase (tolerante a falhas)
+// Merge inteligente de listas preservando edições mais recentes
+function spoolMergeLists(localList, remoteList) {
+  const map = new Map();
+  (remoteList || []).forEach(s => {
+    if (s && s.id) map.set(s.id, { ...s });
+  });
+  (localList || []).forEach(local => {
+    if (!local || !local.id) return;
+    const remote = map.get(local.id);
+    if (!remote) {
+      map.set(local.id, { ...local });
+    } else {
+      const localTime = new Date(local.installedAt || local.receivedAt || 0).getTime();
+      const remoteTime = new Date(remote.installedAt || remote.receivedAt || 0).getTime();
+      if (localTime > remoteTime) {
+        map.set(local.id, { ...remote, ...local });
+      } else {
+        map.set(local.id, { ...local, ...remote });
+      }
+    }
+  });
+  return Array.from(map.values());
+}
+
+// Sync com Supabase (app_metadata - spool_registry)
 async function spoolSyncRemote(spools) {
-  if (!window.supabaseClient) return;
-  try {} catch (e) {}
+  try {
+    const payload = {
+      updatedAt: new Date().toISOString(),
+      updatedBy: (window.currentUser?.name) || 'Pedro Alves',
+      spools: spools,
+      version: 4
+    };
+    if (typeof supabaseRestRequest === 'function') {
+      await supabaseRestRequest('app_metadata?on_conflict=key', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates' },
+        body: JSON.stringify({ key: 'spool_registry', value: payload })
+      });
+      spoolUpdateSyncIndicator(true);
+      return true;
+    }
+  } catch (e) {
+    console.warn('Falha no upload de spools para Supabase:', e);
+    spoolUpdateSyncIndicator(false);
+  }
+  return false;
+}
+
+// Baixar spools do Supabase (compartilhado entre Netlify, localhost e mobile)
+async function syncSpoolsFromSupabase(options = {}) {
+  try {
+    if (typeof supabaseRestRequest !== 'function') return false;
+    const rows = await supabaseRestRequest('app_metadata?key=eq.spool_registry&select=value');
+    if (Array.isArray(rows) && rows[0]?.value?.spools) {
+      const remoteSpools = rows[0].value.spools;
+      if (Array.isArray(remoteSpools) && remoteSpools.length > 0) {
+        const merged = spoolMergeLists(spoolDb, remoteSpools);
+        spoolDb = merged;
+        try {
+          localStorage.setItem(SPOOL_STORE_KEY, JSON.stringify(spoolDb));
+        } catch(e) {}
+        const navCount = document.getElementById('navSpoolCount');
+        if (navCount) navCount.textContent = spoolDb.length;
+        if (window.location.hash === '#spools') {
+          renderSpools();
+        }
+        spoolUpdateSyncIndicator(true);
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn('Falha ao baixar spools do Supabase:', e);
+    spoolUpdateSyncIndicator(false);
+  }
+  return false;
+}
+window.syncSpoolsFromSupabase = syncSpoolsFromSupabase;
+window.syncSpoolProjectsFromSupabase = syncSpoolsFromSupabase;
+
+function spoolUpdateSyncIndicator(synced) {
+  const badge = document.getElementById('spoolSyncBadge');
+  if (!badge) return;
+  if (synced) {
+    badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; margin-right:4px;"></span> Online (${spoolDb.length} spools) • Supabase Sincronizado`;
+    badge.style.color = '#065f46';
+  } else {
+    badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#f59e0b; margin-right:4px;"></span> Local (${spoolDb.length} spools)`;
+  }
+}
+
+// Data local no formato YYYY-MM-DD (respeita fuso horário local e evita divergência após 21h em UTC-3)
+function getLocalDateStr(d = new Date()) {
+  if (typeof d === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+    d = new Date(d);
+  }
+  if (!(d instanceof Date) || isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Hora atual no fuso local (HH:mm)
+function getLocalTimeStr(d = new Date()) {
+  if (typeof d === 'string' && d.includes('T')) d = new Date(d);
+  if (!(d instanceof Date) || isNaN(d.getTime())) d = new Date();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+// Formata timestamp/ISO para hora local do navegador (evita discrepâncias de fuso)
+function formatSpoolTime(raw) {
+  if (!raw) return '';
+  const str = String(raw).trim();
+  if (/^\d{2}:\d{2}$/.test(str)) return str;
+  if (/^\d{2}:\d{2}:\d{2}/.test(str)) return str.slice(0, 5);
+  try {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      return `${hh}:${mm}`;
+    }
+  } catch (e) {}
+  const m = str.match(/T?(\d{2}):(\d{2})/);
+  return m ? `${m[1]}:${m[2]}` : '';
+}
+
+// Cria timestamp ISO combinando data local e hora local selecionada
+function buildIsoFromLocalDateAndTime(dateStr, timeStr) {
+  if (!dateStr) return '';
+  const time = timeStr && /^\d{2}:\d{2}/.test(timeStr) ? timeStr.slice(0, 5) : getLocalTimeStr();
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hours, minutes] = time.split(':').map(Number);
+  const d = new Date(year, month - 1, day, hours || 0, minutes || 0, 0);
+  return d.toISOString();
 }
 
 // Base principal de spools
@@ -231,7 +1024,7 @@ let spoolTypeFilter = 'all'; // 'all', 'straight', 'valve', 'branch'
 let spoolDiameterFilter = 'all';
 let spoolListFilter = 'all';
 let spoolSearchTerm = '';
-let spoolSelectedDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+let spoolSelectedDate = getLocalDateStr(); // YYYY-MM-DD no fuso local
 
 function formatSpoolDateDisplay(d) {
   if (!d) return '—';
@@ -253,7 +1046,7 @@ function formatSpoolDateShort(d) {
    FUNÇÃO CENTRAL DE FILTRAGEM (spoolFilterList)
    ========================================================================== */
 function spoolFilterList(sourceList) {
-  const targetDate = spoolSelectedDate || new Date().toISOString().slice(0, 10);
+  const targetDate = spoolSelectedDate || getLocalDateStr();
 
   return sourceList.filter(s => {
     // 1. Filtro por Setor
@@ -341,7 +1134,7 @@ function renderSpools() {
   const app = document.getElementById('app');
   if (!app) return;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalDateStr();
   const filterDate = spoolSelectedDate || todayStr;
 
   // Atualizar badge do menu lateral com o total de spools cadastrados
@@ -730,8 +1523,8 @@ function spoolRenderPipelineBar(sectorSpools, sectorMeta) {
           const isRec = s.status === 'received';
           const statusClass = isInst ? 'status-installed' : (isRec ? 'status-received' : 'status-pending');
           const valveClass = isValve ? 'is-valve' : '';
-          const segRecInfo = s.receivedDate ? `\n• Recebido: ${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` às ${s.receivedAt.slice(11, 16)}` : ''}` : '';
-          const segInstInfo = s.installedDate ? `\n• Instalado: ${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` às ${s.installedAt.slice(11, 16)}` : ''}` : '';
+          const segRecInfo = s.receivedDate ? `\n• Recebido: ${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` às ${formatSpoolTime(s.receivedAt)}` : ''}` : '';
+          const segInstInfo = s.installedDate ? `\n• Instalado: ${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '';
 
           return `
             <div class="spool-pipe-seg ${valveClass} ${statusClass}" onclick="spoolToggleStatus('${s.id}')" title="${isValve ? 'Válvula de Linha' : 'Tubo Reto'} ${esc(s.number)} (${node.label})${segRecInfo}${segInstInfo}\nClique para alternar status">
@@ -774,8 +1567,8 @@ function spoolRenderTubeSquares(list, filterDate) {
         const statusClass = isInst ? 'status-installed' : (isRec ? 'status-received' : 'status-pending');
         const typeClass = isValve ? 'is-valve' : (isStraight ? 'is-straight' : 'is-branch');
 
-        const cardRecInfo = spool.receivedDate ? `\n• Recebido em: ${formatSpoolDateDisplay(spool.receivedDate)}${spool.receivedAt ? ` às ${spool.receivedAt.slice(11, 16)}` : ''}${spool.receivedBy ? ` (${spool.receivedBy})` : ''}` : '';
-        const cardInstInfo = spool.installedDate ? `\n• Instalado em: ${formatSpoolDateDisplay(spool.installedDate)}${spool.installedAt ? ` às ${spool.installedAt.slice(11, 16)}` : ''}${spool.installedBy ? ` (${spool.installedBy})` : ''}` : '';
+        const cardRecInfo = spool.receivedDate ? `\n• Recebido em: ${formatSpoolDateDisplay(spool.receivedDate)}${spool.receivedAt ? ` às ${formatSpoolTime(spool.receivedAt)}` : ''}${spool.receivedBy ? ` (${spool.receivedBy})` : ''}` : '';
+        const cardInstInfo = spool.installedDate ? `\n• Instalado em: ${formatSpoolDateDisplay(spool.installedDate)}${spool.installedAt ? ` às ${formatSpoolTime(spool.installedAt)}` : ''}${spool.installedBy ? ` (${spool.installedBy})` : ''}` : '';
 
         return `
           <div class="spool-tube-card ${typeClass} ${statusClass}" onclick="spoolToggleStatus('${spool.id}')" title="Spool ${esc(spool.number)} (${esc(spool.dh || '')})${cardRecInfo}${cardInstInfo}\nClique para alternar status ou no 📅 para ver/editar datas">
@@ -797,16 +1590,16 @@ function spoolRenderTubeSquares(list, filterDate) {
             <div class="tube-foot" style="display:flex; flex-direction:column; gap:2px; font-size:10px; line-height:1.2; width:100%; text-align:center;">
               ${isInst ? `
                 <div style="color:#065f46; font-weight:800; display:flex; align-items:center; justify-content:center; gap:3px;">
-                  <span>🟢 Inst:</span> <span>${formatSpoolDateShort(spool.installedDate)}${spool.installedAt ? ` ${spool.installedAt.slice(11, 16)}` : ''}</span>
+                  <span>🟢 Inst:</span> <span>${formatSpoolDateShort(spool.installedDate)}${spool.installedAt ? ` ${formatSpoolTime(spool.installedAt)}` : ''}</span>
                 </div>
                 ${spool.receivedDate ? `
                   <div style="color:#0369a1; font-weight:700; font-size:9px; opacity:0.95;">
-                    🟡 Rec: ${formatSpoolDateShort(spool.receivedDate)}
+                    🟡 Rec: ${formatSpoolDateShort(spool.receivedDate)}${spool.receivedAt ? ` ${formatSpoolTime(spool.receivedAt)}` : ''}
                   </div>
                 ` : ''}
               ` : (isRec ? `
                 <div style="color:#0369a1; font-weight:800; display:flex; align-items:center; justify-content:center; gap:3px;">
-                  <span>🟡 Rec:</span> <span>${formatSpoolDateShort(spool.receivedDate)}${spool.receivedAt ? ` ${spool.receivedAt.slice(11, 16)}` : ''}</span>
+                  <span>🟡 Rec:</span> <span>${formatSpoolDateShort(spool.receivedDate)}${spool.receivedAt ? ` ${formatSpoolTime(spool.receivedAt)}` : ''}</span>
                 </div>
               ` : `
                 <div style="color:#64748b; font-weight:700;">⚪ Pendente</div>
@@ -1071,22 +1864,22 @@ function spoolSetItemStatus(spoolId, newStatus) {
   const item = spoolDb.find(s => s.id === spoolId);
   if (!item) return;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateStr();
   const now = new Date().toISOString();
 
   item.status = newStatus;
-  const user = currentUser?.name || 'Pedro Alves';
+  const user = (window.currentUser?.name) || 'Pedro Alves';
   if (newStatus === 'installed') {
-    // Garante que a data de recebimento seja preservada se já existia, ou registrada agora
-    if (!item.receivedDate) {
+    // Se não tinha data de recebimento, ou se foi recebido hoje, garante horário idêntico
+    if (!item.receivedDate || item.receivedDate === today) {
       item.receivedDate = today;
       item.receivedAt = now;
-      item.receivedBy = user;
+      item.receivedBy = item.receivedBy || user;
     }
     item.installedDate = today;
     item.installedAt = now;
     item.installedBy = user;
-    toast(`🟢 Spool ${item.number} marcado como INSTALADO! (Rec: ${formatSpoolDateDisplay(item.receivedDate)} | Inst: ${formatSpoolDateDisplay(item.installedDate)})`);
+    toast(`🟢 Spool ${item.number} marcado como INSTALADO às ${formatSpoolTime(now)}!`);
   } else if (newStatus === 'received') {
     item.receivedDate = today;
     item.receivedAt = now;
@@ -1094,7 +1887,7 @@ function spoolSetItemStatus(spoolId, newStatus) {
     item.installedDate = '';
     item.installedAt = '';
     item.installedBy = '';
-    toast(`🟡 Spool ${item.number} marcado como RECEBIDO em ${formatSpoolDateDisplay(today)}!`);
+    toast(`🟡 Spool ${item.number} marcado como RECEBIDO às ${formatSpoolTime(now)}!`);
   } else {
     item.installedDate = '';
     item.installedAt = '';
@@ -2492,8 +3285,8 @@ function spoolOpenReportPDF(scope = 'daily') {
       statusBadge = '<span style="display:inline-block; padding:2px 8px; border-radius:4px; font-weight:800; font-size:10px; background:#fef9c3; color:#a16207; border:1px solid #fde047;">🟡 Recebido</span>';
     }
 
-    const instInfo = s.installedDate ? `${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` às ${s.installedAt.slice(11, 16)}` : ''}` : '—';
-    const recInfo = s.receivedDate ? `${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` às ${s.receivedAt.slice(11, 16)}` : ''}` : '—';
+    const instInfo = s.installedDate ? `${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '—';
+    const recInfo = s.receivedDate ? `${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` às ${formatSpoolTime(s.receivedAt)}` : ''}` : '—';
 
     return `
       <tr>
@@ -2712,10 +3505,10 @@ function spoolCopyDailyReport(dateStr = '') {
 🟢 *TOTAL INSTALADO NO DIA:* ${installed.length} itens
 
 📏 *TRECHOS RETOS:* ${straight.length} tubos
-${straight.length ? straight.map(s => `• Tubo ${s.number} (${s.diameter || '8"'})${s.installedAt ? ` — ${s.installedAt.slice(11, 16)}` : ''}`).join('\n') : '• Nenhum trecho reto hoje'}
+${straight.length ? straight.map(s => `• Tubo ${s.number} (${s.diameter || '8"'})${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhum trecho reto hoje'}
 
 📐 *DERIVAÇÕES (Ramais):* ${branches.length} tubos
-${branches.length ? branches.map(s => `• Spool ${s.number} (${s.diameter || '2.1/2"'})${s.installedAt ? ` — ${s.installedAt.slice(11, 16)}` : ''}`).join('\n') : '• Nenhuma derivação hoje'}
+${branches.length ? branches.map(s => `• Spool ${s.number} (${s.diameter || '2.1/2"'})${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhuma derivação hoje'}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 *STATUS ACUMULADO:*
@@ -2822,8 +3615,8 @@ function spoolOpenTrackingModal(spoolId) {
                 <input type="date" id="spoolModalRecDate" value="${spool.receivedDate || ''}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;">
               </div>
               <div>
-                <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Horário / Registro:</label>
-                <input type="text" readonly value="${spool.receivedAt ? spool.receivedAt.slice(11, 16) + 'h' : '—'}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #e2e8f0; background:#f1f5f9; color:#64748b; font-weight:700;">
+                <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Horário de Recebimento:</label>
+                <input type="time" id="spoolModalRecTime" value="${formatSpoolTime(spool.receivedAt) || (spool.receivedDate ? getLocalTimeStr() : '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700; background:#ffffff;">
               </div>
             </div>
           </div>
@@ -2834,7 +3627,7 @@ function spoolOpenTrackingModal(spoolId) {
               <strong style="font-size:13px; color:#065f46; display:flex; align-items:center; gap:6px;">
                 <span>🟢</span> 2. Data de Instalação / Montagem
               </strong>
-              ${spool.installedDate ? `<span style="font-size:11px; font-weight:800; color:#047857; background:#dcfce7; padding:2px 8px; border-radius:4px;">MONTADO (${formatSpoolDateDisplay(spool.installedDate)})</span>` : '<span style="font-size:11px; font-weight:700; color:#94a3b8;">NÃO MONTADO</span>'}
+              ${spool.installedDate ? `<span style="font-size:11px; font-weight:800; color:#047857; background:#dcfce7; padding:2px 8px; border-radius:4px;">MONTADO (${formatSpoolDateDisplay(spool.installedDate)})${spool.installedAt ? ` às ${formatSpoolTime(spool.installedAt)}` : ''}</span>` : '<span style="font-size:11px; font-weight:700; color:#94a3b8;">NÃO MONTADO</span>'}
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
               <div>
@@ -2842,8 +3635,8 @@ function spoolOpenTrackingModal(spoolId) {
                 <input type="date" id="spoolModalInstDate" value="${spool.installedDate || ''}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;">
               </div>
               <div>
-                <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Horário / Registro:</label>
-                <input type="text" readonly value="${spool.installedAt ? spool.installedAt.slice(11, 16) + 'h' : '—'}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #e2e8f0; background:#f1f5f9; color:#64748b; font-weight:700;">
+                <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Horário de Instalação:</label>
+                <input type="time" id="spoolModalInstTime" value="${formatSpoolTime(spool.installedAt) || (spool.installedDate ? getLocalTimeStr() : '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700; background:#ffffff;">
               </div>
             </div>
           </div>
@@ -2856,14 +3649,17 @@ function spoolOpenTrackingModal(spoolId) {
 
           <!-- ATALHOS RÁPIDOS -->
           <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;">
-            <button type="button" class="button compact" style="background:#0284c7; color:#ffffff; font-weight:700;" onclick="document.getElementById('spoolModalRecDate').value = '${todayStr}';">
-              🟡 Preencher Recebido Hoje
+            <button type="button" class="button compact" style="background:#0284c7; color:#ffffff; font-weight:700;" onclick="const t = getLocalDateStr(); const cur = getLocalTimeStr(); document.getElementById('spoolModalRecDate').value = t; document.getElementById('spoolModalRecTime').value = cur;">
+              🟡 Recebido Agora
             </button>
-            <button type="button" class="button button-green compact" style="font-weight:700;" onclick="const t = '${todayStr}'; if(!document.getElementById('spoolModalRecDate').value) document.getElementById('spoolModalRecDate').value = t; document.getElementById('spoolModalInstDate').value = t;">
-              🟢 Preencher Instalado Hoje
+            <button type="button" class="button button-green compact" style="font-weight:700;" onclick="const t = getLocalDateStr(); const cur = getLocalTimeStr(); document.getElementById('spoolModalInstDate').value = t; document.getElementById('spoolModalInstTime').value = cur; document.getElementById('spoolModalRecDate').value = t; document.getElementById('spoolModalRecTime').value = cur;">
+              🟢 Montado Hoje (Mesmo Horário)
             </button>
-            <button type="button" class="button button-outline compact" style="color:#ef4444; border-color:#fca5a5; font-weight:700;" onclick="document.getElementById('spoolModalRecDate').value = ''; document.getElementById('spoolModalInstDate').value = '';">
-              ↩️ Limpar Datas (Pendente)
+            <button type="button" class="button button-dark compact" style="font-weight:700;" onclick="const cur = document.getElementById('spoolModalInstTime').value || document.getElementById('spoolModalRecTime').value || getLocalTimeStr(); document.getElementById('spoolModalRecTime').value = cur; document.getElementById('spoolModalInstTime').value = cur; toast('Horários igualados!');">
+              ⏱️ Igualar Horários
+            </button>
+            <button type="button" class="button button-outline compact" style="color:#ef4444; border-color:#fca5a5; font-weight:700;" onclick="document.getElementById('spoolModalRecDate').value = ''; document.getElementById('spoolModalRecTime').value = ''; document.getElementById('spoolModalInstDate').value = ''; document.getElementById('spoolModalInstTime').value = '';">
+              ↩️ Limpar (Pendente)
             </button>
           </div>
         </form>
@@ -2884,33 +3680,39 @@ function spoolSaveModalDates(spoolId) {
   if (!item) return;
 
   const recDate = document.getElementById('spoolModalRecDate')?.value || '';
+  const recTime = document.getElementById('spoolModalRecTime')?.value || '';
   const instDate = document.getElementById('spoolModalInstDate')?.value || '';
+  const instTime = document.getElementById('spoolModalInstTime')?.value || '';
   const resp = document.getElementById('spoolModalResp')?.value.trim() || '';
-  const now = new Date().toISOString();
 
   item.receivedDate = recDate;
-  if (recDate && !item.receivedAt) item.receivedAt = `${recDate}T08:00:00.000Z`;
+  item.receivedAt = recDate ? buildIsoFromLocalDateAndTime(recDate, recTime) : '';
   if (resp) item.receivedBy = resp;
 
   item.installedDate = instDate;
-  if (instDate && !item.installedAt) item.installedAt = `${instDate}T10:00:00.000Z`;
+  item.installedAt = instDate ? buildIsoFromLocalDateAndTime(instDate, instTime) : '';
   if (resp) item.installedBy = resp;
 
   if (instDate) {
     item.status = 'installed';
-    if (!item.receivedDate) item.receivedDate = instDate;
+    if (!item.receivedDate) {
+      item.receivedDate = instDate;
+      item.receivedAt = item.installedAt;
+    }
   } else if (recDate) {
     item.status = 'received';
   } else {
     item.status = 'not-started';
     item.receivedAt = '';
     item.installedAt = '';
+    item.receivedDate = '';
+    item.installedDate = '';
   }
 
   spoolSaveAll(spoolDb);
   renderSpools();
   closeModal();
-  toast(`✅ Informações de datas do Spool ${item.number} atualizadas!`);
+  toast(`✅ Spool ${item.number}: Recebido ${item.receivedDate ? formatSpoolDateShort(item.receivedDate) + ' ' + formatSpoolTime(item.receivedAt) : '—'} | Instalado ${item.installedDate ? formatSpoolDateShort(item.installedDate) + ' ' + formatSpoolTime(item.installedAt) : '—'}`);
 }
 
 // Exportações Globais
