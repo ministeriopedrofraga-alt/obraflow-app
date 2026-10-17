@@ -11,7 +11,12 @@
    Subir Planilha · Baixar Planilha Atualizada · Filtros Avançados · Campo DH
    ========================================================================== */
 
-const SPOOL_STORE_KEY = 'obraflow_spools_v4';
+const SPOOL_STORE_KEY = 'obraflow_spools_v5';
+try {
+  localStorage.removeItem('obraflow_spools_v4');
+  localStorage.removeItem('obraflow_spools_v3');
+  localStorage.removeItem('obraflow_spools_v2');
+} catch (e) {}
 const SPOOL_LOG_KEY = 'obraflow_spool_daily_log_v4';
 
 // Normalização universal de Data Hall (DH): 'DH 4', 'dh04', '4', 'DH-04' -> 'DH 04'
@@ -114,7 +119,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "installedAt": "2026-10-17T21:14:59.765Z",
     "installedBy": "Pedro Alves",
     "receivedDate": "2026-10-17",
-    "receivedAt": "2026-10-17T21:14:59.765Z",
+    "receivedAt": "2026-10-17T21:14:58.068Z",
     "notes": ""
   },
   {
@@ -223,7 +228,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "notes": ""
   },
   {
-    "id": "spool-DH04-supercore-1873",
+    "id": "spool-DH04-supercore-C1A1-1873",
     "number": "1873",
     "dh": "DH 04",
     "area": "supercore",
@@ -240,7 +245,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": "Equipe SUPERCORE"
   },
   {
-    "id": "spool-DH04-supercore-1833",
+    "id": "spool-DH04-supercore-C1A2-1833",
     "number": "1833",
     "dh": "DH 04",
     "area": "supercore",
@@ -257,7 +262,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": "Equipe SUPERCORE"
   },
   {
-    "id": "spool-DH04-supercore-1831",
+    "id": "spool-DH04-supercore-C1A3-1831",
     "number": "1831",
     "dh": "DH 04",
     "area": "supercore",
@@ -268,13 +273,13 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "installedAt": "2026-10-17T21:07:51.284Z",
     "installedBy": "Pedro Alves",
     "receivedDate": "2026-10-17",
-    "receivedAt": "2026-10-17T21:07:51.284Z",
+    "receivedAt": "2026-10-17T20:48:49.967Z",
     "notes": "Conjunto 1 - Alimentação (C1A3)",
     "circuit": "C1A3",
     "receivedBy": "Equipe SUPERCORE"
   },
   {
-    "id": "spool-DH04-supercore-1829",
+    "id": "spool-DH04-supercore-C1A4-1829",
     "number": "1829",
     "dh": "DH 04",
     "area": "supercore",
@@ -291,7 +296,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1865",
+    "id": "spool-DH04-supercore-C1A5-1865",
     "number": "1865",
     "dh": "DH 04",
     "area": "supercore",
@@ -308,7 +313,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1861",
+    "id": "spool-DH04-supercore-C1A6-1861",
     "number": "1861",
     "dh": "DH 04",
     "area": "supercore",
@@ -325,7 +330,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1867",
+    "id": "spool-DH04-supercore-C1A7-1867",
     "number": "1867",
     "dh": "DH 04",
     "area": "supercore",
@@ -342,7 +347,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1877",
+    "id": "spool-DH04-supercore-C1A8-1877",
     "number": "1877",
     "dh": "DH 04",
     "area": "supercore",
@@ -359,7 +364,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1879",
+    "id": "spool-DH04-supercore-C1A9-1879",
     "number": "1879",
     "dh": "DH 04",
     "area": "supercore",
@@ -376,7 +381,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1874",
+    "id": "spool-DH04-supercore-C1R1-1874",
     "number": "1874",
     "dh": "DH 04",
     "area": "supercore",
@@ -393,7 +398,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1832",
+    "id": "spool-DH04-supercore-C1R2-1832",
     "number": "1832",
     "dh": "DH 04",
     "area": "supercore",
@@ -410,7 +415,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1830",
+    "id": "spool-DH04-supercore-C1R3-1830",
     "number": "1830",
     "dh": "DH 04",
     "area": "supercore",
@@ -421,13 +426,13 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "installedAt": "2026-10-17T20:47:57.201Z",
     "installedBy": "Pedro Alves",
     "receivedDate": "2026-10-17",
-    "receivedAt": "2026-10-17T20:47:57.201Z",
+    "receivedAt": "2026-10-17T20:47:55.388Z",
     "notes": "Conjunto 1 - Retorno (C1R3)",
     "circuit": "C1R3",
     "receivedBy": "Equipe SUPERCORE"
   },
   {
-    "id": "spool-DH04-supercore-1828",
+    "id": "spool-DH04-supercore-C1R4-1828",
     "number": "1828",
     "dh": "DH 04",
     "area": "supercore",
@@ -444,7 +449,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1863",
+    "id": "spool-DH04-supercore-C1R5-1863",
     "number": "1863",
     "dh": "DH 04",
     "area": "supercore",
@@ -461,7 +466,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1870",
+    "id": "spool-DH04-supercore-C1R6-1870",
     "number": "1870",
     "dh": "DH 04",
     "area": "supercore",
@@ -478,7 +483,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1868",
+    "id": "spool-DH04-supercore-C1R7-1868",
     "number": "1868",
     "dh": "DH 04",
     "area": "supercore",
@@ -495,7 +500,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1878",
+    "id": "spool-DH04-supercore-C1R8-1878",
     "number": "1878",
     "dh": "DH 04",
     "area": "supercore",
@@ -512,7 +517,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1879",
+    "id": "spool-DH04-supercore-C1R9-1879",
     "number": "1879",
     "dh": "DH 04",
     "area": "supercore",
@@ -529,7 +534,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1879",
+    "id": "spool-DH04-supercore-C2A1-1879",
     "number": "1879",
     "dh": "DH 04",
     "area": "supercore",
@@ -546,7 +551,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1876",
+    "id": "spool-DH04-supercore-C2A2-1876",
     "number": "1876",
     "dh": "DH 04",
     "area": "supercore",
@@ -563,7 +568,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1872",
+    "id": "spool-DH04-supercore-C2A3-1872",
     "number": "1872",
     "dh": "DH 04",
     "area": "supercore",
@@ -580,7 +585,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1871",
+    "id": "spool-DH04-supercore-C2A4-1871",
     "number": "1871",
     "dh": "DH 04",
     "area": "supercore",
@@ -597,7 +602,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1838",
+    "id": "spool-DH04-supercore-C2A5-1838",
     "number": "1838",
     "dh": "DH 04",
     "area": "supercore",
@@ -614,7 +619,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1836",
+    "id": "spool-DH04-supercore-C2A6-1836",
     "number": "1836",
     "dh": "DH 04",
     "area": "supercore",
@@ -631,7 +636,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1834",
+    "id": "spool-DH04-supercore-C2A7-1834",
     "number": "1834",
     "dh": "DH 04",
     "area": "supercore",
@@ -648,7 +653,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1869",
+    "id": "spool-DH04-supercore-C2A8-1869",
     "number": "1869",
     "dh": "DH 04",
     "area": "supercore",
@@ -665,7 +670,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1879",
+    "id": "spool-DH04-supercore-C2R1-1879",
     "number": "1879",
     "dh": "DH 04",
     "area": "supercore",
@@ -682,7 +687,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1875",
+    "id": "spool-DH04-supercore-C2R2-1875",
     "number": "1875",
     "dh": "DH 04",
     "area": "supercore",
@@ -699,7 +704,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1864",
+    "id": "spool-DH04-supercore-C2R3-1864",
     "number": "1864",
     "dh": "DH 04",
     "area": "supercore",
@@ -716,7 +721,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1862",
+    "id": "spool-DH04-supercore-C2R4-1862",
     "number": "1862",
     "dh": "DH 04",
     "area": "supercore",
@@ -733,7 +738,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1839",
+    "id": "spool-DH04-supercore-C2R5-1839",
     "number": "1839",
     "dh": "DH 04",
     "area": "supercore",
@@ -750,7 +755,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1837",
+    "id": "spool-DH04-supercore-C2R6-1837",
     "number": "1837",
     "dh": "DH 04",
     "area": "supercore",
@@ -767,7 +772,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1835",
+    "id": "spool-DH04-supercore-C2R7-1835",
     "number": "1835",
     "dh": "DH 04",
     "area": "supercore",
@@ -784,7 +789,7 @@ const DEFAULT_OFFICIAL_SPOOLS = [
     "receivedBy": ""
   },
   {
-    "id": "spool-DH04-supercore-1866",
+    "id": "spool-DH04-supercore-C2R8-1866",
     "number": "1866",
     "dh": "DH 04",
     "area": "supercore",
@@ -842,8 +847,13 @@ function spoolLoadAll() {
     console.error('Erro ao ler spools:', e);
   }
 
-  // Garantir a presença dos 34 spools do SUPERCORE DH 04 com os status da foto
-  spoolEnsureSupercoreDh04Spools(list);
+  // Se a lista estiver vazia ou com mais de 50 spools (duplicatas antigas do v4), restaura os 45 corretos do localhost
+  if (!list.length || list.length > 50) {
+    list = DEFAULT_OFFICIAL_SPOOLS.map(s => ({ ...s }));
+  } else {
+    list = spoolDeduplicateList(list);
+  }
+
   try {
     localStorage.setItem(SPOOL_STORE_KEY, JSON.stringify(list));
   } catch (e) {}
@@ -863,28 +873,34 @@ function spoolSaveAll(spools) {
   }
 }
 
-// Merge inteligente de listas preservando edições mais recentes
-function spoolMergeLists(localList, remoteList) {
+// Deduplicação estrita de spools por DH, Setor e TAG
+function spoolDeduplicateList(list) {
   const map = new Map();
-  (remoteList || []).forEach(s => {
-    if (s && s.id) map.set(s.id, { ...s });
-  });
-  (localList || []).forEach(local => {
-    if (!local || !local.id) return;
-    const remote = map.get(local.id);
-    if (!remote) {
-      map.set(local.id, { ...local });
+  (list || []).forEach(s => {
+    if (!s || !s.number) return;
+    const normDh = normalizeDh(s.dh);
+    const normSec = normalizeSector(s.area);
+    const key = `${normDh}_${normSec}_${s.number}_${s.circuit || ''}`;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { ...s, dh: normDh, area: normSec });
     } else {
-      const localTime = new Date(local.installedAt || local.receivedAt || 0).getTime();
-      const remoteTime = new Date(remote.installedAt || remote.receivedAt || 0).getTime();
-      if (localTime > remoteTime) {
-        map.set(local.id, { ...remote, ...local });
-      } else {
-        map.set(local.id, { ...local, ...remote });
+      const t1 = new Date(s.installedAt || s.receivedAt || 0).getTime();
+      const t2 = new Date(existing.installedAt || existing.receivedAt || 0).getTime();
+      if (t1 > t2 || (s.status === 'installed' && existing.status !== 'installed')) {
+        map.set(key, { ...existing, ...s, dh: normDh, area: normSec });
       }
     }
   });
   return Array.from(map.values());
+}
+
+// Merge inteligente: Supabase oficial tem prioridade sobre caches locais corrompidos
+function spoolMergeLists(localList, remoteList) {
+  if (Array.isArray(remoteList) && remoteList.length > 0 && remoteList.length <= 50) {
+    return spoolDeduplicateList(remoteList);
+  }
+  return spoolDeduplicateList(localList);
 }
 
 // Sync com Supabase (app_metadata - spool_registry)
@@ -894,7 +910,7 @@ async function spoolSyncRemote(spools) {
       updatedAt: new Date().toISOString(),
       updatedBy: (window.currentUser?.name) || 'Pedro Alves',
       spools: spools,
-      version: 4
+      version: 5
     };
     if (typeof supabaseRestRequest === 'function') {
       await supabaseRestRequest('app_metadata?on_conflict=key', {
