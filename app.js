@@ -395,15 +395,32 @@ async function syncUserApprovalsFromSupabase() {
   try {
     const rows = await supabaseRestRequest('user_approvals?select=*&order=created_at.desc');
     if (Array.isArray(rows)) {
-      const serverMap = new Map();
+      const unifiedMap = new Map();
+      // 1. Dados do servidor são a fonte de verdade mais atualizada
       rows.forEach(r => {
         if (!r) return;
-        if (r.id) serverMap.set(r.id, r);
-        if (r.email) serverMap.set(r.email.toLowerCase(), r);
+        const key = (r.email ? r.email.trim().toLowerCase() : '') || r.id;
+        if (key) unifiedMap.set(key, r);
       });
-      // Mantém itens locais que ainda não foram gravados no servidor
-      const localOnly = userApprovals.filter(u => u && ((u.id && !serverMap.has(u.id)) || (u.email && !serverMap.has(u.email.toLowerCase()))));
-      userApprovals = [...rows, ...localOnly];
+
+      // 2. Mescla registros locais que ainda não existam no servidor
+      userApprovals.forEach(u => {
+        if (!u) return;
+        const key = (u.email ? u.email.trim().toLowerCase() : '') || u.id;
+        if (key && !unifiedMap.has(key)) {
+          // Garante que o item local tem UUID válido e não colide com IDs existentes
+          if (!u.id || !isValidUUID(u.id)) {
+            u.id = generateUUID();
+          }
+          unifiedMap.set(key, u);
+          // Oportunisticamente envia registro local para persistência no Supabase
+          if (u.email) {
+            saveUserApprovalToSupabase(u).catch(() => {});
+          }
+        }
+      });
+
+      userApprovals = Array.from(unifiedMap.values());
       localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
       updateAppShellAccess();
       // Não recria a tela se o gestor estiver na aba convidar ou preenchendo qualquer campo
@@ -2674,7 +2691,8 @@ function renderUserManagement() {
 
   const pendingList = userApprovals.filter(u => u.status === 'pending');
   const approvedList = userApprovals.filter(u => u.status === 'approved' || u.status === 'active');
-  const managersCount = userApprovals.filter(u => u.status === 'approved' && (u.role === 'admin' || u.role === 'gestor' || u.role === 'manager')).length + 1;
+  const rejectedList = userApprovals.filter(u => u.status === 'rejected' || u.status === 'inactive');
+  const managersCount = userApprovals.filter(u => (u.status === 'approved' || u.status === 'active') && (u.role === 'admin' || u.role === 'gestor' || u.role === 'manager')).length + 1;
 
   const appEl = document.getElementById('app');
   appEl.innerHTML = `
@@ -2711,10 +2729,11 @@ function renderUserManagement() {
     <div class="module-tabs">
       <a href="javascript:void(0)" class="${userManagementTab === 'pendentes' ? 'active' : ''}" onclick="setUserManagementTab('pendentes')">${icon('clock')} Solicitações Pendentes <b>${pendingList.length}</b></a>
       <a href="javascript:void(0)" class="${userManagementTab === 'ativos' ? 'active' : ''}" onclick="setUserManagementTab('ativos')">${icon('user')} Usuários Ativos <b>${approvedList.length + 1}</b></a>
+      <a href="javascript:void(0)" class="${userManagementTab === 'revogados' ? 'active' : ''}" onclick="setUserManagementTab('revogados')">${icon('close')} Revogados / Inativos <b>${rejectedList.length}</b></a>
       <a href="javascript:void(0)" class="${userManagementTab === 'convidar' ? 'active' : ''}" onclick="setUserManagementTab('convidar')">${icon('plus')} Enviar Convite por E-mail</a>
     </div>
 
-    ${renderUserManagementBody(pendingList, approvedList)}
+    ${renderUserManagementBody(pendingList, approvedList, rejectedList)}
   `;
 }
 
@@ -2723,7 +2742,7 @@ function setUserManagementTab(tab) {
   renderUserManagement();
 }
 
-function renderUserManagementBody(pendingList, approvedList) {
+function renderUserManagementBody(pendingList, approvedList, rejectedList = []) {
   const uniqueCompanies = [...new Set(workforce.map(p => p?.company).filter(Boolean))].sort(safeSort);
   const uniquePeople = [...new Set(workforce.map(p => p?.name).filter(Boolean))].sort(safeSort);
 
@@ -2762,16 +2781,17 @@ function renderUserManagementBody(pendingList, approvedList) {
                 <td style="padding:14px 16px; color:var(--muted);">${esc(u.email)}</td>
                 <td style="padding:14px 16px;">${esc(u.company || '—')}</td>
                 <td style="padding:14px 16px;">
-                  <select onchange="updatePendingUserRole('${esc(u.id)}', this.value)" style="padding:4px 8px; border-radius:6px; border:1px solid var(--line); font-size:12px;">
+                  <select onchange="updatePendingUserRole('${esc(u.id)}', this.value, '${esc(u.email)}')" style="padding:4px 8px; border-radius:6px; border:1px solid var(--line); font-size:12px;">
                     <option value="operador" ${u.role === 'operador' ? 'selected' : ''}>Operador de Campo</option>
                     <option value="engenheiro" ${u.role === 'engenheiro' ? 'selected' : ''}>Engenheiro</option>
                     <option value="gestor" ${u.role === 'gestor' || u.role === 'admin' ? 'selected' : ''}>Gestor de Obra</option>
                   </select>
                 </td>
                 <td style="padding:14px 16px; color:var(--muted); font-size:12px;">${fullDate(u.created_at)}</td>
-                <td style="padding:14px 16px; text-align:right;">
-                  <button class="button button-green compact" onclick="approveUserAccess('${esc(u.id)}')">${icon('check')} Aprovar Acesso</button>
-                  <button class="button button-outline compact" style="color:var(--red);" onclick="rejectUserAccess('${esc(u.id)}')">${icon('close')} Rejeitar</button>
+                <td style="padding:14px 16px; text-align:right; white-space:nowrap;">
+                  <button class="button button-green compact" onclick="approveUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('check')} Aprovar Acesso</button>
+                  <button class="button button-outline compact" style="color:var(--muted); margin-left:4px;" onclick="rejectUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('close')} Rejeitar</button>
+                  <button class="button button-outline compact" style="color:var(--red); margin-left:4px;" title="Excluir cadastro" onclick="deleteUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('trash')} Excluir</button>
                 </td>
               </tr>
             `).join('')}
@@ -2814,9 +2834,55 @@ function renderUserManagementBody(pendingList, approvedList) {
                   </span>
                 </td>
                 <td style="padding:14px 16px; color:var(--muted); font-size:12px;">${fullDate(u.approved_at || u.created_at)}</td>
-                <td style="padding:14px 16px; text-align:right;">
-                  <button class="button button-outline compact" style="margin-right:6px;" onclick="copyUserAccessLink('${esc(u.id)}')">${icon('clipboard')} Copiar Convite/Acesso</button>
-                  <button class="button button-outline compact" style="color:var(--red);" onclick="revokeUserAccess('${esc(u.id)}')">${icon('close')} Revogar</button>
+                <td style="padding:14px 16px; text-align:right; white-space:nowrap;">
+                  <button class="button button-outline compact" style="margin-right:6px;" onclick="copyUserAccessLink('${esc(u.id)}', '${esc(u.email)}')">${icon('clipboard')} Copiar Convite/Acesso</button>
+                  <button class="button button-outline compact" style="color:#d97706; margin-right:6px;" title="Bloquear acesso temporariamente" onclick="revokeUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('close')} Revogar</button>
+                  <button class="button button-outline compact" style="color:var(--red);" title="Excluir permanentemente do sistema" onclick="deleteUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('trash')} Excluir</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </section>`;
+  }
+
+  if (userManagementTab === 'revogados') {
+    if (rejectedList.length === 0) {
+      return `
+        <div class="empty-state" style="padding:32px 24px; text-align:center; border:1px dashed var(--line); border-radius:12px; background:white;">
+          <span style="font-size:32px; display:block; margin-bottom:8px;">🛡️</span>
+          <h3 style="font-size:16px; margin-bottom:4px;">Nenhum acesso revogado ou inativo</h3>
+          <p style="color:var(--muted); font-size:13px;">Quando você revoga ou recusa o acesso de alguém, o colaborador fica listado aqui para você reativar ou excluir em definitivo.</p>
+        </div>`;
+    }
+    return `
+      <section class="table-card" style="border:1px solid var(--line); border-radius:12px; background:white; overflow:hidden;">
+        <table class="data-table" style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead>
+            <tr style="background:#f7f9f8; border-bottom:1px solid var(--line); text-align:left;">
+              <th style="padding:12px 16px;">Colaborador</th>
+              <th style="padding:12px 16px;">E-mail</th>
+              <th style="padding:12px 16px;">Empresa</th>
+              <th style="padding:12px 16px;">Função Anterior</th>
+              <th style="padding:12px 16px;">Status</th>
+              <th style="padding:12px 16px; text-align:right;">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rejectedList.map(u => `
+              <tr style="border-bottom:1px solid var(--line); opacity:0.88;">
+                <td style="padding:14px 16px;"><strong>${esc(u.name || 'Sem nome')}</strong></td>
+                <td style="padding:14px 16px; color:var(--muted);">${esc(u.email)}</td>
+                <td style="padding:14px 16px;">${esc(u.company || '—')}</td>
+                <td style="padding:14px 16px;">
+                  <span class="badge" style="background:#f1f3f4; color:#5f6368; padding:3px 8px; border-radius:6px; font-weight:700; font-size:11px;">
+                    ${u.role === 'gestor' || u.role === 'admin' ? 'Gestor' : u.role === 'engenheiro' ? 'Engenheiro' : 'Operador'}
+                  </span>
+                </td>
+                <td style="padding:14px 16px;"><span class="badge" style="background:#fee2e2; color:#b91c1c; padding:3px 8px; border-radius:6px; font-weight:700; font-size:11px;">Acesso Revogado</span></td>
+                <td style="padding:14px 16px; text-align:right; white-space:nowrap;">
+                  <button class="button button-green compact" style="margin-right:6px;" onclick="approveUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('check')} Reativar Acesso</button>
+                  <button class="button button-outline compact" style="color:var(--red);" title="Excluir permanentemente do banco" onclick="deleteUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('trash')} Excluir</button>
                 </td>
               </tr>
             `).join('')}
@@ -2935,13 +3001,28 @@ function handleInvitePersonChange(input) {
   }
 }
 
-async function approveUserAccess(id) {
-  const user = userApprovals.find(u => u.id === id);
+function findUserApproval(id, email) {
+  if (!userApprovals || !userApprovals.length) return null;
+  if (email && String(email).trim()) {
+    const cleanEmail = String(email).trim().toLowerCase();
+    const byEmail = userApprovals.find(u => u && u.email && u.email.trim().toLowerCase() === cleanEmail);
+    if (byEmail) return byEmail;
+  }
+  if (id && String(id).trim() && id !== 'undefined' && id !== 'null') {
+    const byId = userApprovals.find(u => u && u.id === id);
+    if (byId) return byId;
+  }
+  return null;
+}
+
+async function approveUserAccess(id, email) {
+  const user = findUserApproval(id, email);
   if (user) {
     user.status = 'approved';
     user.approved_at = new Date().toISOString();
     user.approved_by = currentUser?.name || 'Gestor Master';
     user.updated_at = new Date().toISOString();
+    if (!user.id || !isValidUUID(user.id)) user.id = generateUUID();
     localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
     await saveUserApprovalToSupabase(user);
     toast(`Acesso de ${user.name} APROVADO com sucesso!`);
@@ -2950,8 +3031,8 @@ async function approveUserAccess(id) {
   }
 }
 
-async function rejectUserAccess(id) {
-  const user = userApprovals.find(u => u.id === id);
+async function rejectUserAccess(id, email) {
+  const user = findUserApproval(id, email);
   if (user) {
     user.status = 'rejected';
     user.updated_at = new Date().toISOString();
@@ -2963,21 +3044,53 @@ async function rejectUserAccess(id) {
   }
 }
 
-async function revokeUserAccess(id) {
-  const user = userApprovals.find(u => u.id === id);
+async function revokeUserAccess(id, email) {
+  const user = findUserApproval(id, email);
   if (user) {
     user.status = 'rejected';
     user.updated_at = new Date().toISOString();
     localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
     await saveUserApprovalToSupabase(user);
-    toast(`Acesso de ${user.name} revogado.`);
+    toast(`Acesso de ${user.name} revogado. O colaborador agora está na aba "Revogados / Inativos".`);
     updateAppShellAccess();
     renderUserManagement();
   }
 }
 
-function updatePendingUserRole(id, newRole) {
-  const user = userApprovals.find(u => u.id === id);
+async function deleteUserAccess(id, email) {
+  const user = findUserApproval(id, email);
+  const userName = user?.name || email || 'este colaborador';
+  const confirmed = window.confirm(`Tem certeza que deseja EXCLUIR permanentemente o cadastro de "${userName}"?\n\nEsta ação removerá o colaborador do sistema e apagará o registro do banco de dados definitivamente.`);
+  if (!confirmed) return;
+
+  const targetEmail = (user?.email || email || '').trim().toLowerCase();
+  const targetId = user?.id || id;
+
+  userApprovals = userApprovals.filter(u => {
+    if (!u) return false;
+    if (targetEmail && u.email && u.email.trim().toLowerCase() === targetEmail) return false;
+    if (targetId && u.id && u.id === targetId) return false;
+    return true;
+  });
+  localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
+
+  try {
+    if (targetId && isValidUUID(targetId)) {
+      await supabaseRestRequest(`user_approvals?id=eq.${encodeURIComponent(targetId)}`, { method: 'DELETE' });
+    } else if (targetEmail) {
+      await supabaseRestRequest(`user_approvals?email=eq.${encodeURIComponent(targetEmail)}`, { method: 'DELETE' });
+    }
+  } catch(e) {
+    console.warn('Erro ao deletar usuário do Supabase:', e);
+  }
+
+  toast(`Usuário ${userName} excluído com sucesso.`);
+  updateAppShellAccess();
+  renderUserManagement();
+}
+
+function updatePendingUserRole(id, newRole, email) {
+  const user = findUserApproval(id, email);
   if (user) {
     user.role = newRole;
     user.updated_at = new Date().toISOString();
@@ -3077,8 +3190,8 @@ function showInviteSuccessModal(opts) {
   modal(modalHtml, 'modal-medium');
 }
 
-function copyUserAccessLink(id) {
-  const u = userApprovals.find(item => item.id === id);
+function copyUserAccessLink(id, email) {
+  const u = findUserApproval(id, email);
   if (!u) return;
   const baseUrl = `${window.location.origin}${window.location.pathname}`;
   let inviteUrl = '';
@@ -3140,6 +3253,9 @@ async function generateInviteLink(event) {
     };
     userApprovals.unshift(match);
   } else {
+    if (!match.id || !isValidUUID(match.id)) {
+      match.id = generateUUID();
+    }
     match.invite_token = token;
     match.name = name || match.name;
     match.role = role;

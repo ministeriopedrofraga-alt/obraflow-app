@@ -1053,12 +1053,13 @@ if (spoolDb.length > 0) {
 // Se o setor ou DH gravados estiverem vazios de dados enquanto houver spools, inicia com 'all' para garantir visualização imediata
 let spoolActiveSector = localStorage.getItem('obraflow_spool_active_sector') || 'all';
 let spoolActiveDh = localStorage.getItem('obraflow_spool_active_dh') || 'ALL';
-let spoolStatusFilter = 'all'; // 'all', 'not-started', 'received', 'installed'
+let spoolStatusFilter = 'all'; // 'all', 'not-started', 'received', 'installed', 'rejected'
 let spoolTypeFilter = 'all'; // 'all', 'straight', 'valve', 'branch'
 let spoolDiameterFilter = 'all';
 let spoolListFilter = 'all';
 let spoolSearchTerm = '';
 let spoolSelectedDate = getLocalDateStr(); // YYYY-MM-DD no fuso local
+let spoolDateFilterMode = 'all'; // 'all' (todas as datas), 'activity' (atividade no dia), 'installed' (instalados no dia), 'received' (recebidos no dia)
 
 function formatSpoolDateDisplay(d) {
   if (!d) return '—';
@@ -1095,40 +1096,59 @@ function spoolFilterList(sourceList) {
       }
     }
 
-    // 3. Filtro por Status e por Data do Apontamento
+    // 3. Filtro Ativo por Data (permite filtrar qualquer dia selecionado)
+    if (spoolDateFilterMode !== 'all') {
+      const isInstOnDate = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
+      const isRecOnDate = (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate));
+      const isRejOnDate = s.status === 'rejected' && (s.rejectedDate === targetDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === targetDate));
+
+      if (spoolDateFilterMode === 'installed' && !isInstOnDate) return false;
+      if (spoolDateFilterMode === 'received' && !isRecOnDate) return false;
+      if (spoolDateFilterMode === 'rejected' && !isRejOnDate) return false;
+      if (spoolDateFilterMode === 'activity' && !isInstOnDate && !isRecOnDate && !isRejOnDate) return false;
+    }
+
+    // 4. Filtro por Status e por Data do Apontamento
     if (spoolStatusFilter !== 'all') {
       if (spoolStatusFilter === 'pending' || spoolStatusFilter === 'not-started') {
         if (s.status !== 'not-started') return false;
+      } else if (spoolStatusFilter === 'rejected') {
+        if (s.status !== 'rejected') return false;
       } else if (spoolStatusFilter === 'installed_on_date') {
         const isInst = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
         if (!isInst) return false;
       } else if (spoolStatusFilter === 'received_on_date') {
         const isRec = (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate));
         if (!isRec) return false;
+      } else if (spoolStatusFilter === 'rejected_on_date') {
+        const isRej = s.status === 'rejected' && (s.rejectedDate === targetDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === targetDate));
+        if (!isRej) return false;
       } else if (spoolStatusFilter === 'activity_on_date') {
         const isInst = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
         const isRec = (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate));
-        if (!isInst && !isRec) return false;
+        const isRej = s.status === 'rejected' && (s.rejectedDate === targetDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === targetDate));
+        if (!isInst && !isRec && !isRej) return false;
       } else if (s.status !== spoolStatusFilter) {
         return false;
       }
     }
 
-    // 4. Filtro por Tipo / Classificação
+    // 5. Filtro por Tipo / Classificação
     if (spoolTypeFilter !== 'all' && s.type !== spoolTypeFilter) {
       return false;
     }
 
-    // 5. Filtro por Diâmetro
+    // 6. Filtro por Diâmetro
     if (spoolDiameterFilter !== 'all' && s.diameter !== spoolDiameterFilter) {
       return false;
     }
 
-    // 6. Abas Rápidas / Botões de Fechamento
+    // 7. Abas Rápidas / Botões de Fechamento
     if (spoolListFilter === 'straight' && s.type !== 'straight') return false;
     if (spoolListFilter === 'valve' && s.type !== 'valve') return false;
     if (spoolListFilter === 'branch' && s.type !== 'branch') return false;
     if (spoolListFilter === 'pending' && s.status !== 'not-started') return false;
+    if (spoolListFilter === 'rejected' && s.status !== 'rejected') return false;
     if (spoolListFilter === 'installed_today') {
       const isInst = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
       if (!isInst) return false;
@@ -1164,6 +1184,7 @@ function spoolShowAllMySpools() {
   spoolTypeFilter = 'all';
   spoolDiameterFilter = 'all';
   spoolListFilter = 'all';
+  spoolDateFilterMode = 'all';
   spoolSearchTerm = '';
   localStorage.setItem('obraflow_spool_active_sector', 'all');
   localStorage.setItem('obraflow_spool_active_dh', 'ALL');
@@ -1206,6 +1227,8 @@ function renderSpools() {
 
   const installedToday = baseSectorSpools.filter(s => s.status === 'installed' && (s.installedDate === filterDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === filterDate)));
   const receivedToday = baseSectorSpools.filter(s => (s.status === 'received' || s.status === 'installed') && (s.receivedDate === filterDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === filterDate)));
+  const rejectedCount = baseSectorSpools.filter(s => s.status === 'rejected').length;
+  const rejectedToday = baseSectorSpools.filter(s => s.status === 'rejected' && (s.rejectedDate === filterDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === filterDate)));
   const totalPending = baseSectorSpools.filter(s => s.status === 'not-started').length;
   const totalInstalled = baseSectorSpools.filter(s => s.status === 'installed').length;
 
@@ -1223,7 +1246,9 @@ function renderSpools() {
        <button class="button button-green" onclick="spoolOpenExportModal()" title="Exportar planilha Excel (.xlsx)">${icon('download')} Baixar Planilha</button>
        <button class="button button-dark" onclick="spoolOpenReportPDF('daily')" title="Gerar relatório em PDF com logos Heating & Afonso França">${icon('print')} Relatório PDF</button>
        <button class="button button-outline" onclick="spoolOpenImportModal()" title="Subir planilha Excel (.xlsx) ou CSV">${icon('upload')} Subir Planilha</button>
-       <button class="button button-outline" onclick="spoolCopyDailyReport('${filterDate}')" title="Copiar fechamento do dia para o WhatsApp">${icon('clipboard')} Copiar do Dia</button>
+       <button class="button button-green" onclick="spoolCopyFilteredReport()" title="Copiar spools com filtros atuais para WhatsApp">${icon('clipboard')} Copiar Filtrados (${filteredSpools.length})</button>
+       <button class="button button-outline" onclick="spoolCopyDailyReport('${filterDate}')" title="Copiar fechamento do dia para o WhatsApp">${icon('calendar')} Fechamento do Dia</button>
+       <button class="button button-outline" onclick="spoolOpenCopyModal()" title="Mais opções de cópia e compartilhamento">${icon('share')} Opções Copiar</button>
        <button class="button button-outline" onclick="spoolOpenManualEntryModal()" title="Escrever / colar tags manualmente">${icon('plus')} Escrever Spools</button>`
     )}
 
@@ -1326,6 +1351,12 @@ function renderSpools() {
         <div class="spool-kpi-val">${totalPending} <small style="font-size:14px; font-weight:700; color:#94a3b8;">pendentes</small></div>
         <div class="spool-kpi-sub">Total de ${baseSectorSpools.length} spools (${totalInstalled} montados)</div>
       </div>
+
+      <div class="spool-kpi-card tone-rejected ${spoolListFilter === 'rejected' ? 'is-active-tab' : ''}" onclick="spoolSetFilter('rejected')" title="Clique para ver os tubos reprovados / em quarentena" style="border-left: 4px solid #ef4444; background: ${spoolListFilter === 'rejected' ? '#fee2e2' : '#fff5f5'};">
+        <span class="spool-kpi-label" style="color:#b91c1c;">🔴 REPROVADOS / QUARENTENA <span class="spool-kpi-badge" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5;">VER LISTA</span></span>
+        <div class="spool-kpi-val" style="color:#dc2626;">${rejectedCount} ${rejectedToday.length ? `<small style="font-size:14px; font-weight:800; color:#b91c1c;">(+${rejectedToday.length} hoje)</small>` : ''}</div>
+        <div class="spool-kpi-sub" style="color:#991b1b;">Tubulações bloqueadas / retrabalho · Clique p/ listar</div>
+      </div>
     </section>
 
     <!-- 4. BARRAMENTO PRINCIPAL DA LINHA: TRECHOS RETOS + VÁLVULAS (SE HOUVER) -->
@@ -1364,8 +1395,10 @@ function renderSpools() {
           <option value="not-started" ${spoolStatusFilter === 'not-started' ? 'selected' : ''}>⚪ Pendente</option>
           <option value="received" ${spoolStatusFilter === 'received' ? 'selected' : ''}>🟡 Recebido (Geral)</option>
           <option value="installed" ${spoolStatusFilter === 'installed' ? 'selected' : ''}>🟢 Instalado (Geral)</option>
+          <option value="rejected" ${spoolStatusFilter === 'rejected' ? 'selected' : ''}>🔴 Reprovado (Quarentena)</option>
           <option value="installed_on_date" ${spoolStatusFilter === 'installed_on_date' ? 'selected' : ''}>🟢 Instalados no Dia (${formatSpoolDateShort(filterDate)})</option>
           <option value="received_on_date" ${spoolStatusFilter === 'received_on_date' ? 'selected' : ''}>🟡 Recebidos no Dia (${formatSpoolDateShort(filterDate)})</option>
+          <option value="rejected_on_date" ${spoolStatusFilter === 'rejected_on_date' ? 'selected' : ''}>🔴 Reprovados no Dia (${formatSpoolDateShort(filterDate)})</option>
           <option value="activity_on_date" ${spoolStatusFilter === 'activity_on_date' ? 'selected' : ''}>⚡ Atividade no Dia (${formatSpoolDateShort(filterDate)})</option>
         </select>
       </div>
@@ -1391,17 +1424,36 @@ function renderSpools() {
         </select>
       </div>
 
-      <!-- Filtro por Dia do Fechamento / Apontamento -->
-      <div class="spool-filter-group">
-        <label class="spool-filter-label" for="spoolMainDateFilter">📅 Filtrar por Dia:</label>
-        <div style="display:flex; align-items:center; gap:4px;">
-          <input type="date" id="spoolMainDateFilter" class="spool-filter-input" value="${filterDate}" onchange="spoolSetSelectedDate(this.value)" style="height:36px; padding:0 8px; font-weight:700; background:#ffffff; border:1.5px solid #cbd5e1; border-radius:6px; cursor:pointer;" title="Clique para escolher a data de apontamento">
-          <button type="button" class="button compact ${filterDate === todayStr ? 'button-green' : 'button-outline'}" onclick="spoolSetSelectedDate('${todayStr}')" style="height:36px; padding:0 8px; font-size:11px; font-weight:800;" title="Ver spools de hoje">
+      <!-- Filtro por Dia do Fechamento / Apontamento com Modo Ativo -->
+      <div class="spool-filter-group" style="min-width:300px;">
+        <label class="spool-filter-label" for="spoolMainDateFilter" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>📅 Filtrar por Dia:</span>
+          ${spoolDateFilterMode !== 'all' ? `
+            <span style="font-size:10px; background:#dcfce7; color:#15803d; padding:1px 6px; border-radius:4px; font-weight:800;">
+              ATIVO: ${spoolDateFilterMode === 'installed' ? 'Instalados' : (spoolDateFilterMode === 'received' ? 'Recebidos' : 'Atividade')}
+            </span>
+          ` : `
+            <span style="font-size:10px; color:#64748b; font-weight:600;">(Todas as datas)</span>
+          `}
+        </label>
+        <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+          <select id="spoolDateModeSelect" class="spool-filter-select" onchange="spoolSetDateFilterMode(this.value)" style="height:36px; font-weight:700; width:125px; font-size:12px;" title="Modo do filtro de data">
+            <option value="all" ${spoolDateFilterMode === 'all' ? 'selected' : ''}>🌐 Todas</option>
+            <option value="activity" ${spoolDateFilterMode === 'activity' ? 'selected' : ''}>⚡ Atividade</option>
+            <option value="installed" ${spoolDateFilterMode === 'installed' ? 'selected' : ''}>🟢 Instalados</option>
+            <option value="received" ${spoolDateFilterMode === 'received' ? 'selected' : ''}>🟡 Recebidos</option>
+            <option value="rejected" ${spoolDateFilterMode === 'rejected' ? 'selected' : ''}>🔴 Reprovados</option>
+          </select>
+          <input type="date" id="spoolMainDateFilter" class="spool-filter-input" value="${filterDate}" onchange="spoolSetSelectedDate(this.value, true)" style="height:36px; padding:0 6px; font-weight:700; background:#ffffff; border:1.5px solid #cbd5e1; border-radius:6px; cursor:pointer; width:125px; font-size:12px;" title="Clique para escolher a data">
+          <button type="button" class="button compact ${spoolDateFilterMode !== 'all' && filterDate === todayStr ? 'button-green' : 'button-outline'}" onclick="spoolQuickFilterDay('${todayStr}')" style="height:36px; padding:0 8px; font-size:11px; font-weight:800;" title="Ver movimentações de hoje">
             Hoje
           </button>
-          <button type="button" class="button compact button-outline" onclick="spoolSetSelectedDate('${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}')" style="height:36px; padding:0 8px; font-size:11px; font-weight:800;" title="Ver spools de ontem">
+          <button type="button" class="button compact button-outline" onclick="spoolQuickFilterDay('${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}')" style="height:36px; padding:0 8px; font-size:11px; font-weight:800;" title="Ver movimentações de ontem">
             Ontem
           </button>
+          ${spoolDateFilterMode !== 'all' ? `
+            <button type="button" class="button compact" onclick="spoolClearDateFilter()" style="height:36px; padding:0 6px; font-size:11px; font-weight:800; background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5;" title="Limpar filtro de data e ver todas">✕ Todas</button>
+          ` : ''}
         </div>
       </div>
 
@@ -1412,7 +1464,7 @@ function renderSpools() {
       </div>
 
       <!-- Botão Limpar Filtros -->
-      ${(spoolStatusFilter !== 'all' || spoolTypeFilter !== 'all' || spoolDiameterFilter !== 'all' || spoolListFilter !== 'all' || spoolSearchTerm || spoolActiveSector !== 'all' || spoolActiveDh !== 'ALL') ? `
+      ${(spoolStatusFilter !== 'all' || spoolDateFilterMode !== 'all' || spoolTypeFilter !== 'all' || spoolDiameterFilter !== 'all' || spoolListFilter !== 'all' || spoolSearchTerm || spoolActiveSector !== 'all' || spoolActiveDh !== 'ALL') ? `
         <div class="spool-filter-group">
           <button type="button" class="button button-outline compact" onclick="spoolClearAllFilters()" style="color:#ef4444; border-color:#fca5a5; font-weight:800; height:36px;">
             ✕ Limpar Filtros
@@ -1420,8 +1472,11 @@ function renderSpools() {
         </div>
       ` : ''}
 
-      <!-- Botões de Ação Direta no Toolbar: PDF com Logos e Excel -->
-      <div class="spool-filter-group" style="margin-left:auto; display:flex; gap:8px;">
+      <!-- Botões de Ação Direta no Toolbar: Copiar Filtro, PDF com Logos e Excel -->
+      <div class="spool-filter-group" style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="button button-outline compact" onclick="spoolCopyFilteredReport()" style="height:36px; font-weight:800; color:#0f172a; border-color:#cbd5e1; background:#ffffff;" title="Copiar os ${filteredSpools.length} spools filtrados na tela para WhatsApp">
+          ${icon('clipboard')} Copiar Filtro (${filteredSpools.length})
+        </button>
         <button type="button" class="button button-outline compact" onclick="spoolOpenReportPDF('daily')" style="height:36px; font-weight:800; color:#0f172a; border-color:#cbd5e1; background:#ffffff;" title="Gerar relatório executivo em PDF com as logos da Heating Cooling e Afonso França">
           ${icon('print')} Relatório PDF
         </button>
@@ -1479,10 +1534,13 @@ function renderSpools() {
               📅 Data:
               <input type="date" value="${filterDate}" onchange="spoolSetSelectedDate(this.value)" class="spool-date-input">
             </label>
-            <button type="button" class="button button-outline compact" onclick="spoolSetSelectedDate('${todayStr}')">Hoje</button>
-            <button type="button" class="button button-outline compact" onclick="spoolSetSelectedDate('${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}')">Ontem</button>
-            <button type="button" class="button button-green compact" onclick="spoolCopyDailyReport('${filterDate}')">
-              📋 Copiar Lista p/ WhatsApp
+            <button type="button" class="button button-outline compact" onclick="spoolQuickFilterDay('${todayStr}', 'installed')">Hoje</button>
+            <button type="button" class="button button-outline compact" onclick="spoolQuickFilterDay('${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}', 'installed')">Ontem</button>
+            <button type="button" class="button button-green compact" onclick="spoolCopyDailyReport('${filterDate}')" title="Copiar fechamento de instalados">
+              📋 Copiar Fechamento (${installedToday.length})
+            </button>
+            <button type="button" class="button button-outline compact" onclick="spoolCopyFilteredReport()" style="background:#ffffff; color:#065f46; border-color:#86efac; font-weight:700;" title="Copiar lista com os filtros atuais">
+              📋 Copiar Filtro (${filteredSpools.length})
             </button>
             <button type="button" class="button button-dark compact" onclick="spoolOpenReportPDF('daily')" style="font-weight:800; display:inline-flex; align-items:center; gap:6px;">
               📄 Relatório PDF
@@ -1510,12 +1568,42 @@ function renderSpools() {
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
             <label style="font-size:12px; font-weight:700; color:#854d0e; display:flex; align-items:center; gap:6px;">
               📅 Data:
-              <input type="date" value="${filterDate}" onchange="spoolSetSelectedDate(this.value)" class="spool-date-input" style="background:#ffffff; color:#0f172a; border-color:#ca8a04;">
+              <input type="date" value="${filterDate}" onchange="spoolSetSelectedDate(this.value, true)" class="spool-date-input" style="background:#ffffff; color:#0f172a; border-color:#ca8a04;">
             </label>
-            <button type="button" class="button button-outline compact" style="color:#854d0e; border-color:#ca8a04; background:#ffffff; font-weight:700;" onclick="spoolSetSelectedDate('${todayStr}')">Hoje</button>
-            <button type="button" class="button button-outline compact" style="color:#854d0e; border-color:#ca8a04; background:#ffffff; font-weight:700;" onclick="spoolSetSelectedDate('${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}')">Ontem</button>
-            <button type="button" class="button button-green compact" onclick="spoolCopyDailyReport('${filterDate}')">
-              📋 Copiar Lista p/ WhatsApp
+            <button type="button" class="button button-outline compact" style="color:#854d0e; border-color:#ca8a04; background:#ffffff; font-weight:700;" onclick="spoolQuickFilterDay('${todayStr}', 'received')">Hoje</button>
+            <button type="button" class="button button-outline compact" style="color:#854d0e; border-color:#ca8a04; background:#ffffff; font-weight:700;" onclick="spoolQuickFilterDay('${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}', 'received')">Ontem</button>
+            <button type="button" class="button compact" onclick="spoolCopyReceivedDailyReport('${filterDate}')" style="background:#ca8a04; color:#ffffff; font-weight:800; border:none;" title="Copiar relatório de recebidos do dia">
+              📋 Copiar Recebidos (${receivedToday.length})
+            </button>
+            <button type="button" class="button button-outline compact" onclick="spoolCopyFilteredReport()" style="color:#854d0e; border-color:#ca8a04; background:#ffffff; font-weight:700;" title="Copiar lista com os filtros atuais">
+              📋 Copiar Filtro (${filteredSpools.length})
+            </button>
+          </div>
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- BANNER SE A ABA DE REPROVADOS ESTIVER ATIVA -->
+    ${spoolListFilter === 'rejected' ? `
+      <div class="spool-installed-today-banner" style="background:linear-gradient(135deg, #fef2f2, #fee2e2); border:1.5px solid #ef4444; color:#991b1b; box-shadow:0 4px 15px rgba(239,68,68,0.15);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="spool-pulse-beacon" style="background:#dc2626; box-shadow:0 0 0 0 rgba(220,38,38,0.7);"></span>
+              <h3 style="margin:0; font-size:16px; font-weight:800; color:#991b1b;">
+                🔴 TUBULAÇÕES REPROVADAS / QUARENTENA (${rejectedCount} peças)
+              </h3>
+            </div>
+            <p style="margin:4px 0 0; font-size:12px; color:#b91c1c;">
+              Peças bloqueadas por duplicidade de fábrica, dimensional ou defeito de solda · ${sectorMeta.name} (${spoolActiveDh}).
+            </p>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="button button-outline compact" onclick="spoolClearAllFilters()" style="color:#991b1b; border-color:#fca5a5; background:#ffffff; font-weight:700;">
+              ✕ Ver Todos os Spools
+            </button>
+            <button type="button" class="button button-green compact" onclick="spoolCopyFilteredReport()" title="Copiar lista de reprovados">
+              📋 Copiar Lista (${filteredSpools.length})
             </button>
           </div>
         </div>
@@ -1535,6 +1623,7 @@ function renderSpools() {
           <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#ffffff; border:2px solid #cbd5e1; display:inline-block;"></i> Pendente</span>
           <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#f0f9ff; border:2px solid #0284c7; display:inline-block;"></i> Recebido</span>
           <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#ecfdf5; border:2px solid #10b981; display:inline-block;"></i> Instalado</span>
+          <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#fef2f2; border:2px solid #ef4444; display:inline-block;"></i> Reprovado</span>
         </div>
       </div>
 
@@ -1550,8 +1639,14 @@ function renderSpools() {
         <span id="spoolBatchCount">0 spool(s) selecionado(s)</span>
       </div>
       <div class="batch-bar-actions">
+        <button type="button" class="button compact" style="background:#059669; color:#ffffff; font-weight:700; border:none; height:32px; padding:4px 12px; border-radius:6px; cursor:pointer;" onclick="spoolCopySelectedSpools()" title="Copiar spools selecionados para WhatsApp">
+          📋 Copiar Marcados
+        </button>
         <button type="button" class="button compact" style="background:#dc2626; color:#ffffff; font-weight:800; border:none; height:32px; padding:4px 14px; border-radius:6px; cursor:pointer;" onclick="spoolBulkDelete()">
           🗑️ Excluir Selecionados
+        </button>
+        <button type="button" class="button compact" onclick="spoolBulkReject()" style="background:#b91c1c; color:#ffffff; font-weight:800; border:none; height:32px; padding:4px 12px; border-radius:6px; cursor:pointer;">
+          🔴 Reprovar
         </button>
         <button type="button" class="button button-outline compact" onclick="spoolBulkSetStatus('received')" style="color:#ffffff; border-color:rgba(255,255,255,0.4);">
           🟡 Recebido
@@ -1612,13 +1707,15 @@ function spoolRenderPipelineBar(sectorSpools, sectorMeta) {
           const isValve = s.type === 'valve';
           const isInst = s.status === 'installed';
           const isRec = s.status === 'received';
-          const statusClass = isInst ? 'status-installed' : (isRec ? 'status-received' : 'status-pending');
+          const isRej = s.status === 'rejected';
+          const statusClass = isInst ? 'status-installed' : (isRec ? 'status-received' : (isRej ? 'status-rejected' : 'status-pending'));
           const valveClass = isValve ? 'is-valve' : '';
           const segRecInfo = s.receivedDate ? `\n• Recebido: ${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` às ${formatSpoolTime(s.receivedAt)}` : ''}` : '';
           const segInstInfo = s.installedDate ? `\n• Instalado: ${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '';
+          const segRejInfo = s.rejectedDate ? `\n• Reprovado: ${formatSpoolDateDisplay(s.rejectedDate)}${s.rejectedReason ? ` (${s.rejectedReason})` : ''}` : '';
 
           return `
-            <div class="spool-pipe-seg ${valveClass} ${statusClass}" onclick="spoolToggleStatus('${s.id}')" title="${isValve ? 'Válvula de Linha' : 'Tubo Reto'} ${esc(s.number)} (${node.label})${segRecInfo}${segInstInfo}\nClique para alternar status">
+            <div class="spool-pipe-seg ${valveClass} ${statusClass}" onclick="spoolToggleStatus('${s.id}')" title="${isValve ? 'Válvula de Linha' : 'Tubo Reto'} ${esc(s.number)} (${node.label})${segRecInfo}${segInstInfo}${segRejInfo}\nClique para alternar status">
               <span class="seg-tag">${esc(s.number)}</span>
               <span class="seg-idx">${node.label}</span>
             </div>
@@ -1655,14 +1752,16 @@ function spoolRenderTubeSquares(list, filterDate) {
         const isValve = spool.type === 'valve';
         const isInst = spool.status === 'installed';
         const isRec = spool.status === 'received';
-        const statusClass = isInst ? 'status-installed' : (isRec ? 'status-received' : 'status-pending');
+        const isRej = spool.status === 'rejected';
+        const statusClass = isInst ? 'status-installed' : (isRec ? 'status-received' : (isRej ? 'status-rejected' : 'status-pending'));
         const typeClass = isValve ? 'is-valve' : (isStraight ? 'is-straight' : 'is-branch');
 
         const cardRecInfo = spool.receivedDate ? `\n• Recebido em: ${formatSpoolDateDisplay(spool.receivedDate)}${spool.receivedAt ? ` às ${formatSpoolTime(spool.receivedAt)}` : ''}${spool.receivedBy ? ` (${spool.receivedBy})` : ''}` : '';
         const cardInstInfo = spool.installedDate ? `\n• Instalado em: ${formatSpoolDateDisplay(spool.installedDate)}${spool.installedAt ? ` às ${formatSpoolTime(spool.installedAt)}` : ''}${spool.installedBy ? ` (${spool.installedBy})` : ''}` : '';
+        const cardRejInfo = spool.rejectedDate ? `\n• Reprovado em: ${formatSpoolDateDisplay(spool.rejectedDate)}${spool.rejectedReason ? ` (Motivo: ${spool.rejectedReason})` : ''}${spool.rejectedBy ? ` por ${spool.rejectedBy}` : ''}` : '';
 
         return `
-          <div class="spool-tube-card ${typeClass} ${statusClass}" onclick="spoolToggleStatus('${spool.id}')" title="Spool ${esc(spool.number)} (${esc(spool.dh || '')})${cardRecInfo}${cardInstInfo}\nClique para alternar status ou no 📅 para ver/editar datas">
+          <div class="spool-tube-card ${typeClass} ${statusClass}" onclick="spoolToggleStatus('${spool.id}')" title="Spool ${esc(spool.number)} (${esc(spool.dh || '')})${cardRecInfo}${cardInstInfo}${cardRejInfo}\nClique para alternar status ou no 📅 para ver/editar datas">
             <div class="tube-header">
               <span style="font-size:10px; font-weight:800; padding:2px 6px; border-radius:4px; ${isValve ? 'background:#fef3c7; color:#b45309;' : (isStraight ? 'background:#f3e8ff; color:#7e22ce;' : 'background:#e0f2fe; color:#0369a1;')}">
                 ${isValve ? '🔘 VÁLVULA' : (isStraight ? '📏 RETO' : '📐 DERIV')}
@@ -1692,9 +1791,14 @@ function spoolRenderTubeSquares(list, filterDate) {
                 <div style="color:#0369a1; font-weight:800; display:flex; align-items:center; justify-content:center; gap:3px;">
                   <span>🟡 Rec:</span> <span>${formatSpoolDateShort(spool.receivedDate)}${spool.receivedAt ? ` ${formatSpoolTime(spool.receivedAt)}` : ''}</span>
                 </div>
+              ` : (isRej ? `
+                <div style="color:#b91c1c; font-weight:900; display:flex; align-items:center; justify-content:center; gap:3px;">
+                  <span>🔴 Reprov:</span> <span>${formatSpoolDateShort(spool.rejectedDate || spool.installedDate || spool.receivedDate)}</span>
+                </div>
+                ${spool.rejectedReason ? `<small style="font-size:9px; color:#ef4444; font-weight:700; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${esc(spool.rejectedReason)}">${esc(spool.rejectedReason)}</small>` : ''}
               ` : `
                 <div style="color:#64748b; font-weight:700;">⚪ Pendente</div>
-              `)}
+              `))}
             </div>
           </div>
         `;
@@ -1718,10 +1822,13 @@ function spoolRenderTubeTable(list, filterDate) {
           </strong>
         </div>
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="button button-outline compact" onclick="spoolCopyFilteredReport()" style="font-weight:800; color:#0f172a; background:#ffffff;" title="Copiar todos os ${list.length} spools da lista para WhatsApp">
+            ${icon('clipboard')} Copiar Lista (${list.length})
+          </button>
           <button type="button" class="button button-green compact" onclick="spoolOpenExportModal()" style="font-weight:800;" title="Abrir opções de download da planilha">
             ${icon('download')} Baixar Planilha
           </button>
-          ${(spoolStatusFilter !== 'all' || spoolTypeFilter !== 'all' || spoolDiameterFilter !== 'all' || spoolListFilter !== 'all' || Boolean(spoolSearchTerm) || spoolActiveSector !== 'all' || spoolActiveDh !== 'ALL') ? `
+          ${(spoolStatusFilter !== 'all' || spoolDateFilterMode !== 'all' || spoolTypeFilter !== 'all' || spoolDiameterFilter !== 'all' || spoolListFilter !== 'all' || Boolean(spoolSearchTerm) || spoolActiveSector !== 'all' || spoolActiveDh !== 'ALL') ? `
             <button type="button" class="button button-outline compact" onclick="spoolExportUpdatedSpreadsheet('filtered')" style="font-weight:800; color:#0f172a;" title="Baixar apenas os ${list.length} spools visíveis com os filtros atuais">
               ${icon('download')} Baixar Filtrados (${list.length})
             </button>
@@ -1749,9 +1856,15 @@ function spoolRenderTubeTable(list, filterDate) {
             Desmarcar todos
           </button>
         </div>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button type="button" class="button compact" onclick="spoolCopySelectedSpools()" style="background:#059669; color:#ffffff; font-weight:700; border:none; height:30px; padding:4px 12px; border-radius:6px; cursor:pointer; font-size:12px;" title="Copiar spools marcados para WhatsApp">
+            📋 Copiar Marcados
+          </button>
           <button type="button" class="button compact" onclick="spoolBulkDelete()" style="background:#dc2626; color:#ffffff; font-weight:800; border:none; height:30px; padding:4px 14px; border-radius:6px; cursor:pointer; font-size:12px;">
             🗑️ Excluir Selecionados
+          </button>
+          <button type="button" class="button compact" onclick="spoolBulkReject()" style="background:#dc2626; color:#ffffff; font-weight:800; border:none; height:30px; padding:4px 12px; border-radius:6px; cursor:pointer; font-size:12px;">
+            🔴 Marcar Reprovado
           </button>
           <button type="button" class="button compact" onclick="spoolBulkSetStatus('received')" style="background:#0284c7; color:#ffffff; font-weight:700; border:none; height:30px; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:12px;">
             🟡 Marcar Recebido
@@ -1784,14 +1897,15 @@ function spoolRenderTubeTable(list, filterDate) {
             ${list.length ? list.map(s => {
               const isReceived = s.status === 'received';
               const isInstalled = s.status === 'installed';
+              const isRejected = s.status === 'rejected';
               const sector = SPOOL_SECTORS[s.area] || { name: s.area || 'Geral' };
 
               // Estilização robusta inline para garantir 100% de visibilidade e contraste
-              const pillBg = isInstalled ? '#059669' : (isReceived ? '#0284c7' : '#0f172a');
-              const pillBorder = isInstalled ? '#047857' : (isReceived ? '#0369a1' : '#334155');
+              const pillBg = isInstalled ? '#059669' : (isReceived ? '#0284c7' : (isRejected ? '#dc2626' : '#0f172a'));
+              const pillBorder = isInstalled ? '#047857' : (isReceived ? '#0369a1' : (isRejected ? '#b91c1c' : '#334155'));
 
               return `
-                <tr style="border-bottom:1px solid #e2e8f0;">
+                <tr style="border-bottom:1px solid #e2e8f0; ${isRejected ? 'background:#fff8f8;' : ''}">
                   <td style="text-align:center; padding:10px 6px;">
                     <input type="checkbox" class="spool-select-check" value="${s.id}" onchange="spoolUpdateSelection()" style="cursor:pointer; width:16px; height:16px;" title="Selecionar este spool">
                   </td>
@@ -1824,7 +1938,11 @@ function spoolRenderTubeTable(list, filterDate) {
                   <td style="padding:10px 14px;">
                     ${isInstalled
                       ? '<span class="spool-status done"><i></i>Instalado</span>'
-                      : (isReceived ? '<span class="spool-status in-progress"><i></i>Recebido</span>' : '<span class="spool-status"><i></i>Pendente</span>')}
+                      : (isReceived
+                        ? '<span class="spool-status in-progress"><i></i>Recebido</span>'
+                        : (isRejected
+                          ? '<span class="spool-status rejected" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5;"><i></i>🔴 Reprovado</span>'
+                          : '<span class="spool-status"><i></i>Pendente</span>'))}
                   </td>
                   <td style="text-align:center; padding:10px 14px;">
                     <div class="spool-action-group">
@@ -1833,6 +1951,9 @@ function spoolRenderTubeTable(list, filterDate) {
                       </button>
                       <button type="button" class="btn-spool-action btn-installed ${isInstalled ? 'is-active' : ''}" onclick="spoolSetItemStatus('${s.id}', 'installed')" title="Marcar como Instalado no Dia">
                         🟢 Instalado
+                      </button>
+                      <button type="button" class="btn-spool-action btn-rejected ${isRejected ? 'is-active' : ''}" onclick="spoolPromptRejectItem('${s.id}')" title="Marcar como Reprovado / Quarentena / Devolução" style="background:${isRejected ? '#dc2626' : '#fee2e2'}; color:${isRejected ? '#ffffff' : '#b91c1c'}; border:1px solid ${isRejected ? '#b91c1c' : '#fca5a5'}; font-weight:800;">
+                        🔴 Reprovado
                       </button>
                       <button type="button" class="btn-spool-action btn-pending" onclick="spoolSetItemStatus('${s.id}', 'not-started')" title="Voltar para Pendente (Desfazer)">
                         ↩️
@@ -1846,24 +1967,34 @@ function spoolRenderTubeTable(list, filterDate) {
                     </div>
                   </td>
                   <td style="padding:10px 14px;">
-                    ${s.receivedDate ? `
+                    ${isRejected ? `
+                      <span style="display:inline-block; font-size:12px; font-weight:900; color:#b91c1c; background:#fee2e2; padding:3px 8px; border-radius:6px; border:1.5px solid #fca5a5;">
+                        🔴 ${formatSpoolDateDisplay(s.rejectedDate || s.receivedDate)}${s.rejectedAt ? ` <small style="font-weight:700; color:#991b1b;">${formatSpoolTime(s.rejectedAt)}</small>` : ''}
+                      </span>
+                      ${s.rejectedReason ? `<small style="font-size:10px; color:#b91c1c; font-weight:800; display:block; margin-top:2px;" title="${esc(s.rejectedReason)}">Motivo: ${esc(s.rejectedReason)}</small>` : ''}
+                      ${s.rejectedBy ? `<small style="font-size:9.5px; color:#64748b; display:block; margin-top:1px;">Por: ${esc(s.rejectedBy)}</small>` : ''}
+                    ` : (s.receivedDate ? `
                       <span style="display:inline-block; font-size:12px; font-weight:800; color:#0369a1; background:#f0f9ff; padding:3px 8px; border-radius:6px; border:1px solid #bae6fd;">
                         🟡 ${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` <small style="font-weight:600; color:#0284c7;">${formatSpoolTime(s.receivedAt)}</small>` : ''}
                       </span>
                       ${s.receivedBy ? `<small style="font-size:10px; color:#64748b; display:block; margin-top:2px;">Por: ${esc(s.receivedBy)}</small>` : ''}
                     ` : `
                       <span style="font-size:11px; color:#94a3b8; font-weight:600;">—</span>
-                    `}
+                    `)}
                   </td>
                   <td style="padding:10px 14px;">
-                    ${s.installedDate ? `
+                    ${isRejected ? `
+                      <span style="display:inline-block; font-size:11px; font-weight:800; color:#b91c1c; background:#fef2f2; padding:3px 8px; border-radius:6px; border:1px dashed #f87171;">
+                        ⛔ BLOQUEADO P/ MONTAGEM
+                      </span>
+                    ` : (s.installedDate ? `
                       <span style="display:inline-block; font-size:12px; font-weight:900; color:#047857; background:#f0fdf4; padding:3px 8px; border-radius:6px; border:1px solid #86efac;">
                         🟢 ${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` <small style="font-weight:700; color:#15803d;">${formatSpoolTime(s.installedAt)}</small>` : ''}
                       </span>
                       ${s.installedBy ? `<small style="font-size:10px; color:#166534; font-weight:700; display:block; margin-top:2px;">Por: ${esc(s.installedBy)}</small>` : ''}
                     ` : `
                       <span style="font-size:11px; color:#94a3b8; font-weight:600;">—</span>
-                    `}
+                    `)}
                   </td>
                 </tr>
               `;
@@ -1899,6 +2030,19 @@ function spoolSelectDh(dhName) {
 
 function spoolSetFilter(filterKey) {
   spoolListFilter = filterKey;
+  if (filterKey === 'installed_today') {
+    spoolDateFilterMode = 'installed';
+    spoolStatusFilter = 'all';
+  } else if (filterKey === 'received_today') {
+    spoolDateFilterMode = 'received';
+    spoolStatusFilter = 'all';
+  } else if (filterKey === 'rejected') {
+    spoolStatusFilter = 'rejected';
+    spoolDateFilterMode = 'all';
+  } else if (filterKey === 'all') {
+    spoolDateFilterMode = 'all';
+    spoolStatusFilter = 'all';
+  }
   renderSpools();
 }
 
@@ -1917,11 +2061,44 @@ function spoolSetDiameterFilter(diaVal) {
   renderSpools();
 }
 
+function spoolSetDateFilterMode(mode) {
+  spoolDateFilterMode = mode;
+  renderSpools();
+  if (mode === 'all') {
+    toast('🌐 Exibindo todas as datas');
+  } else if (mode === 'activity') {
+    toast(`⚡ Filtrando atividade de ${formatSpoolDateDisplay(spoolSelectedDate || getLocalDateStr())}`);
+  } else if (mode === 'installed') {
+    toast(`🟢 Filtrando instalados de ${formatSpoolDateDisplay(spoolSelectedDate || getLocalDateStr())}`);
+  } else if (mode === 'received') {
+    toast(`🟡 Filtrando recebidos de ${formatSpoolDateDisplay(spoolSelectedDate || getLocalDateStr())}`);
+  } else if (mode === 'rejected') {
+    toast(`🔴 Filtrando reprovados de ${formatSpoolDateDisplay(spoolSelectedDate || getLocalDateStr())}`);
+  }
+}
+
+function spoolQuickFilterDay(dateStr, mode = 'activity') {
+  spoolSelectedDate = dateStr;
+  spoolDateFilterMode = mode;
+  renderSpools();
+  toast(`📅 Filtrando por ${formatSpoolDateDisplay(dateStr)}`);
+}
+
+function spoolClearDateFilter() {
+  spoolDateFilterMode = 'all';
+  if (spoolListFilter === 'installed_today' || spoolListFilter === 'received_today' || spoolListFilter === 'rejected') {
+    spoolListFilter = 'all';
+  }
+  renderSpools();
+  toast('Filtro de data desativado (mostrando todas as datas)');
+}
+
 function spoolClearAllFilters() {
   spoolStatusFilter = 'all';
   spoolTypeFilter = 'all';
   spoolDiameterFilter = 'all';
   spoolListFilter = 'all';
+  spoolDateFilterMode = 'all';
   spoolSearchTerm = '';
   spoolSelectedDate = getLocalDateStr();
   spoolActiveSector = 'all';
@@ -1932,8 +2109,11 @@ function spoolClearAllFilters() {
   toast('Filtros redefinidos!');
 }
 
-function spoolSetSelectedDate(dateStr) {
+function spoolSetSelectedDate(dateStr, autoActivate = false) {
   spoolSelectedDate = dateStr;
+  if (autoActivate && spoolDateFilterMode === 'all') {
+    spoolDateFilterMode = 'activity';
+  }
   renderSpools();
 }
 
@@ -1942,6 +2122,13 @@ function spoolToggleStatus(spoolId) {
   const item = spoolDb.find(s => s.id === spoolId);
   if (!item) return;
 
+  if (item.status === 'rejected') {
+    if (confirm(`O Spool ${item.number} está marcado como REPROVADO (${item.rejectedReason || 'Quarentena'}).\nDeseja reverter para Pendente?`)) {
+      spoolSetItemStatus(spoolId, 'not-started');
+    }
+    return;
+  }
+
   if (item.status === 'not-started') {
     spoolSetItemStatus(spoolId, 'received');
   } else if (item.status === 'received') {
@@ -1949,6 +2136,102 @@ function spoolToggleStatus(spoolId) {
   } else {
     spoolSetItemStatus(spoolId, 'not-started');
   }
+}
+
+// Modal Rápido de Reprovação (Com Motivos Prontos, Ex: Duplicidade da Fábrica)
+function spoolPromptRejectItem(spoolId) {
+  const item = spoolDb.find(s => s.id === spoolId);
+  if (!item) return;
+
+  const currentReason = item.rejectedReason || '';
+  const today = getLocalDateStr();
+  const userName = (window.currentUser?.name) || 'Pedro Alves';
+
+  modal(`
+    <form onsubmit="spoolConfirmRejectItem(event, '${item.id}')">
+      ${modalHead('Reprovar Spool / Tubulação', `Spool ${esc(item.number)} · ${esc(item.dh || 'DH 04')} · ${esc(SPOOL_SECTORS[item.area]?.name || item.area)}`)}
+      <div class="modal-body" style="display:grid; gap:14px; background:#ffffff; color:#0f172a;">
+        <div style="background:#fef2f2; border:1.5px solid #f87171; border-radius:10px; padding:12px 14px; display:flex; align-items:flex-start; gap:10px;">
+          <span style="font-size:24px; line-height:1;">⛔</span>
+          <div>
+            <strong style="color:#991b1b; font-size:13px; display:block;">Bloqueio de Tubulação para Montagem</strong>
+            <small style="color:#b91c1c; font-size:11.5px; font-weight:600;">Ao reprovar, o spool é sinalizado em vermelho como não liberado/quarentena, prevenindo que a equipe instale uma peça duplicada ou defeituosa na linha.</small>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size:12px; font-weight:800; color:#0f172a; display:block; margin-bottom:6px;">
+            SELECIONE O MOTIVO RÁPIDO:
+          </label>
+          <div style="display:flex; flex-wrap:wrap; gap:6px;">
+            <button type="button" class="button button-outline compact" onclick="document.getElementById('spoolRejectReasonInput').value = 'Duplicidade enviada pela fábrica'; document.getElementById('spoolRejectReasonInput').focus();" style="border-color:#fca5a5; color:#991b1b; font-weight:700; font-size:11.5px;">
+              🏭 Duplicidade da fábrica
+            </button>
+            <button type="button" class="button button-outline compact" onclick="document.getElementById('spoolRejectReasonInput').value = 'Defeito de solda / visual'; document.getElementById('spoolRejectReasonInput').focus();" style="border-color:#fca5a5; color:#991b1b; font-weight:700; font-size:11.5px;">
+              🔍 Defeito de solda
+            </button>
+            <button type="button" class="button button-outline compact" onclick="document.getElementById('spoolRejectReasonInput').value = 'Dimensional / comprimento incorreto'; document.getElementById('spoolRejectReasonInput').focus();" style="border-color:#fca5a5; color:#991b1b; font-weight:700; font-size:11.5px;">
+              📐 Dimensional incorreto
+            </button>
+            <button type="button" class="button button-outline compact" onclick="document.getElementById('spoolRejectReasonInput').value = 'Avaria / amassado no transporte'; document.getElementById('spoolRejectReasonInput').focus();" style="border-color:#fca5a5; color:#991b1b; font-weight:700; font-size:11.5px;">
+              🚚 Avaria no transporte
+            </button>
+            <button type="button" class="button button-outline compact" onclick="document.getElementById('spoolRejectReasonInput').value = 'Furação / flange incompatível'; document.getElementById('spoolRejectReasonInput').focus();" style="border-color:#fca5a5; color:#991b1b; font-weight:700; font-size:11.5px;">
+              ⭕ Flange incompatível
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size:12px; font-weight:800; color:#0f172a; display:block; margin-bottom:4px;">
+            MOTIVO DA REPROVAÇÃO / RNC *
+          </label>
+          <input type="text" id="spoolRejectReasonInput" name="reason" required placeholder="Ex.: Duplicidade enviada pela fábrica, solda trincada..." value="${esc(currentReason || 'Duplicidade enviada pela fábrica')}" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700; font-size:13px; color:#0f172a;">
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div>
+            <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Data:</label>
+            <input type="date" name="date" value="${item.rejectedDate || today}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;">
+          </div>
+          <div>
+            <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Responsável pela Reprovação:</label>
+            <input type="text" name="responsible" value="${esc(item.rejectedBy || userName)}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;">
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot" style="background:#ffffff; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between;">
+        <button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="button compact" style="background:#dc2626; color:#ffffff; font-weight:800; border:none; padding:8px 18px;">
+          🔴 Confirmar Reprovação
+        </button>
+      </div>
+    </form>
+  `, 'modal-medium');
+}
+
+function spoolConfirmRejectItem(event, spoolId) {
+  event.preventDefault();
+  const form = event.target;
+  const reason = form.elements.reason?.value.trim() || 'Reprovado na inspeção';
+  const date = form.elements.date?.value || getLocalDateStr();
+  const resp = form.elements.responsible?.value.trim() || (window.currentUser?.name || 'Pedro Alves');
+  const now = new Date().toISOString();
+
+  const item = spoolDb.find(s => s.id === spoolId);
+  if (!item) return;
+
+  item.status = 'rejected';
+  item.rejectedDate = date;
+  item.rejectedAt = now;
+  item.rejectedBy = resp;
+  item.rejectedReason = reason;
+
+  spoolLogDailyAction(item.number, item.area, 'rejected', date);
+  spoolSaveAll(spoolDb);
+  closeModal();
+  renderSpools();
+  toast(`🔴 Spool ${item.number} marcado como REPROVADO (${reason})!`);
 }
 
 // Atualizar status diretamente
@@ -1971,6 +2254,10 @@ function spoolSetItemStatus(spoolId, newStatus) {
     item.installedDate = today;
     item.installedAt = now;
     item.installedBy = user;
+    item.rejectedDate = '';
+    item.rejectedAt = '';
+    item.rejectedBy = '';
+    item.rejectedReason = '';
     toast(`🟢 Spool ${item.number} marcado como INSTALADO às ${formatSpoolTime(now)}!`);
   } else if (newStatus === 'received') {
     item.receivedDate = today;
@@ -1979,7 +2266,20 @@ function spoolSetItemStatus(spoolId, newStatus) {
     item.installedDate = '';
     item.installedAt = '';
     item.installedBy = '';
+    item.rejectedDate = '';
+    item.rejectedAt = '';
+    item.rejectedBy = '';
+    item.rejectedReason = '';
     toast(`🟡 Spool ${item.number} marcado como RECEBIDO às ${formatSpoolTime(now)}!`);
+  } else if (newStatus === 'rejected') {
+    item.rejectedDate = item.rejectedDate || today;
+    item.rejectedAt = item.rejectedAt || now;
+    item.rejectedBy = item.rejectedBy || user;
+    item.rejectedReason = item.rejectedReason || 'Reprovado / Quarentena';
+    item.installedDate = '';
+    item.installedAt = '';
+    item.installedBy = '';
+    toast(`🔴 Spool ${item.number} marcado como REPROVADO!`);
   } else {
     item.installedDate = '';
     item.installedAt = '';
@@ -1987,6 +2287,10 @@ function spoolSetItemStatus(spoolId, newStatus) {
     item.receivedDate = '';
     item.receivedAt = '';
     item.receivedBy = '';
+    item.rejectedDate = '';
+    item.rejectedAt = '';
+    item.rejectedBy = '';
+    item.rejectedReason = '';
     toast(`⚪ Spool ${item.number} voltou para Pendente.`);
   }
 
@@ -2022,6 +2326,7 @@ function spoolOpenExportModal() {
 
   const hasActiveFilters = (
     spoolStatusFilter !== 'all' ||
+    spoolDateFilterMode !== 'all' ||
     spoolTypeFilter !== 'all' ||
     spoolDiameterFilter !== 'all' ||
     spoolListFilter !== 'all' ||
@@ -2059,6 +2364,7 @@ function spoolOpenExportModal() {
             ${hasActiveFilters ? `
               • <strong>Data Hall:</strong> ${spoolActiveDh} · 
               <strong>Setor:</strong> ${activeSectorName}
+              ${spoolDateFilterMode !== 'all' ? ` · <strong>Data:</strong> ${spoolDateFilterMode === 'installed' ? 'Instalados no Dia' : (spoolDateFilterMode === 'received' ? 'Recebidos no Dia' : 'Atividade no Dia')} (${formattedDate})` : ''}
               ${spoolStatusFilter !== 'all' ? ` · <strong>Status:</strong> ${spoolStatusFilter}` : ''}
               ${spoolTypeFilter !== 'all' ? ` · <strong>Tipo:</strong> ${spoolTypeFilter}` : ''}
               ${spoolSearchTerm ? ` · <strong>Busca:</strong> "${esc(spoolSearchTerm)}"` : ''}
@@ -2218,7 +2524,7 @@ const SPOOL_DROPDOWN_SECTORS = [
 
 const SPOOL_DROPDOWN_DHS = Array.from({ length: 10 }, (_, i) => `DH ${String(i + 1).padStart(2, '0')}`);
 const SPOOL_DROPDOWN_TYPES = ['Trecho Reto', 'Válvula de Ponta', 'Derivação (Ramal)'];
-const SPOOL_DROPDOWN_STATUS = ['Pendente', 'Recebido', 'Instalado'];
+const SPOOL_DROPDOWN_STATUS = ['Pendente', 'Recebido', 'Instalado', 'Reprovado'];
 
 async function ensureSpoolExcelLibrary() {
   if (window.ExcelJS) return true;
@@ -2280,10 +2586,10 @@ function applySpoolExcelDataValidations(sheet, maxRow = 2500) {
   sheet.dataValidations.add(`F2:F${maxRow}`, {
     type: 'list',
     allowBlank: true,
-    formulae: ['Listas_Auxiliares!$D$1:$D$3'],
+    formulae: ['Listas_Auxiliares!$D$1:$D$4'],
     showErrorMessage: true,
     errorTitle: 'Status Inválido',
-    error: 'Selecione Pendente, Recebido ou Instalado na lista suspensa.'
+    error: 'Selecione Pendente, Recebido, Instalado ou Reprovado na lista suspensa.'
   });
 }
 
@@ -2320,6 +2626,9 @@ function populateSpoolExcelSheet(sheet, items) {
     let statusName = 'Pendente';
     if (s.status === 'installed') statusName = 'Instalado';
     else if (s.status === 'received') statusName = 'Recebido';
+    else if (s.status === 'rejected') statusName = 'Reprovado';
+
+    const obsContent = s.status === 'rejected' && s.rejectedReason ? `[REPROVADO: ${s.rejectedReason}] ${s.notes || ''}` : (s.notes || '');
 
     const row = sheet.addRow({
       tag: s.number,
@@ -2330,8 +2639,8 @@ function populateSpoolExcelSheet(sheet, items) {
       status: statusName,
       recData: s.receivedDate || '',
       instData: s.installedDate || '',
-      resp: s.installedBy || '',
-      obs: s.notes || ''
+      resp: s.installedBy || s.rejectedBy || '',
+      obs: obsContent
     });
 
     row.height = 20;
@@ -2342,6 +2651,11 @@ function populateSpoolExcelSheet(sheet, items) {
     row.getCell(6).alignment = { vertical: 'middle', horizontal: 'center' };
     row.getCell(7).alignment = { vertical: 'middle', horizontal: 'center' };
     row.getCell(8).alignment = { vertical: 'middle', horizontal: 'center' };
+
+    if (s.status === 'rejected') {
+      row.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+      row.getCell(6).font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFB91C1C' } };
+    }
   });
 
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
@@ -2433,8 +2747,9 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
     let typeName = 'Trecho Reto';
     if (s.type === 'valve') typeName = 'Válvula de Ponta';
     else if (s.type === 'branch') typeName = 'Derivação (Ramal)';
-    let statusName = s.status === 'installed' ? 'Instalado' : (s.status === 'received' ? 'Recebido' : 'Pendente');
-    rows.push([s.number, normalizeDh(s.dh), secName, typeName, s.diameter || '', statusName, s.receivedDate || '', s.installedDate || '', s.installedBy || '', s.notes || '']);
+    let statusName = s.status === 'installed' ? 'Instalado' : (s.status === 'received' ? 'Recebido' : (s.status === 'rejected' ? 'Reprovado' : 'Pendente'));
+    const obsVal = s.status === 'rejected' && s.rejectedReason ? `[REPROVADO: ${s.rejectedReason}] ${s.notes || ''}` : (s.notes || '');
+    rows.push([s.number, normalizeDh(s.dh), secName, typeName, s.diameter || '', statusName, s.receivedDate || '', s.installedDate || '', s.installedBy || s.rejectedBy || '', obsVal]);
   });
 
   const wb = XLSX.utils.book_new();
@@ -2821,6 +3136,8 @@ async function spoolHandleExcelUpload(event) {
             statusVal = 'installed';
           } else if (/receb|obra|cheg/i.test(sStr)) {
             statusVal = 'received';
+          } else if (/reprov|rejeit|quarent|devol|rnc|defeit/i.test(sStr)) {
+            statusVal = 'rejected';
           } else if (/pend|aguard|fabr|n[aã]o/i.test(sStr)) {
             statusVal = 'not-started';
           }
@@ -2863,6 +3180,17 @@ async function spoolHandleExcelUpload(event) {
             recAt = recDate ? `${recDate}T08:00:00.000Z` : new Date().toISOString();
           }
 
+          let rejDate = '';
+          let rejAt = '';
+          let rejBy = '';
+          let rejReason = '';
+          if (statusVal === 'rejected') {
+            rejDate = new Date().toISOString().slice(0, 10);
+            rejAt = new Date().toISOString();
+            rejBy = (respIdx !== -1 && row[respIdx]) ? String(row[respIdx]).trim() : (currentUser?.name || 'Pedro Alves');
+            rejReason = notesVal || 'Reprovado na importação';
+          }
+
           parsedSpools.push({
             id: `spool-${targetDh.replace(/\s+/g, '')}-${sectorVal}-${tagVal}`,
             number: tagVal,
@@ -2876,6 +3204,10 @@ async function spoolHandleExcelUpload(event) {
             installedBy: instBy,
             receivedDate: recDate,
             receivedAt: recAt,
+            rejectedDate: rejDate,
+            rejectedAt: rejAt,
+            rejectedBy: rejBy,
+            rejectedReason: rejReason,
             notes: notesVal
           });
         });
@@ -2939,7 +3271,7 @@ async function spoolHandleExcelUpload(event) {
                 ${parsedSpools.slice(0, 30).map(s => `
                   <tr>
                     <td>
-                      <span class="spool-tag-pill status-${s.status === 'not-started' ? 'pending' : s.status}" style="display:inline-flex; align-items:center; justify-content:center; font-family:monospace; font-size:13px; font-weight:900; padding:4px 10px; border-radius:5px; background:${s.status === 'installed' ? '#059669' : (s.status === 'received' ? '#0284c7' : '#0f172a')}; color:#ffffff; border:1px solid #334155;">
+                      <span class="spool-tag-pill status-${s.status === 'not-started' ? 'pending' : s.status}" style="display:inline-flex; align-items:center; justify-content:center; font-family:monospace; font-size:13px; font-weight:900; padding:4px 10px; border-radius:5px; background:${s.status === 'installed' ? '#059669' : (s.status === 'received' ? '#0284c7' : (s.status === 'rejected' ? '#dc2626' : '#0f172a'))}; color:#ffffff; border:1px solid #334155;">
                         ${esc(s.number)}
                       </span>
                     </td>
@@ -2958,8 +3290,8 @@ async function spoolHandleExcelUpload(event) {
                     </td>
                     <td><strong style="color:#0f172a; font-size:13px;">${esc(s.diameter)}</strong></td>
                     <td>
-                      <span style="font-weight:800; font-size:12px; color:${s.status === 'installed' ? '#059669' : (s.status === 'received' ? '#0284c7' : '#64748b')};">
-                        ${s.status === 'installed' ? '🟢 Instalado' : (s.status === 'received' ? '🟡 Recebido' : '⚪ Pendente')}
+                      <span style="font-weight:800; font-size:12px; color:${s.status === 'installed' ? '#059669' : (s.status === 'received' ? '#0284c7' : (s.status === 'rejected' ? '#dc2626' : '#64748b'))};">
+                        ${s.status === 'installed' ? '🟢 Instalado' : (s.status === 'received' ? '🟡 Recebido' : (s.status === 'rejected' ? '🔴 Reprovado' : '⚪ Pendente'))}
                       </span>
                     </td>
                   </tr>
@@ -3024,6 +3356,18 @@ function spoolConfirmImport(importedSpools) {
           existing.installedDate = '';
           existing.installedAt = '';
           existing.installedBy = '';
+          existing.rejectedDate = '';
+          existing.rejectedAt = '';
+          existing.rejectedBy = '';
+          existing.rejectedReason = '';
+        } else if (imp.status === 'rejected') {
+          existing.rejectedDate = imp.rejectedDate || existing.rejectedDate || new Date().toISOString().slice(0, 10);
+          existing.rejectedAt = imp.rejectedAt || existing.rejectedAt || new Date().toISOString();
+          existing.rejectedBy = imp.rejectedBy || existing.rejectedBy || (currentUser?.name || 'Pedro Alves');
+          existing.rejectedReason = imp.rejectedReason || existing.rejectedReason || 'Reprovado na importação';
+          existing.installedDate = '';
+          existing.installedAt = '';
+          existing.installedBy = '';
         } else {
           existing.receivedDate = '';
           existing.receivedAt = '';
@@ -3031,6 +3375,10 @@ function spoolConfirmImport(importedSpools) {
           existing.installedDate = '';
           existing.installedAt = '';
           existing.installedBy = '';
+          existing.rejectedDate = '';
+          existing.rejectedAt = '';
+          existing.rejectedBy = '';
+          existing.rejectedReason = '';
         }
         if (imp.notes) existing.notes = imp.notes;
       } else {
@@ -3171,9 +3519,75 @@ function spoolBulkDelete() {
   toast(`🗑️ ${ids.length} spool(s) excluído(s) com sucesso!`);
 }
 
+function spoolBulkReject() {
+  const ids = spoolGetSelectedIds();
+  if (!ids.length) return toast('Selecione ao menos um spool para reprovar.', true);
+
+  modal(`
+    <form onsubmit="spoolConfirmBulkReject(event)">
+      ${modalHead('Reprovar Spools Selecionados em Lote', `${ids.length} spool(s) selecionado(s)`)}
+      <div class="modal-body" style="display:grid; gap:14px; background:#ffffff; color:#0f172a;">
+        <div style="background:#fef2f2; border:1.5px solid #f87171; border-radius:10px; padding:12px 14px;">
+          <strong style="color:#991b1b; font-size:13px; display:block;">⛔ Bloqueio em Massa para Montagem</strong>
+          <small style="color:#b91c1c; font-size:11.5px; font-weight:600;">Todos os ${ids.length} spools marcados serão sinalizados como REPROVADOS / QUARENTENA.</small>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:800; color:#0f172a; display:block; margin-bottom:4px;">
+            MOTIVO DA REPROVAÇÃO DO LOTE *
+          </label>
+          <input type="text" id="spoolBulkRejectReason" required placeholder="Ex.: Duplicidade enviada pela fábrica, lote avariado..." value="Duplicidade enviada pela fábrica" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700; font-size:13px; color:#0f172a;">
+        </div>
+      </div>
+      <div class="modal-foot" style="background:#ffffff; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between;">
+        <button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="button compact" style="background:#dc2626; color:#ffffff; font-weight:800; border:none; padding:8px 18px;">
+          🔴 Reprovar ${ids.length} Spools
+        </button>
+      </div>
+    </form>
+  `, 'modal-medium');
+}
+
+function spoolConfirmBulkReject(event) {
+  event.preventDefault();
+  const ids = spoolGetSelectedIds();
+  if (!ids.length) return;
+
+  const reason = document.getElementById('spoolBulkRejectReason')?.value.trim() || 'Reprovação em lote';
+  const today = getLocalDateStr();
+  const now = new Date().toISOString();
+  const user = (window.currentUser?.name) || 'Pedro Alves';
+  const idSet = new Set(ids);
+
+  spoolDb = spoolDb.map(s => {
+    if (!idSet.has(s.id)) return s;
+    return {
+      ...s,
+      status: 'rejected',
+      rejectedDate: today,
+      rejectedAt: now,
+      rejectedBy: user,
+      rejectedReason: reason,
+      installedDate: '',
+      installedAt: '',
+      installedBy: ''
+    };
+  });
+
+  spoolSaveAll(spoolDb);
+  closeModal();
+  renderSpools();
+  toast(`🔴 ${ids.length} spool(s) marcados como REPROVADOS (${reason})!`);
+}
+
 function spoolBulkSetStatus(newStatus) {
   const ids = spoolGetSelectedIds();
   if (!ids.length) return toast('Selecione ao menos um spool.', true);
+
+  if (newStatus === 'rejected') {
+    spoolBulkReject();
+    return;
+  }
 
   const idSet = new Set(ids);
   const now = new Date().toISOString();
@@ -3190,6 +3604,10 @@ function spoolBulkSetStatus(newStatus) {
       updated.installedDate = '';
       updated.installedAt = '';
       updated.installedBy = '';
+      updated.rejectedDate = '';
+      updated.rejectedAt = '';
+      updated.rejectedBy = '';
+      updated.rejectedReason = '';
     } else if (newStatus === 'installed') {
       if (!updated.receivedDate) {
         updated.receivedDate = dateStr;
@@ -3199,6 +3617,10 @@ function spoolBulkSetStatus(newStatus) {
       updated.installedAt = now;
       updated.installedDate = dateStr;
       updated.installedBy = user;
+      updated.rejectedDate = '';
+      updated.rejectedAt = '';
+      updated.rejectedBy = '';
+      updated.rejectedReason = '';
     } else if (newStatus === 'not-started') {
       updated.receivedDate = '';
       updated.receivedAt = '';
@@ -3206,6 +3628,10 @@ function spoolBulkSetStatus(newStatus) {
       updated.installedDate = '';
       updated.installedAt = '';
       updated.installedBy = '';
+      updated.rejectedDate = '';
+      updated.rejectedAt = '';
+      updated.rejectedBy = '';
+      updated.rejectedReason = '';
     }
     return updated;
   });
@@ -3361,6 +3787,7 @@ function spoolOpenReportPDF(scope = 'daily') {
   const totalItems = items.length;
   const installedCount = items.filter(s => s.status === 'installed').length;
   const receivedCount = items.filter(s => s.status === 'received').length;
+  const rejectedCount = items.filter(s => s.status === 'rejected').length;
   const pendingCount = items.filter(s => s.status === 'not-started').length;
   const straightCount = items.filter(s => s.type === 'straight').length;
   const branchCount = items.filter(s => s.type === 'branch').length;
@@ -3375,13 +3802,24 @@ function spoolOpenReportPDF(scope = 'daily') {
       statusBadge = '<span style="display:inline-block; padding:2px 8px; border-radius:4px; font-weight:800; font-size:10px; background:#dcfce7; color:#15803d; border:1px solid #86efac;">🟢 Instalado</span>';
     } else if (s.status === 'received') {
       statusBadge = '<span style="display:inline-block; padding:2px 8px; border-radius:4px; font-weight:800; font-size:10px; background:#fef9c3; color:#a16207; border:1px solid #fde047;">🟡 Recebido</span>';
+    } else if (s.status === 'rejected') {
+      statusBadge = '<span style="display:inline-block; padding:2px 8px; border-radius:4px; font-weight:800; font-size:10px; background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5;">🔴 Reprovado</span>';
     }
 
-    const instInfo = s.installedDate ? `${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '—';
-    const recInfo = s.receivedDate ? `${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` às ${formatSpoolTime(s.receivedAt)}` : ''}` : '—';
+    let instInfo = s.installedDate ? `${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '—';
+    let recInfo = s.receivedDate ? `${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` às ${formatSpoolTime(s.receivedAt)}` : ''}` : '—';
+
+    if (s.status === 'rejected') {
+      instInfo = '<span style="color:#b91c1c; font-weight:800;">⛔ BLOQUEADO P/ MONTAGEM</span>';
+      if (s.rejectedDate) {
+        recInfo = `<span style="color:#b91c1c; font-weight:800;">🔴 ${formatSpoolDateDisplay(s.rejectedDate)}</span>`;
+      }
+    }
+
+    const obsContent = s.status === 'rejected' && s.rejectedReason ? `[REPROVADO: ${s.rejectedReason}] ${s.notes || ''}` : (s.notes || '');
 
     return `
-      <tr>
+      <tr style="${s.status === 'rejected' ? 'background:#fff8f8;' : ''}">
         <td style="text-align:center; font-weight:800; color:#0f172a; padding:6px 8px; border:1px solid #cbd5e1;">${esc(s.number)}</td>
         <td style="text-align:center; font-weight:700; padding:6px 8px; border:1px solid #cbd5e1;">${esc(normalizeDh(s.dh))}</td>
         <td style="padding:6px 8px; border:1px solid #cbd5e1;">${esc(secName)}</td>
@@ -3389,9 +3827,9 @@ function spoolOpenReportPDF(scope = 'daily') {
         <td style="text-align:center; font-weight:800; padding:6px 8px; border:1px solid #cbd5e1;">${esc(s.diameter || '—')}</td>
         <td style="text-align:center; padding:6px 8px; border:1px solid #cbd5e1;">${statusBadge}</td>
         <td style="text-align:center; font-size:10px; padding:6px 8px; border:1px solid #cbd5e1;">${recInfo}</td>
-        <td style="text-align:center; font-size:10px; font-weight:700; color:#15803d; padding:6px 8px; border:1px solid #cbd5e1;">${instInfo}</td>
-        <td style="padding:6px 8px; border:1px solid #cbd5e1;">${esc(s.installedBy || 'Equipe HVAC')}</td>
-        <td style="color:#64748b; font-size:10px; padding:6px 8px; border:1px solid #cbd5e1;">${esc(s.notes || '')}</td>
+        <td style="text-align:center; font-size:10px; font-weight:700; color:${s.status === 'rejected' ? '#b91c1c' : '#15803d'}; padding:6px 8px; border:1px solid #cbd5e1;">${instInfo}</td>
+        <td style="padding:6px 8px; border:1px solid #cbd5e1;">${esc(s.status === 'rejected' ? (s.rejectedBy || 'Fiscalização') : (s.installedBy || 'Equipe HVAC'))}</td>
+        <td style="color:${s.status === 'rejected' ? '#b91c1c' : '#64748b'}; font-size:10px; padding:6px 8px; border:1px solid #cbd5e1; font-weight:${s.status === 'rejected' ? '700' : 'normal'};">${esc(obsContent)}</td>
       </tr>
     `;
   }).join('');
@@ -3447,7 +3885,7 @@ function spoolOpenReportPDF(scope = 'daily') {
       </header>
 
       <!-- QUADRO RESUMO EXECUTIVO (KPIS) -->
-      <div class="report-summary" style="display:grid; grid-template-columns:repeat(5, 1fr); margin-bottom:16px; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; background:#f8fafc;">
+      <div class="report-summary" style="display:grid; grid-template-columns:repeat(6, 1fr); margin-bottom:16px; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; background:#f8fafc;">
         <span style="padding:10px 14px; border-right:1px solid #e2e8f0; display:grid; gap:2px;">
           <b style="font-size:18px; color:#0f172a; font-weight:900;">${totalItems}</b>
           <small style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">Total de Peças</small>
@@ -3459,6 +3897,10 @@ function spoolOpenReportPDF(scope = 'daily') {
         <span style="padding:10px 14px; border-right:1px solid #e2e8f0; display:grid; gap:2px; background:#fefce8;">
           <b style="font-size:18px; color:#a16207; font-weight:900;">${receivedCount}</b>
           <small style="font-size:10px; font-weight:800; color:#a16207; text-transform:uppercase;">Recebidos</small>
+        </span>
+        <span style="padding:10px 14px; border-right:1px solid #e2e8f0; display:grid; gap:2px; background:#fef2f2;">
+          <b style="font-size:18px; color:#b91c1c; font-weight:900;">${rejectedCount}</b>
+          <small style="font-size:10px; font-weight:800; color:#b91c1c; text-transform:uppercase;">Reprovados</small>
         </span>
         <span style="padding:10px 14px; border-right:1px solid #e2e8f0; display:grid; gap:2px;">
           <b style="font-size:18px; color:#64748b; font-weight:900;">${pendingCount}</b>
@@ -3575,6 +4017,138 @@ function spoolOpenReportPDF(scope = 'daily') {
    FECHAMENTO DO DIA & WHATSAPP
    ========================================================================== */
 
+function spoolCopyFilteredReport(customList = null) {
+  const list = customList || spoolFilterList(spoolDb);
+  if (!list.length) {
+    return toast('Nenhum spool encontrado com os filtros atuais para copiar.', true);
+  }
+
+  const targetDate = spoolSelectedDate || getLocalDateStr();
+  const dateFormatted = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
+  const sectorMeta = SPOOL_SECTORS[spoolActiveSector] || { name: 'Todos os Setores' };
+
+  // Contexto dos filtros ativos
+  const filterDesc = [];
+  if (spoolActiveSector !== 'all') filterDesc.push(`Setor: *${sectorMeta.name}*`);
+  if (spoolActiveDh !== 'ALL') filterDesc.push(`DH: *${spoolActiveDh}*`);
+  if (spoolDateFilterMode !== 'all') {
+    const modeMap = {
+      'activity': `Atividade no Dia (${dateFormatted})`,
+      'installed': `Instalados no Dia (${dateFormatted})`,
+      'received': `Recebidos no Dia (${dateFormatted})`,
+      'rejected': `Reprovados no Dia (${dateFormatted})`
+    };
+    filterDesc.push(`Data: *${modeMap[spoolDateFilterMode] || dateFormatted}*`);
+  }
+  if (spoolStatusFilter !== 'all') {
+    const statusMap = {
+      'not-started': 'Pendente',
+      'pending': 'Pendente',
+      'received': 'Recebido',
+      'installed': 'Instalado',
+      'rejected': '🔴 Reprovado / Quarentena',
+      'installed_on_date': `Instalados no Dia (${dateFormatted})`,
+      'received_on_date': `Recebidos no Dia (${dateFormatted})`,
+      'rejected_on_date': `Reprovados no Dia (${dateFormatted})`,
+      'activity_on_date': `Atividade no Dia (${dateFormatted})`
+    };
+    filterDesc.push(`Status: *${statusMap[spoolStatusFilter] || spoolStatusFilter}*`);
+  }
+  if (spoolTypeFilter !== 'all') {
+    filterDesc.push(`Tipo: *${spoolTypeFilter === 'straight' ? 'Trecho Reto' : (spoolTypeFilter === 'valve' ? 'Válvula' : 'Derivação')}*`);
+  }
+  if (spoolDiameterFilter !== 'all') filterDesc.push(`Diâmetro: *${spoolDiameterFilter}*`);
+  if (spoolSearchTerm) filterDesc.push(`Busca: *"${spoolSearchTerm}"*`);
+
+  const installed = list.filter(s => s.status === 'installed');
+  const received = list.filter(s => s.status === 'received');
+  const rejected = list.filter(s => s.status === 'rejected');
+  const pending = list.filter(s => s.status === 'not-started');
+
+  const straight = list.filter(s => s.type === 'straight');
+  const branches = list.filter(s => s.type === 'branch');
+  const valves = list.filter(s => s.type === 'valve');
+
+  let text = `🏗️ *RELATÓRIO DE SPOOLS (FILTRADOS)*\n`;
+  text += `📍 *Data Center Omnia (DC01)*\n`;
+  if (filterDesc.length > 0) {
+    text += `🎯 *Filtros:* ${filterDesc.join(' · ')}\n`;
+  } else {
+    text += `🌐 *Escopo:* Visão Geral da Obra (${list.length} spools)\n`;
+  }
+  text += `📅 *Gerado em:* ${new Date().toLocaleDateString('pt-BR')} às ${getLocalTimeStr()}\n`;
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  text += `📊 *RESUMO DA SELEÇÃO:* ${list.length} spools\n`;
+  text += `🟢 *Instalados:* ${installed.length}\n`;
+  text += `🟡 *Recebidos:* ${received.length}\n`;
+  if (rejected.length > 0) {
+    text += `🔴 *Reprovados / Quarentena:* ${rejected.length}\n`;
+  }
+  text += `⚪ *Pendentes:* ${pending.length}\n`;
+  if (straight.length || branches.length || valves.length) {
+    text += `📏 Retos: ${straight.length} · 📐 Derivações: ${branches.length}${valves.length ? ` · 🔘 Válvulas: ${valves.length}` : ''}\n`;
+  }
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+  if (list.length <= 100) {
+    if (installed.length > 0) {
+      text += `\n🟢 *INSTALADOS (${installed.length}):*\n`;
+      text += installed.map(s => {
+        const dia = s.diameter ? ` (${s.diameter})` : '';
+        const dh = s.dh ? ` · ${s.dh}` : '';
+        const dt = s.installedDate ? ` — ${formatSpoolDateShort(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '';
+        return `• Tubo ${s.number}${dia}${dh}${dt}`;
+      }).join('\n') + `\n`;
+    }
+
+    if (received.length > 0) {
+      text += `\n🟡 *RECEBIDOS (${received.length}):*\n`;
+      text += received.map(s => {
+        const dia = s.diameter ? ` (${s.diameter})` : '';
+        const dh = s.dh ? ` · ${s.dh}` : '';
+        const dt = s.receivedDate ? ` — ${formatSpoolDateShort(s.receivedDate)}${s.receivedAt ? ` às ${formatSpoolTime(s.receivedAt)}` : ''}` : '';
+        return `• Spool ${s.number}${dia}${dh}${dt}`;
+      }).join('\n') + `\n`;
+    }
+
+    if (rejected.length > 0) {
+      text += `\n🔴 *REPROVADOS / QUARENTENA (${rejected.length}):*\n`;
+      text += rejected.map(s => {
+        const dia = s.diameter ? ` (${s.diameter})` : '';
+        const dh = s.dh ? ` · ${s.dh}` : '';
+        const rsn = s.rejectedReason ? ` [Motivo: ${s.rejectedReason}]` : '';
+        const dt = s.rejectedDate ? ` — ${formatSpoolDateShort(s.rejectedDate)}${s.rejectedAt ? ` às ${formatSpoolTime(s.rejectedAt)}` : ''}` : '';
+        return `• Spool ${s.number}${dia}${dh}${rsn}${dt}`;
+      }).join('\n') + `\n`;
+    }
+
+    if (pending.length > 0) {
+      text += `\n⚪ *PENDENTES (${pending.length}):*\n`;
+      text += pending.map(s => {
+        const dia = s.diameter ? ` (${s.diameter})` : '';
+        const dh = s.dh ? ` · ${s.dh}` : '';
+        return `• Spool ${s.number}${dia}${dh}`;
+      }).join('\n') + `\n`;
+    }
+  } else {
+    text += `\n📋 *PRIMEIRAS 60 TAGS (de ${list.length} itens):*\n`;
+    const sample = list.slice(0, 60);
+    text += sample.map(s => `• ${s.number} (${s.dh || 'DH'} - ${s.status === 'installed' ? '🟢' : (s.status === 'received' ? '🟡' : (s.status === 'rejected' ? '🔴' : '⚪'))})`).join('\n');
+    text += `\n\n_(+ ${list.length - 60} spools não detalhados na mensagem. Baixe a planilha Excel para a relação completa.)_\n`;
+  }
+
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  text += `_Heating Cooling & Afonso França Engenharia_`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      toast(`📋 Lista filtrada (${list.length} spools) copiada para o WhatsApp!`);
+    }).catch(() => spoolPromptFallbackCopy(text, `Lista Filtrada (${list.length} spools)`));
+  } else {
+    spoolPromptFallbackCopy(text, `Lista Filtrada (${list.length} spools)`);
+  }
+}
+
 function spoolCopyDailyReport(dateStr = '') {
   const targetDate = dateStr || spoolSelectedDate || getLocalDateStr();
   const sectorSpools = spoolDb.filter(s => (spoolActiveSector === 'all' || s.area === spoolActiveSector) && (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh)));
@@ -3583,6 +4157,7 @@ function spoolCopyDailyReport(dateStr = '') {
   const installed = sectorSpools.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate)));
   const straight = installed.filter(s => s.type === 'straight');
   const branches = installed.filter(s => s.type === 'branch');
+  const rejectedOnDay = sectorSpools.filter(s => s.status === 'rejected' && (s.rejectedDate === targetDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === targetDate)));
 
   const allStraight = sectorSpools.filter(s => s.type === 'straight');
   const straightInstalledTotal = allStraight.filter(s => s.status === 'installed').length;
@@ -3590,40 +4165,182 @@ function spoolCopyDailyReport(dateStr = '') {
 
   const dateFormatted = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
 
-  const text = `🏗️ *FECHAMENTO DIÁRIO DE SPOOLS*
-📍 *Data Center Omnia (DC01)* · *${sectorMeta.name}* · *${spoolActiveDh}*
-📅 *Data:* ${dateFormatted}
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟢 *TOTAL INSTALADO NO DIA:* ${installed.length} itens
+  let text = `🏗️ *FECHAMENTO DIÁRIO DE SPOOLS*\n`;
+  text += `📍 *Data Center Omnia (DC01)* · *${sectorMeta.name}* · *${spoolActiveDh}*\n`;
+  text += `📅 *Data:* ${dateFormatted}\n`;
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  text += `🟢 *TOTAL INSTALADO NO DIA:* ${installed.length} itens\n\n`;
 
-📏 *TRECHOS RETOS:* ${straight.length} tubos
-${straight.length ? straight.map(s => `• Tubo ${s.number} (${s.diameter || '8"'})${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhum trecho reto hoje'}
+  text += `📏 *TRECHOS RETOS:* ${straight.length} tubos\n`;
+  text += `${straight.length ? straight.map(s => `• Tubo ${s.number} (${s.diameter || '8"'})${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhum trecho reto hoje'}\n\n`;
 
-📐 *DERIVAÇÕES (Ramais):* ${branches.length} tubos
-${branches.length ? branches.map(s => `• Spool ${s.number} (${s.diameter || '2.1/2"'})${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhuma derivação hoje'}
+  text += `📐 *DERIVAÇÕES (Ramais):* ${branches.length} tubos\n`;
+  text += `${branches.length ? branches.map(s => `• Spool ${s.number} (${s.diameter || '2.1/2"'})${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhuma derivação hoje'}\n`;
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 *STATUS ACUMULADO:*
-• Linha Reta: ${straightInstalledTotal} de ${allStraight.length} concluídos (${allStraight.length ? Math.round((straightInstalledTotal / allStraight.length) * 100) : 0}%)
-• Restante no Setor: ${totalPending} itens pendentes
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-_Heating Cooling & Afonso França Engenharia_`;
+  if (rejectedOnDay.length > 0) {
+    text += `\n🔴 *REPROVADOS NO DIA:* ${rejectedOnDay.length} tubos\n`;
+    text += `${rejectedOnDay.map(s => `• Spool ${s.number} (${s.diameter || '8"'})${s.rejectedReason ? ` [${s.rejectedReason}]` : ''}`).join('\n')}\n`;
+  }
 
-  if (navigator.clipboard) {
+  text += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  text += `📊 *STATUS ACUMULADO:*\n`;
+  text += `• Linha Reta: ${straightInstalledTotal} de ${allStraight.length} concluídos (${allStraight.length ? Math.round((straightInstalledTotal / allStraight.length) * 100) : 0}%)\n`;
+  text += `• Restante no Setor: ${totalPending} itens pendentes\n`;
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  text += `_Heating Cooling & Afonso França Engenharia_`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(() => {
       toast('📋 Relatório do dia copiado para o WhatsApp!');
-    }).catch(() => spoolPromptFallbackCopy(text));
+    }).catch(() => spoolPromptFallbackCopy(text, 'Fechamento Diário de Spools'));
   } else {
-    spoolPromptFallbackCopy(text);
+    spoolPromptFallbackCopy(text, 'Fechamento Diário de Spools');
   }
 }
 
-function spoolPromptFallbackCopy(text) {
+function spoolCopyReceivedDailyReport(dateStr = '') {
+  const targetDate = dateStr || spoolSelectedDate || getLocalDateStr();
+  const sectorSpools = spoolDb.filter(s => (spoolActiveSector === 'all' || s.area === spoolActiveSector) && (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh)));
+  const sectorMeta = SPOOL_SECTORS[spoolActiveSector] || { name: 'Todos os Setores' };
+
+  const received = sectorSpools.filter(s => (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate)));
+  const straight = received.filter(s => s.type === 'straight');
+  const branches = received.filter(s => s.type === 'branch');
+  const valves = received.filter(s => s.type === 'valve');
+
+  const dateFormatted = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
+
+  let text = `🏗️ *RECEBIMENTO DIÁRIO DE SPOOLS*\n`;
+  text += `📍 *Data Center Omnia (DC01)* · *${sectorMeta.name}* · *${spoolActiveDh}*\n`;
+  text += `📅 *Data de Descarga:* ${dateFormatted}\n`;
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  text += `🟡 *TOTAL RECEBIDO NO DIA:* ${received.length} peças\n\n`;
+
+  text += `📏 *TRECHOS RETOS RECEBIDOS:* ${straight.length} tubos\n`;
+  text += `${straight.length ? straight.map(s => `• Tubo ${s.number} (${s.diameter || '8"'})${s.receivedAt ? ` — ${formatSpoolTime(s.receivedAt)}` : ''}`).join('\n') : '• Nenhum trecho reto recebido hoje'}\n\n`;
+
+  text += `📐 *DERIVAÇÕES (Ramais) RECEBIDAS:* ${branches.length} tubos\n`;
+  text += `${branches.length ? branches.map(s => `• Spool ${s.number} (${s.diameter || '2.1/2"'})${s.receivedAt ? ` — ${formatSpoolTime(s.receivedAt)}` : ''}`).join('\n') : '• Nenhuma derivação recebida hoje'}\n`;
+
+  if (valves.length > 0) {
+    text += `\n🔘 *VÁLVULAS RECEBIDAS:* ${valves.length}\n${valves.map(s => `• Válvula ${s.number}`).join('\n')}\n`;
+  }
+
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  text += `_Heating Cooling & Afonso França Engenharia_`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      toast('📋 Relatório de recebidos copiado para o WhatsApp!');
+    }).catch(() => spoolPromptFallbackCopy(text, 'Recebimento Diário de Spools'));
+  } else {
+    spoolPromptFallbackCopy(text, 'Recebimento Diário de Spools');
+  }
+}
+
+function spoolCopyTagsOnly(customList = null) {
+  const list = customList || spoolFilterList(spoolDb);
+  if (!list.length) return toast('Nenhum spool encontrado para copiar tags.', true);
+
+  const tags = list.map(s => s.number).filter(Boolean);
+  const text = tags.join(', ');
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      toast(`🏷️ ${tags.length} tags copiadas!`);
+    }).catch(() => spoolPromptFallbackCopy(text, `Tags (${tags.length})`));
+  } else {
+    spoolPromptFallbackCopy(text, `Tags (${tags.length})`);
+  }
+}
+
+function spoolCopySelectedSpools() {
+  const ids = spoolGetSelectedIds();
+  if (!ids.length) return toast('Selecione ao menos um spool na tabela.', true);
+
+  const idSet = new Set(ids);
+  const selectedList = spoolDb.filter(s => idSet.has(s.id));
+  spoolCopyFilteredReport(selectedList);
+}
+
+function spoolOpenCopyModal() {
+  const filteredList = spoolFilterList(spoolDb);
+  const targetDate = spoolSelectedDate || getLocalDateStr();
+  const dateFormatted = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
+  const installedToday = spoolDb.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate)));
+  const receivedToday = spoolDb.filter(s => (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate)));
+  const selectedIds = spoolGetSelectedIds();
+
   modal(`
     <div style="padding:18px;">
-      ${modalHead('Fechamento Diário de Spools', 'Copie o texto abaixo para enviar no WhatsApp')}
+      ${modalHead('Copiar Spools para WhatsApp / Clipboard', 'Escolha qual formato e seleção você deseja copiar')}
+
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:12px; margin-top:14px;">
+        <!-- Opção 1: Copiar Spools Filtrados da Tela -->
+        <div style="border:1.5px solid #10b981; background:#f0fdf4; border-radius:10px; padding:14px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+          <div>
+            <strong style="color:#065f46; font-size:14px; display:block;">📋 Copiar Lista com Filtros Atuais (${filteredList.length} spools)</strong>
+            <small style="color:#047857; font-size:12px;">Copia a relação completa dos spools atualmente visíveis na tela, com status, diâmetro e DH.</small>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="button button-green compact" onclick="closeModal(); spoolCopyFilteredReport();" style="font-weight:800;">
+              Copiar Detalhado
+            </button>
+            <button type="button" class="button button-outline compact" onclick="closeModal(); spoolCopyTagsOnly();" style="font-weight:700; color:#065f46; border-color:#86efac; background:#ffffff;" title="Copiar apenas os números das tags separados por vírgula">
+              Apenas Tags
+            </button>
+          </div>
+        </div>
+
+        <!-- Opção 2: Fechamento Diário de Montagem (Instalados no Dia) -->
+        <div style="border:1.5px solid #0284c7; background:#f0f9ff; border-radius:10px; padding:14px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+          <div>
+            <strong style="color:#0369a1; font-size:14px; display:block;">🟢 Fechamento do Dia · Instalados (${installedToday.length} tubos)</strong>
+            <small style="color:#0284c7; font-size:12px;">Relatório executivo de avanço físico em ${dateFormatted} por trecho reto e ramal.</small>
+          </div>
+          <button type="button" class="button compact" onclick="closeModal(); spoolCopyDailyReport('${targetDate}');" style="background:#0284c7; color:#ffffff; font-weight:800;">
+            Copiar Fechamento
+          </button>
+        </div>
+
+        <!-- Opção 3: Recebidos no Dia -->
+        <div style="border:1.5px solid #ca8a04; background:#fefce8; border-radius:10px; padding:14px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+          <div>
+            <strong style="color:#854d0e; font-size:14px; display:block;">🟡 Recebidos no Dia (${receivedToday.length} peças)</strong>
+            <small style="color:#713f12; font-size:12px;">Lista de materiais descarregados e conferidos em ${dateFormatted}.</small>
+          </div>
+          <button type="button" class="button compact" onclick="closeModal(); spoolCopyReceivedDailyReport('${targetDate}');" style="background:#ca8a04; color:#ffffff; font-weight:800;">
+            Copiar Recebidos
+          </button>
+        </div>
+
+        <!-- Opção 4: Se houver spools selecionados via checkbox -->
+        ${selectedIds.length > 0 ? `
+          <div style="border:1.5px solid #8b5cf6; background:#f5f3ff; border-radius:10px; padding:14px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div>
+              <strong style="color:#6d28d9; font-size:14px; display:block;">☑️ Copiar Selecionados (${selectedIds.length} spools)</strong>
+              <small style="color:#5b21b6; font-size:12px;">Apenas as peças marcadas com caixa de seleção na tabela.</small>
+            </div>
+            <button type="button" class="button compact" onclick="closeModal(); spoolCopySelectedSpools();" style="background:#7c3aed; color:#ffffff; font-weight:800;">
+              Copiar Marcados
+            </button>
+          </div>
+        ` : ''}
+      </div>
+
+      <div class="modal-foot" style="margin-top:16px;">
+        <button type="button" class="button button-outline" onclick="closeModal()">Fechar</button>
+      </div>
+    </div>
+  `, 'modal-medium');
+}
+
+function spoolPromptFallbackCopy(text, title = 'Relatório de Spools') {
+  modal(`
+    <div style="padding:18px;">
+      ${modalHead(title, 'Copie o texto formatado abaixo para enviar no WhatsApp')}
       <div class="modal-body">
-        <textarea readonly style="width:100%; height:220px; font-family:monospace; font-size:12px; padding:10px; border-radius:8px; border:1px solid #cbd5e1; background:#f8fafc;" onclick="this.select()">${esc(text)}</textarea>
+        <textarea readonly style="width:100%; height:260px; font-family:monospace; font-size:12px; padding:10px; border-radius:8px; border:1px solid #cbd5e1; background:#f8fafc;" onclick="this.select()">${esc(text)}</textarea>
       </div>
       <div class="modal-foot">
         <button class="button button-green" onclick="navigator.clipboard?.writeText(document.querySelector('textarea').value); toast('Copiado!'); closeModal();">Copiar</button>
@@ -3686,11 +4403,13 @@ function spoolOpenTrackingModal(spoolId) {
               ? '<span class="spool-status done" style="font-size:13px; font-weight:900; padding:6px 14px;"><i></i>🟢 INSTALADO</span>'
               : (isRec
                 ? '<span class="spool-status in-progress" style="font-size:13px; font-weight:900; padding:6px 14px;"><i></i>🟡 RECEBIDO</span>'
-                : '<span class="spool-status" style="font-size:13px; font-weight:900; padding:6px 14px;"><i></i>⚪ PENDENTE</span>')}
+                : (spool.status === 'rejected'
+                  ? '<span class="spool-status rejected" style="font-size:13px; font-weight:900; padding:6px 14px; background:#fee2e2; color:#b91c1c; border-color:#fca5a5;"><i></i>🔴 REPROVADO / QUARENTENA</span>'
+                  : '<span class="spool-status" style="font-size:13px; font-weight:900; padding:6px 14px;"><i></i>⚪ PENDENTE</span>'))}
           </div>
         </div>
 
-        <!-- FORMULÁRIO COM AS DUAS DATAS: RECEBIDO & INSTALADO -->
+        <!-- FORMULÁRIO COM AS DATAS: RECEBIDO, INSTALADO & REPROVADO -->
         <form id="spoolTrackingForm" onsubmit="event.preventDefault(); spoolSaveModalDates('${spool.id}');" style="display:flex; flex-direction:column; gap:14px;">
           
           <!-- 1. BLOCO DE RECEBIMENTO -->
@@ -3733,10 +4452,34 @@ function spoolOpenTrackingModal(spoolId) {
             </div>
           </div>
 
-          <!-- 3. RESPONSÁVEL PELO APONTAMENTO -->
+          <!-- 3. BLOCO DE REPROVAÇÃO / QUARENTENA -->
+          <div style="background:${spool.status === 'rejected' || spool.rejectedDate ? '#fef2f2' : '#ffffff'}; border:1.5px solid ${spool.status === 'rejected' || spool.rejectedDate ? '#ef4444' : '#cbd5e1'}; border-radius:10px; padding:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <strong style="font-size:13px; color:#b91c1c; display:flex; align-items:center; gap:6px;">
+                <span>🔴</span> 3. Reprovação / Quarentena / Devolução
+              </strong>
+              ${spool.status === 'rejected' || spool.rejectedDate ? `<span style="font-size:11px; font-weight:800; color:#b91c1c; background:#fee2e2; padding:2px 8px; border-radius:4px;">REPROVADO (${formatSpoolDateDisplay(spool.rejectedDate || '')})${spool.rejectedAt ? ` às ${formatSpoolTime(spool.rejectedAt)}` : ''}</span>` : '<span style="font-size:11px; font-weight:700; color:#94a3b8;">NÃO REPROVADO</span>'}
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px;">
+              <div>
+                <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Data da Reprovação:</label>
+                <input type="date" id="spoolModalRejDate" value="${spool.rejectedDate || ''}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;">
+              </div>
+              <div>
+                <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Horário de Reprovação:</label>
+                <input type="time" id="spoolModalRejTime" value="${formatSpoolTime(spool.rejectedAt) || (spool.rejectedDate ? getLocalTimeStr() : '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700; background:#ffffff;">
+              </div>
+            </div>
+            <div>
+              <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Motivo da Não-Conformidade / Quarentena:</label>
+              <input type="text" id="spoolModalRejReason" placeholder="Ex.: Duplicidade enviada pela fábrica, defeito de solda, dimensional incorreto..." value="${esc(spool.rejectedReason || '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;">
+            </div>
+          </div>
+
+          <!-- 4. RESPONSÁVEL PELO APONTAMENTO -->
           <div>
-            <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Responsável pelo Apontamento / Montagem:</label>
-            <input type="text" id="spoolModalResp" placeholder="Ex.: Pedro Alves, Equipe HVAC..." value="${esc(spool.installedBy || spool.receivedBy || '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;">
+            <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Responsável pelo Apontamento / Montagem / Inspeção:</label>
+            <input type="text" id="spoolModalResp" placeholder="Ex.: Pedro Alves, Equipe HVAC..." value="${esc(spool.installedBy || spool.receivedBy || spool.rejectedBy || '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;">
           </div>
 
           <!-- ATALHOS RÁPIDOS -->
@@ -3744,13 +4487,16 @@ function spoolOpenTrackingModal(spoolId) {
             <button type="button" class="button compact" style="background:#0284c7; color:#ffffff; font-weight:700;" onclick="const t = getLocalDateStr(); const cur = getLocalTimeStr(); document.getElementById('spoolModalRecDate').value = t; document.getElementById('spoolModalRecTime').value = cur;">
               🟡 Recebido Agora
             </button>
-            <button type="button" class="button button-green compact" style="font-weight:700;" onclick="const t = getLocalDateStr(); const cur = getLocalTimeStr(); document.getElementById('spoolModalInstDate').value = t; document.getElementById('spoolModalInstTime').value = cur; document.getElementById('spoolModalRecDate').value = t; document.getElementById('spoolModalRecTime').value = cur;">
+            <button type="button" class="button button-green compact" style="font-weight:700;" onclick="const t = getLocalDateStr(); const cur = getLocalTimeStr(); document.getElementById('spoolModalInstDate').value = t; document.getElementById('spoolModalInstTime').value = cur; document.getElementById('spoolModalRecDate').value = t; document.getElementById('spoolModalRecTime').value = cur; document.getElementById('spoolModalRejDate').value = ''; document.getElementById('spoolModalRejTime').value = '';">
               🟢 Montado Hoje (Mesmo Horário)
+            </button>
+            <button type="button" class="button compact" style="background:#ef4444; color:#ffffff; font-weight:700;" onclick="const t = getLocalDateStr(); const cur = getLocalTimeStr(); document.getElementById('spoolModalRejDate').value = t; document.getElementById('spoolModalRejTime').value = cur; document.getElementById('spoolModalInstDate').value = ''; document.getElementById('spoolModalInstTime').value = ''; if(!document.getElementById('spoolModalRejReason').value) document.getElementById('spoolModalRejReason').value = 'Duplicidade enviada pela fábrica'; toast('Marcado para Reprovação');">
+              🔴 Reprovar Hoje
             </button>
             <button type="button" class="button button-dark compact" style="font-weight:700;" onclick="const cur = document.getElementById('spoolModalInstTime').value || document.getElementById('spoolModalRecTime').value || getLocalTimeStr(); document.getElementById('spoolModalRecTime').value = cur; document.getElementById('spoolModalInstTime').value = cur; toast('Horários igualados!');">
               ⏱️ Igualar Horários
             </button>
-            <button type="button" class="button button-outline compact" style="color:#ef4444; border-color:#fca5a5; font-weight:700;" onclick="document.getElementById('spoolModalRecDate').value = ''; document.getElementById('spoolModalRecTime').value = ''; document.getElementById('spoolModalInstDate').value = ''; document.getElementById('spoolModalInstTime').value = '';">
+            <button type="button" class="button button-outline compact" style="color:#ef4444; border-color:#fca5a5; font-weight:700;" onclick="document.getElementById('spoolModalRecDate').value = ''; document.getElementById('spoolModalRecTime').value = ''; document.getElementById('spoolModalInstDate').value = ''; document.getElementById('spoolModalInstTime').value = ''; document.getElementById('spoolModalRejDate').value = ''; document.getElementById('spoolModalRejTime').value = ''; document.getElementById('spoolModalRejReason').value = '';">
               ↩️ Limpar (Pendente)
             </button>
           </div>
@@ -3775,6 +4521,9 @@ function spoolSaveModalDates(spoolId) {
   const recTime = document.getElementById('spoolModalRecTime')?.value || '';
   const instDate = document.getElementById('spoolModalInstDate')?.value || '';
   const instTime = document.getElementById('spoolModalInstTime')?.value || '';
+  const rejDate = document.getElementById('spoolModalRejDate')?.value || '';
+  const rejTime = document.getElementById('spoolModalRejTime')?.value || '';
+  const rejReason = document.getElementById('spoolModalRejReason')?.value.trim() || '';
   const resp = document.getElementById('spoolModalResp')?.value.trim() || '';
 
   item.receivedDate = recDate;
@@ -3785,26 +4534,49 @@ function spoolSaveModalDates(spoolId) {
   item.installedAt = instDate ? buildIsoFromLocalDateAndTime(instDate, instTime) : '';
   if (resp) item.installedBy = resp;
 
-  if (instDate) {
+  item.rejectedDate = rejDate;
+  item.rejectedAt = rejDate ? buildIsoFromLocalDateAndTime(rejDate, rejTime) : '';
+  item.rejectedReason = rejReason;
+  if (rejDate && resp) item.rejectedBy = resp;
+
+  if (rejDate) {
+    item.status = 'rejected';
+    item.installedDate = '';
+    item.installedAt = '';
+  } else if (instDate) {
     item.status = 'installed';
+    item.rejectedDate = '';
+    item.rejectedAt = '';
+    item.rejectedReason = '';
     if (!item.receivedDate) {
       item.receivedDate = instDate;
       item.receivedAt = item.installedAt;
     }
   } else if (recDate) {
     item.status = 'received';
+    item.rejectedDate = '';
+    item.rejectedAt = '';
+    item.rejectedReason = '';
   } else {
     item.status = 'not-started';
     item.receivedAt = '';
     item.installedAt = '';
+    item.rejectedAt = '';
     item.receivedDate = '';
     item.installedDate = '';
+    item.rejectedDate = '';
+    item.rejectedReason = '';
   }
 
   spoolSaveAll(spoolDb);
   renderSpools();
   closeModal();
-  toast(`✅ Spool ${item.number}: Recebido ${item.receivedDate ? formatSpoolDateShort(item.receivedDate) + ' ' + formatSpoolTime(item.receivedAt) : '—'} | Instalado ${item.installedDate ? formatSpoolDateShort(item.installedDate) + ' ' + formatSpoolTime(item.installedAt) : '—'}`);
+
+  if (item.status === 'rejected') {
+    toast(`🔴 Spool ${item.number} marcado como REPROVADO em ${formatSpoolDateShort(item.rejectedDate)}${item.rejectedReason ? ` (${item.rejectedReason})` : ''}`);
+  } else {
+    toast(`✅ Spool ${item.number}: Recebido ${item.receivedDate ? formatSpoolDateShort(item.receivedDate) + ' ' + formatSpoolTime(item.receivedAt) : '—'} | Instalado ${item.installedDate ? formatSpoolDateShort(item.installedDate) + ' ' + formatSpoolTime(item.installedAt) : '—'}`);
+  }
 }
 
 // Exportações Globais
@@ -3818,8 +4590,15 @@ window.spoolSetDiameterFilter = spoolSetDiameterFilter;
 window.spoolClearAllFilters = spoolClearAllFilters;
 window.spoolShowAllMySpools = spoolShowAllMySpools;
 window.spoolSetSelectedDate = spoolSetSelectedDate;
+window.spoolSetDateFilterMode = spoolSetDateFilterMode;
+window.spoolQuickFilterDay = spoolQuickFilterDay;
+window.spoolClearDateFilter = spoolClearDateFilter;
 window.spoolToggleStatus = spoolToggleStatus;
 window.spoolSetItemStatus = spoolSetItemStatus;
+window.spoolPromptRejectItem = spoolPromptRejectItem;
+window.spoolConfirmRejectItem = spoolConfirmRejectItem;
+window.spoolBulkReject = spoolBulkReject;
+window.spoolConfirmBulkReject = spoolConfirmBulkReject;
 window.spoolOpenImportModal = spoolOpenImportModal;
 window.spoolHandleExcelUpload = spoolHandleExcelUpload;
 window.spoolConfirmImport = spoolConfirmImport;
@@ -3829,6 +4608,11 @@ window.spoolOpenExportModal = spoolOpenExportModal;
 window.spoolOpenManualEntryModal = spoolOpenManualEntryModal;
 window.spoolSaveManualBatch = spoolSaveManualBatch;
 window.spoolCopyDailyReport = spoolCopyDailyReport;
+window.spoolCopyFilteredReport = spoolCopyFilteredReport;
+window.spoolCopyReceivedDailyReport = spoolCopyReceivedDailyReport;
+window.spoolCopyTagsOnly = spoolCopyTagsOnly;
+window.spoolCopySelectedSpools = spoolCopySelectedSpools;
+window.spoolOpenCopyModal = spoolOpenCopyModal;
 window.spoolClearSectorData = spoolClearSectorData;
 window.spoolOpenTrackingModal = spoolOpenTrackingModal;
 window.spoolTotalCount = spoolTotalCount;
@@ -3843,4 +4627,5 @@ window.spoolDownloadSupercoreSpreadsheet = spoolDownloadSupercoreSpreadsheet;
 window.spoolOpenReportPDF = spoolOpenReportPDF;
 window.spoolSaveModalDates = spoolSaveModalDates;
 window.formatSpoolDateDisplay = formatSpoolDateDisplay;
+
 

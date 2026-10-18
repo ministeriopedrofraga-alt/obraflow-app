@@ -2643,6 +2643,9 @@ h3 { font-size: 14px; }
   border-left: 4px solid #f59e0b;
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(21, 34, 29, 0.95));
 }
+.spool-kpi-card.tone-rejected {
+  border-left: 4px solid #ef4444;
+}
 .spool-kpi-label {
   font-size: 11px;
   font-weight: 800;
@@ -2850,6 +2853,18 @@ h3 { font-size: 14px; }
 .btn-spool-action.btn-delete:hover {
   background: #ef4444;
   color: #ffffff;
+}
+.btn-spool-action.btn-rejected {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+.btn-spool-action.btn-rejected.is-active {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 2px #fff;
+  filter: brightness(1.1);
 }
 
 /* Badge de Linha Reta */
@@ -3125,6 +3140,19 @@ h3 { font-size: 14px; }
 .spool-tube-card.status-pending .tube-tag {
   color: #0f172a !important;
 }
+.spool-tube-card.status-rejected {
+  background: #fef2f2 !important;
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.35) !important;
+}
+.spool-tube-card.status-rejected .tube-tag {
+  color: #b91c1c !important;
+}
+.spool-status.rejected {
+  color: #b91c1c;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+}
 
 /* TRACKER VISUAL: BARRAMENTO PRINCIPAL (35 TUBOS + 2 VÁLVULAS) */
 .spool-pipeline-container {
@@ -3214,6 +3242,17 @@ h3 { font-size: 14px; }
 .spool-pipe-seg.status-received .seg-idx {
   color: #e0f2fe;
 }
+.spool-pipe-seg.status-rejected {
+  background: #7f1d1d !important;
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+.spool-pipe-seg.status-rejected .seg-tag {
+  color: #ffffff !important;
+}
+.spool-pipe-seg.status-rejected .seg-idx {
+  color: #fca5a5;
+}
 .spool-pipe-connector {
   flex: 0 0 auto;
   width: 10px;
@@ -3251,6 +3290,12 @@ h3 { font-size: 14px; }
   color: #ffffff !important;
   border: 1.5px solid #047857 !important;
   box-shadow: 0 2px 6px rgba(16,185,129,0.35) !important;
+}
+.spool-tag-pill.status-rejected {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border: 1.5px solid #b91c1c !important;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.35) !important;
 }
 
 /* BARRA DE FILTROS AVANÇADOS DE SPOOLS */
