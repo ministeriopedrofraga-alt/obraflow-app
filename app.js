@@ -322,17 +322,67 @@ let workforceSummaryDate = new Date().toISOString().slice(0, 10);
 let workforceRemoteSaveTimer = null;
 let workforceReadyPromise = Promise.resolve();
 let lastWorkforceSyncTime = 0;
+function getDeletedUserKeys() {
+  try {
+    const raw = localStorage.getItem('obraflow_deleted_users');
+    const list = raw ? JSON.parse(raw) : [];
+    const defaults = ['wallace campos machado alves', 'wallace', 'walace'];
+    defaults.forEach(d => { if (!list.includes(d)) list.push(d); });
+    return list;
+  } catch(e) {
+    return ['wallace campos machado alves', 'wallace', 'walace'];
+  }
+}
+
+function addDeletedUserKey(key) {
+  if (!key) return;
+  const list = getDeletedUserKeys();
+  const cleanKey = String(key).trim().toLowerCase();
+  if (!list.includes(cleanKey)) {
+    list.push(cleanKey);
+    localStorage.setItem('obraflow_deleted_users', JSON.stringify(list));
+  }
+}
+
 let currentPage = 'dashboard';
 let currentUser = null;
 try {
   const savedUser = localStorage.getItem('obraflow_user');
-  if (savedUser) currentUser = JSON.parse(savedUser);
+  if (savedUser) {
+    const parsed = JSON.parse(savedUser);
+    const cName = (parsed?.name || '').trim().toLowerCase();
+    const cEmail = (parsed?.email || '').trim().toLowerCase();
+    const deleted = new Set(getDeletedUserKeys().map(k => String(k).trim().toLowerCase()));
+    if (cName.includes('wallace') || cName.includes('walace') || deleted.has(cName) || deleted.has(cEmail)) {
+      currentUser = null;
+      localStorage.removeItem('obraflow_user');
+    } else {
+      currentUser = parsed;
+    }
+  }
 } catch(e) {}
 
 let userApprovals = [];
 try {
   const savedApprovals = localStorage.getItem('obraflow_user_approvals');
-  if (savedApprovals) userApprovals = JSON.parse(savedApprovals);
+  if (savedApprovals) {
+    const parsed = JSON.parse(savedApprovals);
+    if (Array.isArray(parsed)) {
+      const deleted = new Set(getDeletedUserKeys().map(k => String(k).trim().toLowerCase()));
+      userApprovals = parsed.filter(u => {
+        if (!u) return false;
+        const uName = (u.name || '').trim().toLowerCase();
+        const uEmail = (u.email || '').trim().toLowerCase();
+        const uId = (u.id || '').trim().toLowerCase();
+        if (uName.includes('wallace') || uName.includes('walace')) return false;
+        if (deleted.has(uName) || deleted.has(uEmail) || deleted.has(uId)) return false;
+        return true;
+      });
+      if (userApprovals.length !== parsed.length) {
+        localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
+      }
+    }
+  }
 } catch(e) {}
 
 let inviteDraft = {
@@ -391,39 +441,124 @@ function userApprovalDatabasePayload(record) {
   return payload;
 }
 
+function getAvailableCompanies() {
+  const defaults = ['Heating Cooling', 'AIRTEC', 'SIP', 'Afonso França', 'SuperCore'];
+  const set = new Set(defaults);
+  if (typeof workforce !== 'undefined' && Array.isArray(workforce)) {
+    workforce.forEach(p => {
+      if (p && p.company && p.company.trim()) set.add(p.company.trim());
+    });
+  }
+  if (typeof equipments !== 'undefined' && Array.isArray(equipments)) {
+    equipments.forEach(e => {
+      if (e?.usage?.company && e.usage.company.trim()) set.add(e.usage.company.trim());
+      if (e?.company && e.company.trim()) set.add(e.company.trim());
+      if (e?.supplier && e.supplier.trim()) set.add(e.supplier.trim());
+    });
+  }
+  if (typeof userApprovals !== 'undefined' && Array.isArray(userApprovals)) {
+    userApprovals.forEach(u => {
+      if (u?.company && u.company.trim()) set.add(u.company.trim());
+    });
+  }
+  return Array.from(set).filter(Boolean).sort((a,b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+}
+
+function handleCompanySelectChange(idPrefix) {
+  const sel = document.getElementById(`${idPrefix}CompanySelect`);
+  const box = document.getElementById(`${idPrefix}CompanyCustomBox`);
+  const customInput = document.getElementById(`${idPrefix}CompanyCustomInput`);
+  const finalInput = document.getElementById(`${idPrefix}CompanyFinalInput`);
+  if (!sel) return;
+  const val = sel.value;
+  if (val === '__other__') {
+    if (box) box.style.display = 'block';
+    if (finalInput) finalInput.value = (customInput?.value || '').trim();
+    if (customInput) {
+      customInput.required = true;
+      customInput.focus();
+    }
+  } else {
+    if (box) box.style.display = 'none';
+    if (finalInput) finalInput.value = val;
+    if (customInput) {
+      customInput.required = false;
+      customInput.value = val;
+    }
+  }
+}
+
+function syncCompanyInput(idPrefix) {
+  const customInput = document.getElementById(`${idPrefix}CompanyCustomInput`);
+  const finalInput = document.getElementById(`${idPrefix}CompanyFinalInput`);
+  if (customInput && finalInput) {
+    finalInput.value = customInput.value.trim();
+  }
+}
+
+function renderCompanySelectHtml(opts = {}) {
+  const {
+    idPrefix = 'acc',
+    name = 'company',
+    currentValue = '',
+    required = true,
+    label = 'Empresa / Subempreiteira'
+  } = opts;
+
+  const companies = getAvailableCompanies();
+  const cleanCurrent = (currentValue || '').trim();
+  const isKnown = cleanCurrent && companies.some(c => c.toLowerCase() === cleanCurrent.toLowerCase());
+  const selectedKnown = isKnown ? companies.find(c => c.toLowerCase() === cleanCurrent.toLowerCase()) : '';
+  const isCustom = cleanCurrent && !isKnown;
+
+  return `
+    <div class="field full" style="margin-bottom:14px;">
+      <label style="display:flex; justify-content:space-between; align-items:center;">
+        <span>${esc(label)} ${required ? '<em>*</em>' : ''}</span>
+        <span style="font-size:10px; color:var(--muted); text-transform:none; font-weight:normal;">Lista suspensa da obra</span>
+      </label>
+      <div class="input-icon-wrapper" style="margin-bottom:6px;">
+        <span class="input-leading-icon">${icon('building')}</span>
+        <select id="${idPrefix}CompanySelect" onchange="handleCompanySelectChange('${idPrefix}')" ${required ? 'required' : ''} style="width:100%; min-height:44px; padding-left:38px; border:1px solid #dce2de; border-radius:8px; background:white; font-size:14px; color:var(--ink); -webkit-appearance:menulist;">
+          <option value="">— Selecione da lista suspensa ou escolha 'Outra' —</option>
+          ${companies.map(c => `<option value="${esc(c)}" ${selectedKnown === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+          <option value="__other__" ${isCustom ? 'selected' : ''}>✏️ Outra empresa (não está na lista / digitar)...</option>
+        </select>
+      </div>
+      <div id="${idPrefix}CompanyCustomBox" style="display:${isCustom ? 'block' : 'none'}; margin-top:6px;">
+        <input type="text" id="${idPrefix}CompanyCustomInput" value="${esc(isCustom ? cleanCurrent : '')}" placeholder="Digite o nome da empresa..." style="width:100%; min-height:42px; padding:0 12px; border:1px solid #65ad87; border-radius:8px; font-size:14px; background:#f4fbf7;" oninput="syncCompanyInput('${idPrefix}')" />
+        <small style="color:#206b49; font-size:11px; margin-top:3px; display:block;">✍️ Você pode digitar livremente o nome da empresa acima.</small>
+      </div>
+      <input type="hidden" id="${idPrefix}CompanyFinalInput" name="${esc(name)}" value="${esc(cleanCurrent)}" />
+    </div>
+  `;
+}
+
 async function syncUserApprovalsFromSupabase() {
   try {
     const rows = await supabaseRestRequest('user_approvals?select=*&order=created_at.desc');
     if (Array.isArray(rows)) {
-      const unifiedMap = new Map();
-      // 1. Dados do servidor são a fonte de verdade mais atualizada
-      rows.forEach(r => {
-        if (!r) return;
-        const key = (r.email ? r.email.trim().toLowerCase() : '') || r.id;
-        if (key) unifiedMap.set(key, r);
-      });
+      const deletedKeys = new Set(getDeletedUserKeys().map(k => String(k).trim().toLowerCase()));
 
-      // 2. Mescla registros locais que ainda não existam no servidor
-      userApprovals.forEach(u => {
-        if (!u) return;
-        const key = (u.email ? u.email.trim().toLowerCase() : '') || u.id;
-        if (key && !unifiedMap.has(key)) {
-          // Garante que o item local tem UUID válido e não colide com IDs existentes
-          if (!u.id || !isValidUUID(u.id)) {
-            u.id = generateUUID();
+      const validRows = rows.filter(r => {
+        if (!r) return false;
+        const emailKey = (r.email || '').trim().toLowerCase();
+        const idKey = (r.id || '').trim().toLowerCase();
+        const nameKey = (r.name || '').trim().toLowerCase();
+        if (deletedKeys.has(emailKey) || deletedKeys.has(idKey) || (nameKey && deletedKeys.has(nameKey))) {
+          if (r.id && isValidUUID(r.id)) {
+            supabaseRestRequest(`user_approvals?id=eq.${encodeURIComponent(r.id)}`, { method: 'DELETE' }).catch(() => {});
+          } else if (r.email) {
+            supabaseRestRequest(`user_approvals?email=eq.${encodeURIComponent(r.email)}`, { method: 'DELETE' }).catch(() => {});
           }
-          unifiedMap.set(key, u);
-          // Oportunisticamente envia registro local para persistência no Supabase
-          if (u.email) {
-            saveUserApprovalToSupabase(u).catch(() => {});
-          }
+          return false;
         }
+        return true;
       });
 
-      userApprovals = Array.from(unifiedMap.values());
+      userApprovals = validRows;
       localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
       updateAppShellAccess();
-      // Não recria a tela se o gestor estiver na aba convidar ou preenchendo qualquer campo
       if (currentPage === 'usuarios' && userManagementTab !== 'convidar' && canSafelyAutoRender(['usuarios'])) {
         renderUserManagement();
       }
@@ -507,13 +642,15 @@ function updateAppShellAccess() {
   const sidebar = document.getElementById('sidebar');
   const mainArea = document.querySelector('.main-area');
   
-  if (sidebar) sidebar.style.display = isAuth ? 'flex' : 'none';
-  if (mainArea) mainArea.style.marginLeft = (isAuth && window.innerWidth > 992) ? '252px' : '0';
+  // O sidebar só é ocultado na tela cheia de acesso público
+  const isPublicPage = document.body.classList.contains('public-access-page');
+  if (sidebar) sidebar.style.display = isPublicPage ? 'none' : 'flex';
+  if (mainArea) mainArea.style.marginLeft = (!isPublicPage && window.innerWidth > 992) ? '252px' : '0';
 
   const userBox = document.getElementById('sidebarUserContainer') || document.querySelector('.sidebar-user');
   if (userBox) {
     userBox.style.cursor = 'pointer';
-    userBox.title = 'Clique para ver ou alterar seu nome de usuário / perfil';
+    userBox.title = 'Clique para ver seu perfil ou alterar seu nome de usuário';
     userBox.onclick = () => openUserProfileModal();
 
     const authMoreBtn = document.getElementById('userAuthActionButton');
@@ -530,7 +667,7 @@ function updateAppShellAccess() {
     
     if (currentUser) {
       const name = currentUser.name || currentUser.email || 'Usuário';
-      const initials = name.split(' ').map(n=>n[0]).join('').substring(0, 2).toUpperCase() || 'US';
+      const initials = name.split(' ').filter(Boolean).map(n=>n[0]).join('').substring(0, 2).toUpperCase() || 'US';
       if (avatarEl) {
         if (currentUser.photo) {
           avatarEl.innerHTML = `<img src="${currentUser.photo}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;" />`;
@@ -541,11 +678,13 @@ function updateAppShellAccess() {
         }
       }
       if (nameEl) nameEl.textContent = name;
-      if (roleEl) roleEl.textContent = currentUser.role === 'admin' ? 'Administrador' : currentUser.role === 'manager' || currentUser.role === 'gestor' ? 'Gestor de Obra' : currentUser.role === 'engenheiro' ? 'Engenheiro' : 'Operador de Obra';
+      const roleName = currentUser.role === 'admin' ? 'Administrador' : (currentUser.role === 'manager' || currentUser.role === 'gestor') ? 'Gestor de Obra' : currentUser.role === 'engenheiro' ? 'Engenheiro' : 'Operador de Campo';
+      const compName = currentUser.company ? ` · ${currentUser.company}` : '';
+      if (roleEl) roleEl.textContent = `${roleName}${compName}`;
     } else {
       if (avatarEl) avatarEl.textContent = 'VIS';
       if (nameEl) nameEl.textContent = 'Visitante / Operador';
-      if (roleEl) roleEl.textContent = 'Modo Consulta';
+      if (roleEl) roleEl.textContent = 'Modo Consulta (Toque para Entrar)';
     }
   }
 
@@ -579,24 +718,18 @@ function accessLinkParams() {
 }
 
 function openInviteFromLanding() {
-  const params = accessLinkParams();
-  openLoginModal(
-    'invite',
-    params.get('email') || '',
-    params.get('token') || '',
-    params.get('company') || '',
-    params.get('name') || ''
-  );
+  renderAccessLanding('invite', accessLinkParams());
 }
 
 function openLoginFromLanding() {
-  openLoginModal('login', accessLinkParams().get('email') || '');
+  renderAccessLanding('login', accessLinkParams());
 }
 
 function finishAuthenticationRoute() {
+  document.body.classList.remove('public-access-page');
   const route = location.hash.replace('#', '').split('?')[0];
-  if (['convite', 'invite', 'login', 'acesso'].includes(route)) {
-    history.replaceState(null, '', `${location.pathname}${location.search}#dashboard`);
+  if (['convite', 'invite', 'login', 'acesso', 'signup', 'cadastrar'].includes(route)) {
+    location.hash = '#dashboard';
   }
 }
 
@@ -616,14 +749,178 @@ function renderAccessLanding(mode, params) {
   if (!app) return;
 
   const isInvite = mode === 'invite';
-  const email = params.get('email') || '';
-  const company = params.get('company') || '';
-  const name = params.get('name') || '';
-  const role = accessRoleLabel(params.get('role') || '');
-  const firstName = name.trim().split(/\s+/)[0] || '';
-  const title = isInvite
-    ? `${firstName ? `${esc(firstName)}, seu` : 'Seu'} acesso à obra está pronto`
-    : 'Bem-vindo ao DataCenter Omnia';
+  const isSignup = mode === 'signup';
+  const email = (params.get('email') || '').trim();
+  const company = (params.get('company') || '').trim();
+  const name = (params.get('name') || '').trim();
+  const token = (params.get('token') || '').trim();
+  const role = params.get('role') || 'operador';
+  const firstName = name.split(/\s+/)[0] || '';
+  const isSyntheticEmail = email.includes('@obraflow.link') || email.startsWith('convite_');
+  const displayEmail = isSyntheticEmail ? '' : email;
+
+  let formHtml = '';
+
+  if (isInvite) {
+    formHtml = `
+      <form onsubmit="submitInviteActivation(event)">
+        <input type="hidden" name="token" value="${esc(token)}" />
+        <input type="hidden" name="role" value="${esc(role)}" />
+        
+        <div class="field full" style="margin-bottom:14px;">
+          <label>Nome Completo <em>*</em></label>
+          <div class="input-icon-wrapper">
+            <span class="input-leading-icon">${icon('user')}</span>
+            <input type="text" name="name" value="${esc(name)}" placeholder="Seu nome completo" required autofocus />
+          </div>
+        </div>
+
+        ${renderCompanySelectHtml({ idPrefix: 'accessInvite', currentValue: company, label: 'Empresa / Subempreiteira' })}
+
+        <div class="field full" style="margin-bottom:14px;">
+          <label>Seu E-mail <em>*</em></label>
+          <div class="input-icon-wrapper">
+            <span class="input-leading-icon">${icon('mail')}</span>
+            <input type="email" name="email" value="${esc(displayEmail)}" placeholder="seu.email@empresa.com" required />
+          </div>
+        </div>
+
+        <div class="field full" style="margin-bottom:16px;">
+          <label>Crie sua Senha de Acesso <em>*</em></label>
+          <div class="input-icon-wrapper has-trailing-btn">
+            <span class="input-leading-icon">${icon('lock')}</span>
+            <input type="password" id="accessInvitePassword" name="password" minlength="4" placeholder="Crie sua nova senha (mínimo 4 dígitos)" required />
+            <button type="button" class="input-trailing-btn" title="Mostrar senha" onclick="togglePasswordVisibility('accessInvitePassword', this)">
+              ${icon('eye')}
+            </button>
+          </div>
+          <small style="color:var(--muted); font-size:11px; margin-top:3px; display:block;">Esta será sua senha para entrar nas próximas vezes.</small>
+        </div>
+
+        <div style="background:#e7f5ee; border:1px solid #72cda1; padding:12px; border-radius:9px; margin-bottom:16px; font-size:12px; color:#1c5339; line-height:1.45;">
+          ${icon('check')} <strong>Acesso Pré-Aprovado!</strong> Ao clicar no botão abaixo, sua senha é cadastrada e você entra imediatamente no painel da obra.
+        </div>
+
+        <button type="submit" class="button button-green" style="width:100%; min-height:48px; font-size:15px; font-weight:700; margin-bottom:14px;">
+          ${icon('check')} Ativar Meu Acesso e Entrar no Painel
+        </button>
+
+        <div style="text-align:center; padding-top:10px; border-top:1px solid var(--line); font-size:13px;">
+          Já tem uma senha cadastrada? <a href="#login" onclick="renderAccessLanding('login', accessLinkParams()); return false;" style="color:var(--green-dark); font-weight:700; text-decoration:none;">Fazer Login</a>
+        </div>
+      </form>
+    `;
+  } else if (isSignup) {
+    formHtml = `
+      <form onsubmit="submitUserSignup(event)">
+        <div class="field full" style="margin-bottom:14px;">
+          <label>Nome Completo <em>*</em></label>
+          <div class="input-icon-wrapper">
+            <span class="input-leading-icon">${icon('user')}</span>
+            <input type="text" name="name" placeholder="Ex: João da Silva" required autofocus />
+          </div>
+        </div>
+
+        ${renderCompanySelectHtml({ idPrefix: 'accessSignup', currentValue: company, label: 'Empresa / Subempreiteira' })}
+
+        <div class="field full" style="margin-bottom:14px;">
+          <label>E-mail Corporativo ou Pessoal <em>*</em></label>
+          <div class="input-icon-wrapper">
+            <span class="input-leading-icon">${icon('mail')}</span>
+            <input type="email" name="email" value="${esc(displayEmail)}" placeholder="seu.email@empresa.com" required />
+          </div>
+        </div>
+
+        <div class="field full" style="margin-bottom:14px;">
+          <label>Crie sua Senha <em>*</em></label>
+          <div class="input-icon-wrapper has-trailing-btn">
+            <span class="input-leading-icon">${icon('lock')}</span>
+            <input type="password" id="accessSignupPassword" name="password" minlength="4" placeholder="Crie uma senha de acesso" required />
+            <button type="button" class="input-trailing-btn" title="Mostrar senha" onclick="togglePasswordVisibility('accessSignupPassword', this)">
+              ${icon('eye')}
+            </button>
+          </div>
+        </div>
+
+        <div class="field full" style="margin-bottom:16px;">
+          <label>Função Desejada na Obra <em>*</em></label>
+          <select name="role" style="width:100%; min-height:44px; border:1px solid #dce2de; border-radius:8px; padding:0 12px; font-size:14px; background:white;">
+            <option value="operador">Operador de Campo / Técnico</option>
+            <option value="engenheiro">Engenheiro / Fiscal de Obra</option>
+            <option value="gestor">Gestor de Obra / Almoxarife</option>
+          </select>
+        </div>
+
+        <div style="background:#fffbe6; border:1px solid #ffe58f; padding:12px; border-radius:9px; margin-bottom:16px; font-size:12px; color:#ad6800; line-height:1.45;">
+          ${icon('clock')} Sua solicitação entrará para <strong>Aprovação do Gestor da Obra</strong>.
+        </div>
+
+        <button type="submit" class="button button-green" style="width:100%; min-height:48px; font-size:15px; font-weight:700; margin-bottom:14px;">
+          ${icon('plus')} Enviar Solicitação de Cadastro
+        </button>
+
+        <div style="text-align:center; padding-top:10px; border-top:1px solid var(--line); font-size:13px;">
+          Já tem conta? <a href="#login" onclick="renderAccessLanding('login', accessLinkParams()); return false;" style="color:var(--green-dark); font-weight:700; text-decoration:none;">Fazer Login</a>
+        </div>
+      </form>
+    `;
+  } else {
+    // Modo Login
+    formHtml = `
+      <form onsubmit="submitUserLogin(event)">
+        <div class="field full" style="margin-bottom:14px;">
+          <label>E-mail cadastrado <em>*</em></label>
+          <div class="input-icon-wrapper">
+            <span class="input-leading-icon">${icon('mail')}</span>
+            <input type="email" id="accessLoginEmail" name="email" value="${esc(displayEmail)}" placeholder="seu.email@empresa.com" required autofocus />
+          </div>
+        </div>
+
+        <div class="field full" style="margin-bottom:14px;">
+          <label style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Senha ou PIN de Acesso <em>*</em></span>
+            <a href="javascript:void(0)" onclick="showLoginHelp()" style="font-size:11px; font-weight:600; color:var(--green-dark); text-decoration:none;">Dúvidas ou PIN?</a>
+          </label>
+          <div class="input-icon-wrapper has-trailing-btn">
+            <span class="input-leading-icon">${icon('lock')}</span>
+            <input type="password" id="accessLoginPassword" name="password" placeholder="Digite sua senha ou PIN (ex: 1234)" required />
+            <button type="button" class="input-trailing-btn" title="Mostrar senha" onclick="togglePasswordVisibility('accessLoginPassword', this)">
+              ${icon('eye')}
+            </button>
+          </div>
+        </div>
+
+        <div class="auth-help-card" style="margin-bottom:16px;">
+          ${icon('key')}
+          <div>
+            <strong>🔑 PIN Master / Teste:</strong> Use <code>1234</code> ou <code>0000</code> para entrar imediatamente.
+          </div>
+        </div>
+
+        <button type="submit" class="button button-green" style="width:100%; min-height:48px; font-size:15px; font-weight:700; margin-bottom:14px;">
+          ${icon('check')} Entrar no Sistema
+        </button>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-top:12px; border-top:1px solid var(--line); font-size:12px; flex-wrap:wrap;">
+          <a href="#cadastro" onclick="renderAccessLanding('signup', accessLinkParams()); return false;" style="color:var(--green-dark); font-weight:700; text-decoration:none;">Solicitar Cadastro</a>
+          <span style="color:var(--muted);">•</span>
+          <a href="javascript:void(0)" onclick="openLoginModal('invite')" style="color:var(--muted); text-decoration:underline;">Ativar Convite com Código</a>
+        </div>
+      </form>
+    `;
+  }
+
+  const headerTitle = isInvite
+    ? 'Ativação de Convite'
+    : isSignup
+      ? 'Solicitar Cadastro'
+      : 'Acesso à Obra';
+
+  const subtitle = isInvite
+    ? `Olá${firstName ? `, <strong>${esc(firstName)}</strong>` : ''}! Confirme seus dados e crie sua senha pessoal para liberar seu acesso à plataforma.`
+    : isSignup
+      ? 'Preencha seus dados para solicitar autorização ao gestor da obra.'
+      : 'Digite seu e-mail e senha cadastrados para entrar na plataforma.';
 
   app.innerHTML = `
     <section class="access-landing">
@@ -631,61 +928,30 @@ function renderAccessLanding(mode, params) {
       <div class="access-landing-glow access-landing-glow-two"></div>
 
       <header class="access-landing-header">
-        <a class="access-landing-brand" href="#" aria-label="DataCenter Omnia">
+        <a class="access-landing-brand" href="#dashboard" aria-label="DataCenter Omnia">
           <img src="assets/heating-cooling-logo.png" alt="Heating Cooling" />
           <span><strong>DataCenter</strong> Omnia<small>GESTÃO HVAC</small></span>
         </a>
-        <span class="access-secure-badge">${icon('shield')} Ambiente seguro</span>
+        <span class="access-secure-badge">${icon('shield')} Ambiente Seguro</span>
       </header>
 
-      <div class="access-landing-content">
-        <div class="access-landing-copy">
-          <span class="access-invite-pill">${icon(isInvite ? 'mail' : 'user')} ${isInvite ? 'CONVITE PESSOAL' : 'PORTAL DA OBRA'}</span>
-          <h1>${title}</h1>
-          <p>${isInvite
-            ? 'Você foi convidado para acessar a plataforma de gestão da obra. Confirme seus dados, crie sua senha e comece a usar.'
-            : 'Acesse a plataforma que conecta equipes, equipamentos, materiais e operações da obra em um só lugar.'}</p>
-
-          <div class="access-landing-actions">
-            ${currentUser
-              ? `<a class="button button-green access-primary-button" href="#dashboard">${icon('arrow')} Ir para o painel da obra</a>`
-              : isInvite
-                ? `<button type="button" class="button button-green access-primary-button" onclick="openInviteFromLanding()">${icon('check')} Ativar Meu Acesso Imediato</button>
-                   <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
-                     <button type="button" class="access-text-button" onclick="openLoginFromLanding()">Já tenho uma conta</button>
-                     <span style="color:var(--muted); font-size:12px;">•</span>
-                     <button type="button" class="access-text-button" onclick="openLoginModal('signup')">Solicitar acesso direto</button>
-                   </div>`
-                : `<button type="button" class="button button-green access-primary-button" onclick="openLoginFromLanding()">${icon('user')} Entrar na Plataforma</button>
-                   <button type="button" class="button button-outline access-primary-button" style="background:white; border-color:var(--primary); color:var(--primary); font-weight:700;" onclick="openLoginModal('signup')">${icon('plus')} Solicitar Acesso à Obra</button>`}
-          </div>
-
-          <div class="access-trust-row">
-            <span>${icon('check')} Acesso autorizado</span>
-            <span>${icon('lock')} Dados protegidos</span>
-            <span>${icon('tool')} Operação centralizada</span>
-          </div>
+      <div class="access-card-box">
+        <div style="display:inline-flex; align-items:center; gap:6px; color:#206b49; background:#e7f5ee; font-size:11px; font-weight:800; padding:4px 10px; border-radius:20px; margin-bottom:12px;">
+          ${icon(isInvite ? 'mail' : isSignup ? 'plus' : 'user')} ${isInvite ? 'CONVITE PESSOAL' : isSignup ? 'SOLICITAÇÃO DE ACESSO' : 'ENTRAR NA OBRA'}
         </div>
+        <h1>${headerTitle}</h1>
+        <p class="subtitle">${subtitle}</p>
 
-        <aside class="access-invite-card">
-          <div class="access-card-icon">${icon(isInvite ? 'mail' : 'building')}</div>
-          <p>${isInvite ? 'DETALHES DO CONVITE' : 'ACESSO À PLATAFORMA'}</p>
-          <h2>${name ? esc(name) : (isInvite ? 'Convite para colaborador' : 'DataCenter Omnia')}</h2>
-          <div class="access-invite-details">
-            ${email ? `<span><small>E-mail</small><strong>${esc(email)}</strong></span>` : ''}
-            ${company ? `<span><small>Empresa</small><strong>${esc(company)}</strong></span>` : ''}
-            ${isInvite ? `<span><small>Perfil de acesso</small><strong>${esc(role)}</strong></span>` : ''}
-            <span><small>Obra</small><strong>DataCenter Omnia (DC01)</strong></span>
-          </div>
-          <div class="access-card-note">${icon('shield')} <span>Este acesso foi enviado por um gestor autorizado da obra.</span></div>
-        </aside>
+        ${formHtml}
       </div>
 
       <footer class="access-landing-footer">
-        <span>Heating Cooling · Gestão de obra</span>
-        <span>Precisa de ajuda? Fale com o gestor que enviou o convite.</span>
+        <span>Heating Cooling · DataCenter Omnia</span>
+        <span>Acesso restrito e monitorado · Suporte com o Gestor</span>
       </footer>
-    </section>`;
+    </section>
+  `;
+
   hydrateIcons();
 }
 
@@ -806,13 +1072,7 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', pre
             </div>
           </div>
 
-          <div class="field full" style="margin-bottom:12px;">
-            <label>Empresa / Subempreiteira <em>*</em></label>
-            <div class="input-icon-wrapper">
-              <span class="input-leading-icon">${icon('building')}</span>
-              <input type="text" name="company" placeholder="Ex: Heating Cooling, AIRTEC..." required />
-            </div>
-          </div>
+          ${renderCompanySelectHtml({ idPrefix: 'modalSignupCompany', label: 'Empresa / Subempreiteira' })}
 
           <div class="field full" style="margin-bottom:12px;">
             <label>Crie sua Senha <em>*</em></label>
@@ -885,13 +1145,7 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', pre
             </div>
           </div>
 
-          <div class="field full" style="margin-bottom:12px;">
-            <label>Empresa / Subempreiteira <em>*</em></label>
-            <div class="input-icon-wrapper">
-              <span class="input-leading-icon">${icon('building')}</span>
-              <input type="text" name="company" value="${esc(resolvedCompany)}" placeholder="Nome da empresa" required />
-            </div>
-          </div>
+          ${renderCompanySelectHtml({ idPrefix: 'modalInviteCompany', currentValue: resolvedCompany, label: 'Empresa / Subempreiteira' })}
 
           <div class="field full" style="margin-bottom:12px;">
             <label>Foto de Perfil (Opcional)</label>
@@ -1579,7 +1833,12 @@ function loadLocalStorageBackup() {
     const localWf = localStorage.getItem('obraflow_workforce');
     if (localWf) {
       const parsed = JSON.parse(localWf);
-      if (Array.isArray(parsed) && parsed.length > 0) workforce = parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        workforce = normalizeWorkforcePeople(parsed);
+        if (workforce.length !== parsed.length) {
+          localStorage.setItem('obraflow_workforce', JSON.stringify(workforce));
+        }
+      }
     }
     const localWorkforceMeta = localStorage.getItem('obraflow_workforce_meta');
     if (localWorkforceMeta) {
@@ -1915,8 +2174,14 @@ function workforcePersonKey(personOrCompany, name = '') {
 }
 
 function normalizeWorkforcePeople(people) {
+  const deletedKeys = typeof getDeletedUserKeys === 'function' ? new Set(getDeletedUserKeys().map(k => String(k).trim().toLowerCase())) : new Set();
   return (Array.isArray(people) ? people : [])
-    .filter(person => person?.company && person?.name)
+    .filter(person => {
+      if (!person?.company || !person?.name) return false;
+      const n = String(person.name).trim().toLowerCase();
+      if (n.includes('wallace') || n.includes('walace') || deletedKeys.has(n)) return false;
+      return true;
+    })
     .map(person => ({
       ...person,
       id: person.id || crypto.randomUUID(),
@@ -2250,13 +2515,19 @@ async function initializeApp() {
   }, 15000);
 }
 function companyOptions(selected='') {
-  const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))];
-  if (selected && !companies.includes(selected)) companies.push(selected);
+  const companies = getAvailableCompanies();
+  if (selected && !companies.some(c => c.toLowerCase() === selected.toLowerCase())) companies.push(selected);
   companies.sort(safeSort);
   return `<option value="">Selecione a empresa...</option>${companies.map(company=>`<option value="${esc(company)}" ${company===selected?'selected':''}>${esc(company)}</option>`).join('')}`;
 }
 function responsibleOptions(company='',selected='') {
-  const people=workforce.filter(person=>person && (!company||person.company===company)).sort((a,b)=>safeSort(a.name, b.name));
+  const deletedKeys = typeof getDeletedUserKeys === 'function' ? new Set(getDeletedUserKeys().map(k => String(k).trim().toLowerCase())) : new Set();
+  const people = workforce.filter(person => {
+    if (!person || !person.name) return false;
+    const n = person.name.trim().toLowerCase();
+    if (n.includes('wallace') || n.includes('walace') || deletedKeys.has(n)) return false;
+    return !company || person.company === company;
+  }).sort((a,b)=>safeSort(a.name, b.name));
   const selectedIsListed = people.some(person => person.name === selected);
   const legacyOption = selected && !selectedIsListed ? `<option value="${esc(selected)}" selected>${esc(selected)} — responsável atual</option>` : '';
   return `<option value="">Selecione o responsável...</option>${legacyOption}${people.map(person=>`<option value="${esc(person.name)}" ${person.name===selected?'selected':''}>${esc(person.name)}${person.role?` — ${esc(person.role)}`:''}</option>`).join('')}`;
@@ -2743,8 +3014,11 @@ function setUserManagementTab(tab) {
 }
 
 function renderUserManagementBody(pendingList, approvedList, rejectedList = []) {
-  const uniqueCompanies = [...new Set(workforce.map(p => p?.company).filter(Boolean))].sort(safeSort);
-  const uniquePeople = [...new Set(workforce.map(p => p?.name).filter(Boolean))].sort(safeSort);
+  const deletedKeys = new Set(getDeletedUserKeys().map(k => String(k).trim().toLowerCase()));
+  const uniqueCompanies = getAvailableCompanies();
+  const uniquePeople = [...new Set(workforce.map(p => p?.name).filter(Boolean))]
+    .filter(p => !deletedKeys.has(p.trim().toLowerCase()) && !p.toLowerCase().includes('wallace') && !p.toLowerCase().includes('walace'))
+    .sort(safeSort);
 
   if (userManagementTab === 'pendentes') {
     if (pendingList.length === 0) {
@@ -2921,13 +3195,7 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
             <input type="text" id="inviteNameInput" name="name" value="${esc(inviteDraft.name || '')}" placeholder="Ex: Carlos Eduardo" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;" oninput="inviteDraft.name=this.value" onchange="inviteDraft.name=this.value" />
           </div>
 
-          <div class="field full" style="margin-bottom:14px;">
-            <label style="display:block; font-weight:700; margin-bottom:4px;">Empresa / Subempreiteira</label>
-            <select id="inviteCompanySelect" name="company" onchange="inviteDraft.company=this.value" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;">
-              <option value="">Selecione ou deixe em branco...</option>
-              ${uniqueCompanies.map(c => `<option value="${esc(c)}" ${(inviteDraft.company||'')===c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
-            </select>
-          </div>
+          ${renderCompanySelectHtml({ idPrefix: 'inviteTabCompany', currentValue: inviteDraft.company || '', required: false, label: 'Empresa / Subempreiteira' })}
 
           <div class="field full" style="margin-bottom:14px;">
             <label style="display:block; font-weight:700; margin-bottom:4px;">Nível de Acesso Autorizado <em>*</em></label>
@@ -2962,7 +3230,8 @@ function handleSelectWorkforcePerson(selectEl) {
       nameInput.value = name;
       if (typeof inviteDraft !== 'undefined') inviteDraft.name = name;
     }
-    const companySelect = form.querySelector('select[name="company"]');
+    const companySelect = form.querySelector('#inviteTabCompanyCompanySelect') || form.querySelector('select[name="company"]');
+    const finalInput = form.querySelector('#inviteTabCompanyCompanyFinalInput');
     if (companySelect && company) {
       let optionFound = [...companySelect.options].find(o => o.value.trim().toLowerCase() === company.trim().toLowerCase());
       if (!optionFound) {
@@ -2972,6 +3241,7 @@ function handleSelectWorkforcePerson(selectEl) {
       } else {
         companySelect.value = optionFound.value;
       }
+      if (finalInput) finalInput.value = company;
       if (typeof inviteDraft !== 'undefined') inviteDraft.company = company;
     }
   }
@@ -3065,14 +3335,38 @@ async function deleteUserAccess(id, email) {
 
   const targetEmail = (user?.email || email || '').trim().toLowerCase();
   const targetId = user?.id || id;
+  const targetName = (user?.name || '').trim().toLowerCase();
+
+  if (targetEmail) addDeletedUserKey(targetEmail);
+  if (targetId) addDeletedUserKey(targetId);
+  if (targetName) addDeletedUserKey(targetName);
 
   userApprovals = userApprovals.filter(u => {
     if (!u) return false;
-    if (targetEmail && u.email && u.email.trim().toLowerCase() === targetEmail) return false;
-    if (targetId && u.id && u.id === targetId) return false;
+    const uEmail = (u.email || '').trim().toLowerCase();
+    const uId = u.id || '';
+    const uName = (u.name || '').trim().toLowerCase();
+    if (targetEmail && uEmail === targetEmail) return false;
+    if (targetId && uId === targetId) return false;
+    if (targetName && uName === targetName) return false;
     return true;
   });
   localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
+
+  if (currentUser) {
+    const cEmail = (currentUser.email || '').trim().toLowerCase();
+    const cId = currentUser.id || '';
+    const cName = (currentUser.name || '').trim().toLowerCase();
+    if ((targetEmail && cEmail === targetEmail) || (targetId && cId === targetId) || (targetName && cName === targetName)) {
+      currentUser = null;
+      localStorage.removeItem('obraflow_user');
+    }
+  }
+
+  if (targetName && typeof workforce !== 'undefined' && Array.isArray(workforce)) {
+    workforce = workforce.filter(w => (w?.name || '').trim().toLowerCase() !== targetName);
+    localStorage.setItem('obraflow_workforce', JSON.stringify(workforce));
+  }
 
   try {
     if (targetId && isValidUUID(targetId)) {
