@@ -1011,10 +1011,28 @@ function formatSpoolTime(raw) {
 }
 
 // Cria timestamp ISO combinando data local e hora local selecionada
+// Extrai string YYYY-MM-DD no fuso local a partir de qualquer string de data/ISO
+function formatSpoolLocalDate(raw) {
+  if (!raw) return '';
+  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  try {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) return getLocalDateStr(d);
+  } catch (e) {}
+  return String(raw).slice(0, 10);
+}
+
 function buildIsoFromLocalDateAndTime(dateStr, timeStr) {
   if (!dateStr) return '';
   const time = timeStr && /^\d{2}:\d{2}/.test(timeStr) ? timeStr.slice(0, 5) : getLocalTimeStr();
-  const [year, month, day] = dateStr.split('-').map(Number);
+  let year, month, day;
+  if (dateStr.includes('-')) {
+    [year, month, day] = dateStr.split('-').map(Number);
+  } else if (dateStr.includes('/')) {
+    [day, month, year] = dateStr.split('/').map(Number);
+  } else {
+    return '';
+  }
   const [hours, minutes] = time.split(':').map(Number);
   const d = new Date(year, month - 1, day, hours || 0, minutes || 0, 0);
   return d.toISOString();
@@ -1077,10 +1095,20 @@ function spoolFilterList(sourceList) {
       }
     }
 
-    // 3. Filtro por Status
+    // 3. Filtro por Status e por Data do Apontamento
     if (spoolStatusFilter !== 'all') {
       if (spoolStatusFilter === 'pending' || spoolStatusFilter === 'not-started') {
         if (s.status !== 'not-started') return false;
+      } else if (spoolStatusFilter === 'installed_on_date') {
+        const isInst = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
+        if (!isInst) return false;
+      } else if (spoolStatusFilter === 'received_on_date') {
+        const isRec = (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate));
+        if (!isRec) return false;
+      } else if (spoolStatusFilter === 'activity_on_date') {
+        const isInst = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
+        const isRec = (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate));
+        if (!isInst && !isRec) return false;
       } else if (s.status !== spoolStatusFilter) {
         return false;
       }
@@ -1102,11 +1130,11 @@ function spoolFilterList(sourceList) {
     if (spoolListFilter === 'branch' && s.type !== 'branch') return false;
     if (spoolListFilter === 'pending' && s.status !== 'not-started') return false;
     if (spoolListFilter === 'installed_today') {
-      const isInst = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && s.installedAt.startsWith(targetDate)));
+      const isInst = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
       if (!isInst) return false;
     }
     if (spoolListFilter === 'received_today') {
-      const isRec = (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && s.receivedAt.startsWith(targetDate)));
+      const isRec = (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate));
       if (!isRec) return false;
     }
 
@@ -1176,8 +1204,8 @@ function renderSpools() {
   const valveDone = valveSpools.filter(s => s.status === 'installed').length;
   const branchDone = branchSpools.filter(s => s.status === 'installed').length;
 
-  const installedToday = baseSectorSpools.filter(s => s.status === 'installed' && (s.installedDate === filterDate || (s.installedAt && s.installedAt.startsWith(filterDate))));
-  const receivedToday = baseSectorSpools.filter(s => (s.status === 'received' || s.status === 'installed') && (s.receivedDate === filterDate || (s.receivedAt && s.receivedAt.startsWith(filterDate))));
+  const installedToday = baseSectorSpools.filter(s => s.status === 'installed' && (s.installedDate === filterDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === filterDate)));
+  const receivedToday = baseSectorSpools.filter(s => (s.status === 'received' || s.status === 'installed') && (s.receivedDate === filterDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === filterDate)));
   const totalPending = baseSectorSpools.filter(s => s.status === 'not-started').length;
   const totalInstalled = baseSectorSpools.filter(s => s.status === 'installed').length;
 
@@ -1334,8 +1362,11 @@ function renderSpools() {
         <select id="spoolFilterStatusSelect" class="spool-filter-select" onchange="spoolSetStatusFilter(this.value)">
           <option value="all" ${spoolStatusFilter === 'all' ? 'selected' : ''}>Todos os Status</option>
           <option value="not-started" ${spoolStatusFilter === 'not-started' ? 'selected' : ''}>⚪ Pendente</option>
-          <option value="received" ${spoolStatusFilter === 'received' ? 'selected' : ''}>🟡 Recebido</option>
-          <option value="installed" ${spoolStatusFilter === 'installed' ? 'selected' : ''}>🟢 Instalado</option>
+          <option value="received" ${spoolStatusFilter === 'received' ? 'selected' : ''}>🟡 Recebido (Geral)</option>
+          <option value="installed" ${spoolStatusFilter === 'installed' ? 'selected' : ''}>🟢 Instalado (Geral)</option>
+          <option value="installed_on_date" ${spoolStatusFilter === 'installed_on_date' ? 'selected' : ''}>🟢 Instalados no Dia (${formatSpoolDateShort(filterDate)})</option>
+          <option value="received_on_date" ${spoolStatusFilter === 'received_on_date' ? 'selected' : ''}>🟡 Recebidos no Dia (${formatSpoolDateShort(filterDate)})</option>
+          <option value="activity_on_date" ${spoolStatusFilter === 'activity_on_date' ? 'selected' : ''}>⚡ Atividade no Dia (${formatSpoolDateShort(filterDate)})</option>
         </select>
       </div>
 
@@ -1358,6 +1389,20 @@ function renderSpools() {
             <option value="${esc(d)}" ${spoolDiameterFilter === d ? 'selected' : ''}>${esc(d)}</option>
           `).join('')}
         </select>
+      </div>
+
+      <!-- Filtro por Dia do Fechamento / Apontamento -->
+      <div class="spool-filter-group">
+        <label class="spool-filter-label" for="spoolMainDateFilter">📅 Filtrar por Dia:</label>
+        <div style="display:flex; align-items:center; gap:4px;">
+          <input type="date" id="spoolMainDateFilter" class="spool-filter-input" value="${filterDate}" onchange="spoolSetSelectedDate(this.value)" style="height:36px; padding:0 8px; font-weight:700; background:#ffffff; border:1.5px solid #cbd5e1; border-radius:6px; cursor:pointer;" title="Clique para escolher a data de apontamento">
+          <button type="button" class="button compact ${filterDate === todayStr ? 'button-green' : 'button-outline'}" onclick="spoolSetSelectedDate('${todayStr}')" style="height:36px; padding:0 8px; font-size:11px; font-weight:800;" title="Ver spools de hoje">
+            Hoje
+          </button>
+          <button type="button" class="button compact button-outline" onclick="spoolSetSelectedDate('${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}')" style="height:36px; padding:0 8px; font-size:11px; font-weight:800;" title="Ver spools de ontem">
+            Ontem
+          </button>
+        </div>
       </div>
 
       <!-- Campo de Busca Textual -->
@@ -1441,6 +1486,36 @@ function renderSpools() {
             </button>
             <button type="button" class="button button-dark compact" onclick="spoolOpenReportPDF('daily')" style="font-weight:800; display:inline-flex; align-items:center; gap:6px;">
               📄 Relatório PDF
+            </button>
+          </div>
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- BANNER SE A ABA DE RECEBIDOS HOJE ESTIVER ATIVA -->
+    ${spoolListFilter === 'received_today' ? `
+      <div class="spool-installed-today-banner" style="background:linear-gradient(135deg, #fefce8, #fef08a); border:1.5px solid #ca8a04; color:#713f12; box-shadow:0 4px 15px rgba(202,138,4,0.15);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="spool-pulse-beacon" style="background:#eab308; box-shadow:0 0 0 0 rgba(234,179,8,0.7);"></span>
+              <h3 style="margin:0; font-size:16px; font-weight:800; color:#854d0e;">
+                🟡 TUBOS RECEBIDOS NO DIA (${receivedToday.length} peças)
+              </h3>
+            </div>
+            <p style="margin:4px 0 0; font-size:12px; color:#854d0e;">
+              Peças descarregadas e conferidas em <strong>${formatSpoolDateDisplay(filterDate)}</strong> · ${sectorMeta.name} (${spoolActiveDh}).
+            </p>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <label style="font-size:12px; font-weight:700; color:#854d0e; display:flex; align-items:center; gap:6px;">
+              📅 Data:
+              <input type="date" value="${filterDate}" onchange="spoolSetSelectedDate(this.value)" class="spool-date-input" style="background:#ffffff; color:#0f172a; border-color:#ca8a04;">
+            </label>
+            <button type="button" class="button button-outline compact" style="color:#854d0e; border-color:#ca8a04; background:#ffffff; font-weight:700;" onclick="spoolSetSelectedDate('${todayStr}')">Hoje</button>
+            <button type="button" class="button button-outline compact" style="color:#854d0e; border-color:#ca8a04; background:#ffffff; font-weight:700;" onclick="spoolSetSelectedDate('${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}')">Ontem</button>
+            <button type="button" class="button button-green compact" onclick="spoolCopyDailyReport('${filterDate}')">
+              📋 Copiar Lista p/ WhatsApp
             </button>
           </div>
         </div>
@@ -1773,7 +1848,7 @@ function spoolRenderTubeTable(list, filterDate) {
                   <td style="padding:10px 14px;">
                     ${s.receivedDate ? `
                       <span style="display:inline-block; font-size:12px; font-weight:800; color:#0369a1; background:#f0f9ff; padding:3px 8px; border-radius:6px; border:1px solid #bae6fd;">
-                        🟡 ${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` <small style="font-weight:600; color:#0284c7;">${s.receivedAt.slice(11, 16)}</small>` : ''}
+                        🟡 ${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` <small style="font-weight:600; color:#0284c7;">${formatSpoolTime(s.receivedAt)}</small>` : ''}
                       </span>
                       ${s.receivedBy ? `<small style="font-size:10px; color:#64748b; display:block; margin-top:2px;">Por: ${esc(s.receivedBy)}</small>` : ''}
                     ` : `
@@ -1783,7 +1858,7 @@ function spoolRenderTubeTable(list, filterDate) {
                   <td style="padding:10px 14px;">
                     ${s.installedDate ? `
                       <span style="display:inline-block; font-size:12px; font-weight:900; color:#047857; background:#f0fdf4; padding:3px 8px; border-radius:6px; border:1px solid #86efac;">
-                        🟢 ${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` <small style="font-weight:700; color:#15803d;">${s.installedAt.slice(11, 16)}</small>` : ''}
+                        🟢 ${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` <small style="font-weight:700; color:#15803d;">${formatSpoolTime(s.installedAt)}</small>` : ''}
                       </span>
                       ${s.installedBy ? `<small style="font-size:10px; color:#166534; font-weight:700; display:block; margin-top:2px;">Por: ${esc(s.installedBy)}</small>` : ''}
                     ` : `
@@ -1848,6 +1923,7 @@ function spoolClearAllFilters() {
   spoolDiameterFilter = 'all';
   spoolListFilter = 'all';
   spoolSearchTerm = '';
+  spoolSelectedDate = getLocalDateStr();
   spoolActiveSector = 'all';
   spoolActiveDh = 'ALL';
   localStorage.setItem('obraflow_spool_active_sector', 'all');
@@ -1954,9 +2030,9 @@ function spoolOpenExportModal() {
     spoolActiveDh !== 'ALL'
   );
 
-  const targetDate = spoolSelectedDate || new Date().toISOString().slice(0, 10);
+  const targetDate = spoolSelectedDate || getLocalDateStr();
   const formattedDate = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
-  const installedTodayCount = spoolDb.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && s.installedAt.startsWith(targetDate)))).length;
+  const installedTodayCount = spoolDb.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate))).length;
 
   const activeSectorName = spoolActiveSector === 'all' ? 'Todos os Setores' : (SPOOL_SECTORS[spoolActiveSector]?.name || spoolActiveSector);
 
@@ -2304,8 +2380,8 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
     if (spoolActiveDh !== 'ALL') exportDhTitle += `_${spoolActiveDh.replace(/\s+/g, '_')}`;
     if (spoolActiveSector !== 'all') exportDhTitle += `_${spoolActiveSector}`;
   } else if (scope === 'daily') {
-    const targetDate = spoolSelectedDate || new Date().toISOString().slice(0, 10);
-    const dailyItems = spoolDb.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && s.installedAt.startsWith(targetDate))));
+    const targetDate = spoolSelectedDate || getLocalDateStr();
+    const dailyItems = spoolDb.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate)));
     if (!dailyItems.length) {
       return toast(`Nenhum spool instalado em ${new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR')} para exportar.`, true);
     }
@@ -2317,7 +2393,7 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
     return toast('Nenhum spool cadastrado para exportar.', true);
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalDateStr();
   let filename = `Planilha_Spools_Completa_${exportDhTitle}_${todayStr}.xlsx`;
   let toastMsg = `📥 Planilha com listas suspensas (${listToExport.length} spools) baixada com sucesso!`;
   if (scope === 'filtered') {
@@ -3101,7 +3177,7 @@ function spoolBulkSetStatus(newStatus) {
 
   const idSet = new Set(ids);
   const now = new Date().toISOString();
-  const dateStr = now.slice(0, 10);
+  const dateStr = getLocalDateStr();
   const user = currentUser?.name || 'Operador';
 
   spoolDb = spoolDb.map(s => {
@@ -3254,7 +3330,7 @@ function spoolSaveManualBatch(event) {
    ========================================================================== */
 
 function spoolOpenReportPDF(scope = 'daily') {
-  const targetDate = spoolSelectedDate || new Date().toISOString().slice(0, 10);
+  const targetDate = spoolSelectedDate || getLocalDateStr();
   const formattedDate = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
   const nowFormatted = new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
@@ -3265,7 +3341,7 @@ function spoolOpenReportPDF(scope = 'daily') {
   let reportSubtitle = `Fechamento Diário de Instalação · ${sectorMeta.name} · ${dhLabel} · Data: ${formattedDate}`;
   let items = [];
 
-  const dailyInstalled = spoolDb.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && s.installedAt.startsWith(targetDate))));
+  const dailyInstalled = spoolDb.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate)));
   const filteredList = spoolFilterList(spoolDb);
 
   if (scope === 'daily') {
@@ -3500,11 +3576,11 @@ function spoolOpenReportPDF(scope = 'daily') {
    ========================================================================== */
 
 function spoolCopyDailyReport(dateStr = '') {
-  const targetDate = dateStr || spoolSelectedDate || new Date().toISOString().slice(0, 10);
+  const targetDate = dateStr || spoolSelectedDate || getLocalDateStr();
   const sectorSpools = spoolDb.filter(s => (spoolActiveSector === 'all' || s.area === spoolActiveSector) && (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh)));
   const sectorMeta = SPOOL_SECTORS[spoolActiveSector] || { name: 'Todos os Setores' };
 
-  const installed = sectorSpools.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && s.installedAt.startsWith(targetDate))));
+  const installed = sectorSpools.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate)));
   const straight = installed.filter(s => s.type === 'straight');
   const branches = installed.filter(s => s.type === 'branch');
 
@@ -3588,7 +3664,7 @@ function spoolOpenTrackingModal(spoolId) {
   const isInst = spool.status === 'installed';
   const isRec = spool.status === 'received';
   const sector = SPOOL_SECTORS[spool.area] || { name: spool.area || 'Setor da Obra' };
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalDateStr();
 
   modal(`
     <div style="padding:18px;">
@@ -3623,7 +3699,7 @@ function spoolOpenTrackingModal(spoolId) {
               <strong style="font-size:13px; color:#0369a1; display:flex; align-items:center; gap:6px;">
                 <span>🟡</span> 1. Data de Recebimento na Obra
               </strong>
-              ${spool.receivedDate ? `<span style="font-size:11px; font-weight:800; color:#0284c7; background:#e0f2fe; padding:2px 8px; border-radius:4px;">CONFIRMADO (${formatSpoolDateDisplay(spool.receivedDate)})</span>` : '<span style="font-size:11px; font-weight:700; color:#94a3b8;">NÃO RECEBIDO</span>'}
+              ${spool.receivedDate ? `<span style="font-size:11px; font-weight:800; color:#0284c7; background:#e0f2fe; padding:2px 8px; border-radius:4px;">CONFIRMADO (${formatSpoolDateDisplay(spool.receivedDate)})${spool.receivedAt ? ` às ${formatSpoolTime(spool.receivedAt)}` : ''}</span>` : '<span style="font-size:11px; font-weight:700; color:#94a3b8;">NÃO RECEBIDO</span>'}
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
               <div>
