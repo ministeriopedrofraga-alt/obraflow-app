@@ -344,6 +344,59 @@ function addDeletedUserKey(key) {
   }
 }
 
+const SYSTEM_ADMIN_EMAILS = new Set([
+  'pedro.alves@heatingcooling.com.br'
+]);
+
+function normalizeAccessRole(role) {
+  const key = String(role || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ');
+
+  if (['admin', 'administrador', 'administradora', 'administrator', 'super admin', 'superadmin'].includes(key)) return 'admin';
+  if (['gestor', 'gestora', 'gestor de obra', 'gestora de obra', 'manager', 'gerente', 'almoxarife'].includes(key)) return 'gestor';
+  if (['engenheiro', 'engenheira', 'engenheiro fiscal', 'fiscal'].includes(key)) return 'engenheiro';
+  if (['operator', 'operador', 'operadora', 'operador de campo', 'tecnico', 'tecnica'].includes(key)) return 'operador';
+  return key || 'operador';
+}
+
+function isSystemAdminEmail(email) {
+  return SYSTEM_ADMIN_EMAILS.has(String(email || '').trim().toLowerCase());
+}
+
+function getEffectiveAccessRole(user = currentUser) {
+  if (!user) return 'visitante';
+  if (isSystemAdminEmail(user.email)) return 'admin';
+
+  let role = normalizeAccessRole(user.role || user.accessRole || user.access_role);
+  if (typeof userApprovals !== 'undefined' && Array.isArray(userApprovals)) {
+    const email = String(user.email || '').trim().toLowerCase();
+    const approval = userApprovals.find(item =>
+      (user.id && item?.id === user.id) ||
+      (email && String(item?.email || '').trim().toLowerCase() === email)
+    );
+    if (approval && (approval.status === 'approved' || approval.status === 'active')) {
+      role = normalizeAccessRole(approval.role || role);
+    }
+  }
+  return role;
+}
+
+function accessRoleLabel(role) {
+  const labels = {
+    admin: 'Administrador',
+    gestor: 'Gestor de obra',
+    engenheiro: 'Engenheiro / Fiscal',
+    operador: 'Operador de campo',
+    visitante: 'Visitante'
+  };
+  return labels[normalizeAccessRole(role)] || 'Colaborador da obra';
+}
+
 let currentPage = 'dashboard';
 let currentUser = null;
 try {
@@ -358,6 +411,11 @@ try {
       localStorage.removeItem('obraflow_user');
     } else {
       currentUser = parsed;
+      const normalizedRole = isSystemAdminEmail(currentUser.email) ? 'admin' : normalizeAccessRole(currentUser.role || currentUser.accessRole || currentUser.access_role);
+      if (currentUser.role !== normalizedRole) {
+        currentUser.role = normalizedRole;
+        localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
+      }
     }
   }
 } catch(e) {}
@@ -633,7 +691,8 @@ async function saveUserApprovalToSupabase(record) {
 }
 
 function isAdmin() {
-  return !!(currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'gestor'));
+  const role = getEffectiveAccessRole();
+  return role === 'admin' || role === 'gestor';
 }
 
 function updateAppShellAccess() {
@@ -684,7 +743,7 @@ function updateAppShellAccess() {
         }
       }
       if (nameEl) nameEl.textContent = name;
-      const roleName = currentUser.role === 'admin' ? 'Administrador' : (currentUser.role === 'manager' || currentUser.role === 'gestor') ? 'Gestor de Obra' : currentUser.role === 'engenheiro' ? 'Engenheiro' : 'Operador de Campo';
+      const roleName = accessRoleLabel(getEffectiveAccessRole());
       const compName = currentUser.company ? ` · ${currentUser.company}` : '';
       if (roleEl) roleEl.textContent = `${roleName}${compName}`;
     } else {
@@ -699,6 +758,11 @@ function updateAppShellAccess() {
   if (badge) {
     badge.textContent = pendingCount;
     badge.style.display = (isAuth && pendingCount > 0) ? 'inline-block' : 'none';
+  }
+
+  const userManagementLink = document.querySelector('.nav-link[data-page="usuarios"]');
+  if (userManagementLink) {
+    userManagementLink.style.display = (isAuth && isAdm) ? '' : 'none';
   }
 
   const topActions = document.querySelector('.top-actions');
@@ -737,17 +801,6 @@ function finishAuthenticationRoute() {
   if (['convite', 'invite', 'login', 'acesso', 'signup', 'cadastrar'].includes(route)) {
     location.hash = '#dashboard';
   }
-}
-
-function accessRoleLabel(role) {
-  const labels = {
-    admin: 'Administrador',
-    manager: 'Gestor de obra',
-    gestor: 'Gestor de obra',
-    engenheiro: 'Engenheiro / Fiscal',
-    operador: 'Operador de campo'
-  };
-  return labels[role] || 'Colaborador da obra';
 }
 
 function renderAccessLanding(mode, params) {
@@ -1259,7 +1312,7 @@ async function submitUserLogin(event) {
         id: match.id,
         email: match.email,
         name: match.name,
-        role: match.role || 'gestor',
+        role: isSystemAdminEmail(match.email) ? 'admin' : normalizeAccessRole(match.role || 'gestor'),
         company: match.company || 'Obra',
         photo: match.photo || undefined
       };
@@ -1290,7 +1343,7 @@ async function submitUserLogin(event) {
           id: authData.user.id,
           email: authData.user.email,
           name: authData.user.user_metadata?.name || email.split('@')[0],
-          role: authData.user.user_metadata?.role || 'admin',
+          role: isSystemAdminEmail(authData.user.email) ? 'admin' : normalizeAccessRole(authData.user.user_metadata?.role || 'admin'),
           company: authData.user.user_metadata?.company || 'Heating Cooling'
         };
         localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
@@ -1413,7 +1466,7 @@ async function submitInviteActivation(event) {
     id: match.id,
     email: match.email,
     name: match.name,
-    role: match.role || 'gestor',
+    role: isSystemAdminEmail(match.email) ? 'admin' : normalizeAccessRole(match.role || 'gestor'),
     company: match.company || 'Obra',
     photo: match.photo || undefined
   };
@@ -1444,8 +1497,8 @@ function openUserProfileModal() {
   const name = currentUser.name || currentUser.email || '';
   const email = currentUser.email || '';
   const company = currentUser.company || '';
-  const role = currentUser.role || 'operador';
-  const roleLabel = role === 'admin' ? 'Administrador' : role === 'manager' || role === 'gestor' ? 'Gestor de Obra' : role === 'engenheiro' ? 'Engenheiro' : 'Operador de Campo';
+  const role = getEffectiveAccessRole();
+  const roleLabel = accessRoleLabel(role);
   const initials = (name.split(' ').map(n=>n[0]).join('').substring(0, 2) || 'US').toUpperCase();
 
   modal(`
