@@ -59,6 +59,123 @@ const SPOOL_SECTORS = {
   'rmus': { id: 'rmus', name: 'Salas RMUs', icon: '🔌', line: 'Distribuição Elétrica & Refrigeração' }
 };
 
+// Árvore Hierárquica de Áreas e Subtipos (Preparada para os ramos e sub-áreas da obra)
+const SPOOL_AREA_TREE = {
+  'cag': {
+    id: 'cag',
+    name: 'CAG (Central de Água Gelada)',
+    icon: '❄️',
+    subAreas: [
+      { id: 'chillers', name: 'Chillers' },
+      { id: 'bombas-primarias', name: 'Bombas Primárias (CWP/PCH)' },
+      { id: 'bombas-secundarias', name: 'Bombas Secundárias (SCH)' },
+      { id: 'torres', name: 'Torres de Resfriamento' },
+      { id: 'barramento-cag', name: 'Barramento / Coletor CAG' },
+      { id: 'geral-cag', name: 'Geral CAG' }
+    ]
+  },
+  'supercore': {
+    id: 'supercore',
+    name: 'SUPERCORE',
+    icon: '⚡',
+    subAreas: [
+      { id: 'prumadas', name: 'Prumadas Principais' },
+      { id: 'barramento-sc', name: 'Barramento Supercore' },
+      { id: 'fw-feeds', name: 'Alimentadores Fanwalls' }
+    ]
+  },
+  'fw-a': {
+    id: 'fw-a',
+    name: 'Corredor FW A',
+    icon: '🏢',
+    subAreas: [
+      { id: 'ramal-fw-a', name: 'Ramais FW A' },
+      { id: 'linha-mestra-a', name: 'Linha Mestra FW A' }
+    ]
+  },
+  'fw-b': {
+    id: 'fw-b',
+    name: 'Corredor FW B',
+    icon: '🏢',
+    subAreas: [
+      { id: 'ramal-fw-b', name: 'Ramais FW B' },
+      { id: 'linha-mestra-b', name: 'Linha Mestra FW B' }
+    ]
+  },
+  'gerador': {
+    id: 'gerador',
+    name: 'Corredor Gerador',
+    icon: '⚙️',
+    subAreas: [
+      { id: 'arrefecimento', name: 'Arrefecimento Geradores' },
+      { id: 'combustivel', name: 'Combustível / Diesel' }
+    ]
+  },
+  'eletricas': {
+    id: 'eletricas',
+    name: 'Salas Elétricas',
+    icon: '💡',
+    subAreas: [
+      { id: 'infra-eletrica', name: 'Infraestrutura HVAC' }
+    ]
+  },
+  'rmus': {
+    id: 'rmus',
+    name: 'Salas RMUs',
+    icon: '🔌',
+    subAreas: [
+      { id: 'infra-rmus', name: 'Infraestrutura RMUs' }
+    ]
+  }
+};
+
+function spoolTextKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function spoolCanonicalSubArea(value, sectorId = '') {
+  const valueKey = spoolTextKey(value);
+  if (!valueKey) return '';
+
+  const trees = sectorId && SPOOL_AREA_TREE[sectorId]
+    ? [SPOOL_AREA_TREE[sectorId]]
+    : Object.values(SPOOL_AREA_TREE);
+
+  for (const tree of trees) {
+    const match = (tree.subAreas || []).find(sub => {
+      const idKey = spoolTextKey(sub.id);
+      const nameKey = spoolTextKey(sub.name);
+      return valueKey === idKey || valueKey === nameKey;
+    });
+    if (match) return match.id;
+  }
+
+  return valueKey;
+}
+
+function spoolDisplayNumber(spool) {
+  if (!spool) return '';
+  return `${spool.number || ''}${spool.part ? ` (${spool.part})` : ''}`;
+}
+
+function spoolBuildStableId(spool) {
+  const parts = [
+    'spool',
+    normalizeDh(spool.dh),
+    normalizeSector(spool.area),
+    spool.number,
+    spool.part || spool.seq || '',
+    spool.circuit || '',
+    spoolCanonicalSubArea(spool.subArea, normalizeSector(spool.area))
+  ].map(spoolTextKey).filter(Boolean);
+  return parts.join('-');
+}
+
 // 34 Spools Oficiais do SUPERCORE DH 04 (Identificados a partir do esquema do tablet)
 // 45 Spools Oficiais do Projeto (34 SUPERCORE DH 04 + 11 Corredor FW A DH 08)
 const DEFAULT_OFFICIAL_SPOOLS = [
@@ -847,8 +964,8 @@ function spoolLoadAll() {
     console.error('Erro ao ler spools:', e);
   }
 
-  // Se a lista estiver vazia ou com mais de 50 spools (duplicatas antigas do v4), restaura os 45 corretos do localhost
-  if (!list.length || list.length > 50) {
+  // Se a lista estiver vazia no primeiro carregamento, inicializa com os spools oficiais
+  if (!list.length) {
     list = DEFAULT_OFFICIAL_SPOOLS.map(s => ({ ...s }));
   } else {
     list = spoolDeduplicateList(list);
@@ -873,20 +990,25 @@ function spoolSaveAll(spools) {
   }
 }
 
-// Deduplicação estrita de spools por DH, Setor e TAG
+// Deduplicação estrita de spools por DH, Setor, TAG e Parte/Sequência (ex: 1 de 2)
 function spoolDeduplicateList(list) {
   const map = new Map();
   (list || []).forEach(s => {
     if (!s || !s.number) return;
     const normDh = normalizeDh(s.dh);
     const normSec = normalizeSector(s.area);
-    const key = `${normDh}_${normSec}_${s.number}_${s.circuit || ''}`;
+    const numberKey = spoolTextKey(s.number);
+    const partKey = spoolTextKey(s.part || s.seq || '');
+    const subKey = spoolCanonicalSubArea(s.subArea, normSec);
+    const circuitKey = spoolTextKey(s.circuit || '');
+    // O identificador lógico remove duplicatas reais, mas preserva partes e subáreas distintas.
+    const key = `${normDh}_${normSec}_${numberKey}_${partKey}_${circuitKey}_${subKey}`;
     const existing = map.get(key);
     if (!existing) {
       map.set(key, { ...s, dh: normDh, area: normSec });
     } else {
-      const t1 = new Date(s.installedAt || s.receivedAt || 0).getTime();
-      const t2 = new Date(existing.installedAt || existing.receivedAt || 0).getTime();
+      const t1 = new Date(s.installedAt || s.receivedAt || s.rejectedAt || 0).getTime();
+      const t2 = new Date(existing.installedAt || existing.receivedAt || existing.rejectedAt || 0).getTime();
       if (t1 > t2 || (s.status === 'installed' && existing.status !== 'installed')) {
         map.set(key, { ...existing, ...s, dh: normDh, area: normSec });
       }
@@ -895,12 +1017,12 @@ function spoolDeduplicateList(list) {
   return Array.from(map.values());
 }
 
-// Merge inteligente: Supabase oficial tem prioridade sobre caches locais corrompidos
+// Merge inteligente: Supabase tem prioridade total e sincroniza planilhas completas
 function spoolMergeLists(localList, remoteList) {
-  if (Array.isArray(remoteList) && remoteList.length > 0 && remoteList.length <= 50) {
+  if (Array.isArray(remoteList) && remoteList.length > 0) {
     return spoolDeduplicateList(remoteList);
   }
-  return spoolDeduplicateList(localList);
+  return spoolDeduplicateList(localList || []);
 }
 
 // Sync com Supabase (app_metadata - spool_registry)
@@ -1052,6 +1174,7 @@ if (spoolDb.length > 0) {
 // Estado da Aplicação
 // Se o setor ou DH gravados estiverem vazios de dados enquanto houver spools, inicia com 'all' para garantir visualização imediata
 let spoolActiveSector = localStorage.getItem('obraflow_spool_active_sector') || 'all';
+let spoolActiveSubArea = localStorage.getItem('obraflow_spool_active_subarea') || 'all';
 let spoolActiveDh = localStorage.getItem('obraflow_spool_active_dh') || 'ALL';
 let spoolStatusFilter = 'all'; // 'all', 'not-started', 'received', 'installed', 'rejected'
 let spoolTypeFilter = 'all'; // 'all', 'straight', 'valve', 'branch'
@@ -1060,6 +1183,14 @@ let spoolListFilter = 'all';
 let spoolSearchTerm = '';
 let spoolSelectedDate = getLocalDateStr(); // YYYY-MM-DD no fuso local
 let spoolDateFilterMode = 'all'; // 'all' (todas as datas), 'activity' (atividade no dia), 'installed' (instalados no dia), 'received' (recebidos no dia)
+let spoolSafeTapMode = localStorage.getItem('obraflow_spool_safe_tap') !== 'false'; // Padrão: Modo Seguro (sem risco de desmarcar no tablet)
+let spoolMapCollapsed = localStorage.getItem('obraflow_spool_map_collapsed') === 'true'; // Recolher mapa de spools
+let spoolMultiSelectMode = false;
+let spoolSelectedIds = new Set();
+
+if (spoolActiveSector === 'all') {
+  spoolActiveSubArea = 'all';
+}
 
 function formatSpoolDateDisplay(d) {
   if (!d) return '—';
@@ -1087,6 +1218,15 @@ function spoolFilterList(sourceList) {
     // 1. Filtro por Setor
     if (spoolActiveSector !== 'all' && s.area !== spoolActiveSector) {
       return false;
+    }
+
+    // 1.1 Filtro por Subtipo de Área (Árvore Hierárquica)
+    if (spoolActiveSubArea !== 'all') {
+      const sSub = spoolCanonicalSubArea(s.subArea, s.area);
+      const targetSub = spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector);
+      if (sSub !== targetSub) {
+        return false;
+      }
     }
 
     // 2. Filtro por Data Hall (DH) com normalização
@@ -1158,16 +1298,18 @@ function spoolFilterList(sourceList) {
       if (!isRec) return false;
     }
 
-    // 7. Busca Textual por Tag, DH, Setor, Diâmetro ou Observações
+    // 8. Busca Textual por Tag, Parte, DH, Setor, Subárea, Diâmetro ou Observações
     if (spoolSearchTerm) {
       const q = spoolSearchTerm.toLowerCase().trim();
       const matchTag = (s.number || '').toLowerCase().includes(q);
+      const matchPart = (s.part || s.seq || '').toLowerCase().includes(q);
+      const matchSub = (s.subArea || '').toLowerCase().includes(q);
       const matchDh = (s.dh || '').toLowerCase().includes(q);
       const secName = (SPOOL_SECTORS[s.area]?.name || s.area || '').toLowerCase();
       const matchSec = secName.includes(q);
       const matchDia = (s.diameter || '').toLowerCase().includes(q);
       const matchNotes = (s.notes || '').toLowerCase().includes(q);
-      if (!matchTag && !matchDh && !matchSec && !matchDia && !matchNotes) {
+      if (!matchTag && !matchPart && !matchSub && !matchDh && !matchSec && !matchDia && !matchNotes) {
         return false;
       }
     }
@@ -1179,6 +1321,7 @@ function spoolFilterList(sourceList) {
 // Ação rápida: se a tela estiver zerada por filtro, abre tudo para mostrar os spools
 function spoolShowAllMySpools() {
   spoolActiveSector = 'all';
+  spoolActiveSubArea = 'all';
   spoolActiveDh = 'ALL';
   spoolStatusFilter = 'all';
   spoolTypeFilter = 'all';
@@ -1187,6 +1330,7 @@ function spoolShowAllMySpools() {
   spoolDateFilterMode = 'all';
   spoolSearchTerm = '';
   localStorage.setItem('obraflow_spool_active_sector', 'all');
+  localStorage.setItem('obraflow_spool_active_subarea', 'all');
   localStorage.setItem('obraflow_spool_active_dh', 'ALL');
   renderSpools();
   toast('Mostrando todos os spools cadastrados!');
@@ -1212,8 +1356,10 @@ function renderSpools() {
   // Spools para cálculo dos KPIs superiores
   const baseSectorSpools = spoolDb.filter(s => {
     const matchSec = spoolActiveSector === 'all' || s.area === spoolActiveSector;
+    const matchSub = spoolActiveSubArea === 'all' ||
+      spoolCanonicalSubArea(s.subArea, s.area) === spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector);
     const matchDh = spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh);
-    return matchSec && matchDh;
+    return matchSec && matchSub && matchDh;
   });
 
   // Métricas do Setor / DH Ativo
@@ -1243,6 +1389,10 @@ function renderSpools() {
       'Acompanhamento diário de montagem por DH, trechos retos e derivações com apontamento em 1 clique.',
       'MÓDULO DE REFRIGERAÇÃO & TUBULAÇÃO',
       `<span id="spoolSyncBadge" class="spool-sync-badge">${icon('clock')} Online (${spoolDb.length} spools)</span>
+       <button class="button ${spoolSafeTapMode ? 'button-green' : 'button-outline'}" onclick="spoolToggleSafeTapMode()" title="${spoolSafeTapMode ? 'Modo Seguro ATIVO: toque abre menu de ações deliberadas' : 'Modo Rápido: toque alterna status diretamente'}" style="font-size:12px;">${spoolSafeTapMode ? '🛡️ Modo Seguro' : '⚡ Modo Rápido'}</button>
+       <button class="button ${spoolMultiSelectMode ? 'button-green' : 'button-outline'}" onclick="spoolToggleMultiSelectMode()" title="Selecionar vários spools e alterar status em lote" style="font-size:12px;">${spoolMultiSelectMode ? '☑️ Seleção Ativa' : '☑️ Selecionar Vários'}</button>
+       ${spoolMultiSelectMode ? `<button class="button button-outline" onclick="spoolSelectAllVisible()" title="Selecionar os spools exibidos pelos filtros atuais" style="font-size:12px;">✓ Marcar Visíveis (${filteredSpools.length})</button>
+       <button class="button button-outline" onclick="spoolClearSelection()" title="Limpar a seleção atual" style="font-size:12px;">✕ Desmarcar</button>` : ''}
        <button class="button button-green" onclick="spoolOpenExportModal()" title="Exportar planilha Excel (.xlsx)">${icon('download')} Baixar Planilha</button>
        <button class="button button-dark" onclick="spoolOpenReportPDF('daily')" title="Gerar relatório em PDF com logos Heating & Afonso França">${icon('print')} Relatório PDF</button>
        <button class="button button-outline" onclick="spoolOpenImportModal()" title="Subir planilha Excel (.xlsx) ou CSV">${icon('upload')} Subir Planilha</button>
@@ -1387,6 +1537,23 @@ function renderSpools() {
         </select>
       </div>
 
+      <!-- Filtro por Subtipo / Sub-área (aparece apenas quando o setor selecionado tem sub-áreas definidas) -->
+      ${(() => {
+        const sectorTree = SPOOL_AREA_TREE[spoolActiveSector];
+        if (!sectorTree || !sectorTree.subAreas || !sectorTree.subAreas.length) return '';
+        return `
+          <div class="spool-filter-group">
+            <label class="spool-filter-label" for="spoolFilterSubAreaSelect">🗂️ Sub-área:</label>
+            <select id="spoolFilterSubAreaSelect" class="spool-filter-select" onchange="spoolSelectSubArea(this.value)">
+              <option value="all" ${spoolActiveSubArea === 'all' ? 'selected' : ''}>Todas as Sub-áreas</option>
+              ${sectorTree.subAreas.map(sub => `
+                <option value="${sub.id}" ${spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector) === sub.id ? 'selected' : ''}>${sub.name}</option>
+              `).join('')}
+            </select>
+          </div>
+        `;
+      })()}
+
       <!-- Filtro Status -->
       <div class="spool-filter-group">
         <label class="spool-filter-label" for="spoolFilterStatusSelect">📊 Status:</label>
@@ -1464,7 +1631,7 @@ function renderSpools() {
       </div>
 
       <!-- Botão Limpar Filtros -->
-      ${(spoolStatusFilter !== 'all' || spoolDateFilterMode !== 'all' || spoolTypeFilter !== 'all' || spoolDiameterFilter !== 'all' || spoolListFilter !== 'all' || spoolSearchTerm || spoolActiveSector !== 'all' || spoolActiveDh !== 'ALL') ? `
+      ${(spoolStatusFilter !== 'all' || spoolDateFilterMode !== 'all' || spoolTypeFilter !== 'all' || spoolDiameterFilter !== 'all' || spoolListFilter !== 'all' || spoolSearchTerm || spoolActiveSector !== 'all' || spoolActiveDh !== 'ALL' || spoolActiveSubArea !== 'all') ? `
         <div class="spool-filter-group">
           <button type="button" class="button button-outline compact" onclick="spoolClearAllFilters()" style="color:#ef4444; border-color:#fca5a5; font-weight:800; height:36px;">
             ✕ Limpar Filtros
@@ -1613,11 +1780,13 @@ function renderSpools() {
     <!-- 6. QUADRADOS DOS TUBOS COM TODAS AS TAGS 100% VISÍVEIS -->
     <div class="spool-tube-grid-wrap">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
-        <div>
+        <div style="display:flex; align-items:center; gap:10px;">
           <strong style="color:#0f172a; font-size:15px; display:flex; align-items:center; gap:6px;">
             <span>${sectorMeta.icon}</span> MAPA DOS TUBOS · ${sectorMeta.name} (${spoolActiveDh === 'ALL' ? 'Todos os DHs' : spoolActiveDh})
           </strong>
-          <small style="color:#64748b; font-size:12px; font-weight:600;">Todas as tags estão visíveis abaixo. Clique em qualquer quadrado para mudar o status com 1 toque.</small>
+          <button type="button" onclick="spoolToggleMapCollapse()" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px; font-weight:700; color:#475569; display:flex; align-items:center; gap:4px;" title="${spoolMapCollapsed ? 'Expandir mapa visual' : 'Recolher mapa visual'}">
+            ${spoolMapCollapsed ? '▼ Expandir Mapa' : '▲ Recolher Mapa'}
+          </button>
         </div>
         <div style="display:flex; gap:12px; font-size:11px; font-weight:800; color:#475569; align-items:center;">
           <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#ffffff; border:2px solid #cbd5e1; display:inline-block;"></i> Pendente</span>
@@ -1627,7 +1796,11 @@ function renderSpools() {
         </div>
       </div>
 
-      ${spoolRenderTubeSquares(filteredSpools, filterDate)}
+      ${spoolMapCollapsed ? `
+        <div class="spool-map-collapsed-banner" onclick="spoolToggleMapCollapse()" style="background:#f1f5f9; border:1.5px dashed #94a3b8; border-radius:10px; padding:14px 20px; text-align:center; cursor:pointer; color:#64748b; font-weight:700; font-size:13px;">
+          📦 Mapa visual recolhido · ${filteredSpools.length} spools no filtro atual · <span style="color:#0284c7; text-decoration:underline;">Clique para expandir</span>
+        </div>
+      ` : spoolRenderTubeSquares(filteredSpools, filterDate)}
     </div>
 
     <!-- 7. TABELA OPERACIONAL COM TAGS EM ALTO CONTRASTE E COLUNA DATA HALL (DH) -->
@@ -1662,6 +1835,7 @@ function renderSpools() {
   `;
 
   hydrateIcons(app);
+  spoolUpdateSelection();
 }
 
 /* ==========================================================================
@@ -1710,13 +1884,14 @@ function spoolRenderPipelineBar(sectorSpools, sectorMeta) {
           const isRej = s.status === 'rejected';
           const statusClass = isInst ? 'status-installed' : (isRec ? 'status-received' : (isRej ? 'status-rejected' : 'status-pending'));
           const valveClass = isValve ? 'is-valve' : '';
+          const selectedClass = spoolSelectedIds.has(s.id) ? 'is-selected' : '';
           const segRecInfo = s.receivedDate ? `\n• Recebido: ${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` às ${formatSpoolTime(s.receivedAt)}` : ''}` : '';
           const segInstInfo = s.installedDate ? `\n• Instalado: ${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '';
           const segRejInfo = s.rejectedDate ? `\n• Reprovado: ${formatSpoolDateDisplay(s.rejectedDate)}${s.rejectedReason ? ` (${s.rejectedReason})` : ''}` : '';
 
           return `
-            <div class="spool-pipe-seg ${valveClass} ${statusClass}" onclick="spoolToggleStatus('${s.id}')" title="${isValve ? 'Válvula de Linha' : 'Tubo Reto'} ${esc(s.number)} (${node.label})${segRecInfo}${segInstInfo}${segRejInfo}\nClique para alternar status">
-              <span class="seg-tag">${esc(s.number)}</span>
+            <div class="spool-pipe-seg ${valveClass} ${statusClass} ${selectedClass}" data-spool-id="${esc(s.id)}" onclick="spoolHandleTubeTap('${s.id}', event)" title="${isValve ? 'Válvula de Linha' : 'Tubo Reto'} ${esc(spoolDisplayNumber(s))} (${node.label})${segRecInfo}${segInstInfo}${segRejInfo}\nClique para ${spoolMultiSelectMode ? 'marcar/desmarcar' : (spoolSafeTapMode ? 'abrir menu de ações' : 'alternar status')}">
+              <span class="seg-tag">${esc(spoolDisplayNumber(s))}</span>
               <span class="seg-idx">${node.label}</span>
             </div>
             ${i < ordered.length - 1 ? '<div class="spool-pipe-connector"></div>' : ''}
@@ -1760,8 +1935,10 @@ function spoolRenderTubeSquares(list, filterDate) {
         const cardInstInfo = spool.installedDate ? `\n• Instalado em: ${formatSpoolDateDisplay(spool.installedDate)}${spool.installedAt ? ` às ${formatSpoolTime(spool.installedAt)}` : ''}${spool.installedBy ? ` (${spool.installedBy})` : ''}` : '';
         const cardRejInfo = spool.rejectedDate ? `\n• Reprovado em: ${formatSpoolDateDisplay(spool.rejectedDate)}${spool.rejectedReason ? ` (Motivo: ${spool.rejectedReason})` : ''}${spool.rejectedBy ? ` por ${spool.rejectedBy}` : ''}` : '';
 
+        const isSelected = spoolSelectedIds.has(spool.id);
         return `
-          <div class="spool-tube-card ${typeClass} ${statusClass}" onclick="spoolToggleStatus('${spool.id}')" title="Spool ${esc(spool.number)} (${esc(spool.dh || '')})${cardRecInfo}${cardInstInfo}${cardRejInfo}\nClique para alternar status ou no 📅 para ver/editar datas">
+          <div class="spool-tube-card ${typeClass} ${statusClass}${isSelected ? ' is-selected' : ''}" data-spool-id="${esc(spool.id)}" onclick="spoolHandleTubeTap('${spool.id}', event)" title="Spool ${esc(spoolDisplayNumber(spool))} (${esc(spool.dh || '')})${cardRecInfo}${cardInstInfo}${cardRejInfo}\nClique para ${spoolMultiSelectMode ? 'marcar/desmarcar' : (spoolSafeTapMode ? 'abrir menu de ações' : 'alternar status')} ou no 📅 para ver/editar datas">
+            ${spoolMultiSelectMode ? `<input type="checkbox" class="spool-card-select-check" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); spoolToggleCardSelection('${spool.id}')" aria-label="Selecionar spool ${esc(spoolDisplayNumber(spool))}">` : ''}
             <div class="tube-header">
               <span style="font-size:10px; font-weight:800; padding:2px 6px; border-radius:4px; ${isValve ? 'background:#fef3c7; color:#b45309;' : (isStraight ? 'background:#f3e8ff; color:#7e22ce;' : 'background:#e0f2fe; color:#0369a1;')}">
                 ${isValve ? '🔘 VÁLVULA' : (isStraight ? '📏 RETO' : '📐 DERIV')}
@@ -1776,6 +1953,8 @@ function spoolRenderTubeSquares(list, filterDate) {
 
             <!-- NÚMERO DA TAG EM ALTO CONTRASTE TOTAL -->
             <span class="tube-tag">${esc(spool.number)}</span>
+            ${spool.part ? `<span class="spool-part-badge" style="display:block; font-size:8px; font-weight:800; text-align:center; margin-top:2px; color:#7c3aed; background:#f3e8ff; border-radius:4px; padding:1px 4px;">${esc(spool.part)}</span>` : ''}
+            ${spool.notes ? `<span style="display:block; font-size:8px; text-align:center; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; margin-top:1px;" title="${esc(spool.notes)}">📝</span>` : ''}
 
             <div class="tube-foot" style="display:flex; flex-direction:column; gap:2px; font-size:10px; line-height:1.2; width:100%; text-align:center;">
               ${isInst ? `
@@ -1828,7 +2007,7 @@ function spoolRenderTubeTable(list, filterDate) {
           <button type="button" class="button button-green compact" onclick="spoolOpenExportModal()" style="font-weight:800;" title="Abrir opções de download da planilha">
             ${icon('download')} Baixar Planilha
           </button>
-          ${(spoolStatusFilter !== 'all' || spoolDateFilterMode !== 'all' || spoolTypeFilter !== 'all' || spoolDiameterFilter !== 'all' || spoolListFilter !== 'all' || Boolean(spoolSearchTerm) || spoolActiveSector !== 'all' || spoolActiveDh !== 'ALL') ? `
+          ${(spoolStatusFilter !== 'all' || spoolDateFilterMode !== 'all' || spoolTypeFilter !== 'all' || spoolDiameterFilter !== 'all' || spoolListFilter !== 'all' || Boolean(spoolSearchTerm) || spoolActiveSector !== 'all' || spoolActiveSubArea !== 'all' || spoolActiveDh !== 'ALL') ? `
             <button type="button" class="button button-outline compact" onclick="spoolExportUpdatedSpreadsheet('filtered')" style="font-weight:800; color:#0f172a;" title="Baixar apenas os ${list.length} spools visíveis com os filtros atuais">
               ${icon('download')} Baixar Filtrados (${list.length})
             </button>
@@ -1882,7 +2061,7 @@ function spoolRenderTubeTable(list, filterDate) {
               <th style="width:40px; text-align:center; padding:12px 6px;">
                 <input type="checkbox" id="selectAllSpools" onchange="spoolToggleSelectAll(this)" title="Selecionar todos os spools da tabela" style="cursor:pointer; width:16px; height:16px;">
               </th>
-              <th style="width:140px; padding:12px 14px; font-weight:800; color:#1e293b;">TAG / SPOOL</th>
+              <th style="width:160px; padding:12px 14px; font-weight:800; color:#1e293b;">TAG / SPOOL</th>
               <th style="width:110px; padding:12px 14px; font-weight:800; color:#1e293b;">DATA HALL (DH)</th>
               <th style="width:160px; padding:12px 14px; font-weight:800; color:#1e293b;">SETOR</th>
               <th style="width:160px; padding:12px 14px; font-weight:800; color:#1e293b;">CLASSIFICAÇÃO</th>
@@ -1907,7 +2086,7 @@ function spoolRenderTubeTable(list, filterDate) {
               return `
                 <tr style="border-bottom:1px solid #e2e8f0; ${isRejected ? 'background:#fff8f8;' : ''}">
                   <td style="text-align:center; padding:10px 6px;">
-                    <input type="checkbox" class="spool-select-check" value="${s.id}" onchange="spoolUpdateSelection()" style="cursor:pointer; width:16px; height:16px;" title="Selecionar este spool">
+                    <input type="checkbox" class="spool-select-check" value="${esc(s.id)}" ${spoolSelectedIds.has(s.id) ? 'checked' : ''} onchange="spoolSetSelectionFromCheckbox(this)" style="cursor:pointer; width:16px; height:16px;" title="Selecionar este spool">
                   </td>
                   <td style="padding:10px 14px;">
                     <!-- TAG EM MÁXIMO CONTRASTE TOTAL GARANTIDO -->
@@ -1915,6 +2094,7 @@ function spoolRenderTubeTable(list, filterDate) {
                           style="display:inline-flex; align-items:center; justify-content:center; font-family:monospace, ui-monospace, sans-serif; font-size:14px; font-weight:900; padding:6px 14px; border-radius:6px; letter-spacing:0.5px; background:${pillBg} !important; color:#ffffff !important; border:1.5px solid ${pillBorder} !important; box-shadow:0 1px 4px rgba(0,0,0,0.25);">
                       ${esc(s.number)}
                     </span>
+                    ${s.part ? `<span class="spool-part-badge" style="margin-left:5px; vertical-align:middle;">${esc(s.part)}</span>` : ''}
                   </td>
                   <td style="padding:10px 14px;">
                     <!-- CAMPO DATA HALL (DH) EM DESTAQUE -->
@@ -1924,6 +2104,7 @@ function spoolRenderTubeTable(list, filterDate) {
                   </td>
                   <td style="padding:10px 14px;">
                     <span style="font-size:13px; font-weight:800; color:#0f172a;">${esc(sector.name)}</span>
+                    ${s.subArea ? `<small style="display:block; margin-top:3px; color:#92400e; font-weight:700;">${esc(s.subArea)}</small>` : ''}
                   </td>
                   <td style="padding:10px 14px;">
                     ${s.type === 'valve'
@@ -2018,7 +2199,9 @@ function spoolRenderTubeTable(list, filterDate) {
 
 function spoolSelectSector(sectorId) {
   spoolActiveSector = sectorId;
+  spoolActiveSubArea = 'all';
   localStorage.setItem('obraflow_spool_active_sector', sectorId);
+  localStorage.setItem('obraflow_spool_active_subarea', 'all');
   renderSpools();
 }
 
@@ -2102,22 +2285,95 @@ function spoolClearAllFilters() {
   spoolSearchTerm = '';
   spoolSelectedDate = getLocalDateStr();
   spoolActiveSector = 'all';
+  spoolActiveSubArea = 'all';
   spoolActiveDh = 'ALL';
   localStorage.setItem('obraflow_spool_active_sector', 'all');
+  localStorage.setItem('obraflow_spool_active_subarea', 'all');
   localStorage.setItem('obraflow_spool_active_dh', 'ALL');
   renderSpools();
   toast('Filtros redefinidos!');
 }
 
-function spoolSetSelectedDate(dateStr, autoActivate = false) {
-  spoolSelectedDate = dateStr;
-  if (autoActivate && spoolDateFilterMode === 'all') {
-    spoolDateFilterMode = 'activity';
-  }
+function spoolSelectSubArea(subAreaId) {
+  spoolActiveSubArea = subAreaId || 'all';
+  localStorage.setItem('obraflow_spool_active_subarea', spoolActiveSubArea);
   renderSpools();
 }
 
-// 1 Toque no Quadrado do Tubo: Alterna Pendente -> Recebido -> Instalado -> Pendente
+function spoolToggleSafeTapMode() {
+  spoolSafeTapMode = !spoolSafeTapMode;
+  localStorage.setItem('obraflow_spool_safe_tap', spoolSafeTapMode ? 'true' : 'false');
+  renderSpools();
+  if (spoolSafeTapMode) {
+    toast('🛡️ Modo Seguro ativado: o toque abre o menu deliberado de ações (sem risco de desmarcar ao rolar no tablet).');
+  } else {
+    toast('⚡ Modo Rápido ativado: o toque alterna o status diretamente.');
+  }
+}
+
+function spoolToggleMapCollapse() {
+  spoolMapCollapsed = !spoolMapCollapsed;
+  localStorage.setItem('obraflow_spool_map_collapsed', spoolMapCollapsed ? 'true' : 'false');
+  renderSpools();
+}
+
+function spoolToggleMultiSelectMode() {
+  spoolMultiSelectMode = !spoolMultiSelectMode;
+  if (!spoolMultiSelectMode) {
+    spoolSelectedIds.clear();
+  }
+  renderSpools();
+  if (spoolMultiSelectMode) {
+    toast('Modo Seleção em Lote ativado! Toque nos spools para marcar.');
+  }
+}
+
+function spoolToggleCardSelection(spoolId) {
+  if (spoolSelectedIds.has(spoolId)) {
+    spoolSelectedIds.delete(spoolId);
+  } else {
+    spoolSelectedIds.add(spoolId);
+  }
+  spoolUpdateSelection();
+}
+
+function spoolSyncCardSelectionUI() {
+  document.querySelectorAll('[data-spool-id]').forEach(card => {
+    const id = card.dataset.spoolId || '';
+    const isSel = spoolSelectedIds.has(id);
+    card.classList.toggle('is-selected', isSel);
+    const chk = card.querySelector('.spool-card-select-check');
+    if (chk) chk.checked = isSel;
+  });
+}
+
+function spoolSelectAllVisible() {
+  const visible = spoolFilterList(spoolDb);
+  visible.forEach(s => spoolSelectedIds.add(s.id));
+  spoolUpdateSelection();
+  toast(`✓ ${visible.length} spool(s) selecionado(s)!`);
+}
+
+function spoolHandleTubeTap(spoolId, event) {
+  if (event) event.stopPropagation();
+
+  // 1. Se estiver no Modo Seleção em Lote: apenas seleciona/desmarca o spool
+  if (spoolMultiSelectMode) {
+    spoolToggleCardSelection(spoolId);
+    return;
+  }
+
+  // 2. Se estiver no Modo Seguro (padrão): abre modal com ações deliberadas
+  if (spoolSafeTapMode) {
+    spoolOpenQuickActionModal(spoolId);
+    return;
+  }
+
+  // 3. Se estiver no Modo Toque Rápido:
+  spoolToggleStatus(spoolId);
+}
+
+// Alternância deliberada com proteção contra toques acidentais
 function spoolToggleStatus(spoolId) {
   const item = spoolDb.find(s => s.id === spoolId);
   if (!item) return;
@@ -2134,8 +2390,108 @@ function spoolToggleStatus(spoolId) {
   } else if (item.status === 'received') {
     spoolSetItemStatus(spoolId, 'installed');
   } else {
-    spoolSetItemStatus(spoolId, 'not-started');
+    // Confirmação para evitar desmarcar acidentalmente ao rolar a tela no tablet
+    const partTxt = item.part ? ` (${item.part})` : '';
+    if (confirm(`⚠️ O Spool ${item.number}${partTxt} já está marcado como INSTALADO.\nDeseja realmente desmarcá-lo e voltar para Pendente?`)) {
+      spoolSetItemStatus(spoolId, 'not-started');
+    }
   }
+}
+
+// Modal Rápido de Ação Deliberada (Proteção Total no Tablet)
+function spoolOpenQuickActionModal(spoolId) {
+  const spool = spoolDb.find(s => s.id === spoolId);
+  if (!spool) return;
+
+  const isInst = spool.status === 'installed';
+  const isRec = spool.status === 'received';
+  const isRej = spool.status === 'rejected';
+  const sector = SPOOL_SECTORS[spool.area] || { name: spool.area || 'Setor' };
+
+  modal(`
+    <div style="background:#ffffff; color:#0f172a; padding:18px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; border-bottom:1px solid #e2e8f0; padding-bottom:12px;">
+        <div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:26px; font-weight:900; font-family:monospace; color:#0f172a;">
+              ${esc(spool.number)}
+            </span>
+            ${spool.part ? `<span class="spool-part-badge" style="font-size:13px; padding:3px 8px;">${esc(spool.part)}</span>` : ''}
+            ${spool.subArea ? `<span class="spool-subarea-badge">${esc(spool.subArea)}</span>` : ''}
+          </div>
+          <small style="color:#64748b; font-weight:700; font-size:12px;">
+            ${esc(normalizeDh(spool.dh))} · ${esc(sector.name)} · Ø ${esc(spool.diameter || '—')}
+          </small>
+        </div>
+        <button type="button" class="icon-button" onclick="closeModal()" title="Fechar" style="color:#64748b;">
+          ${icon('close')}
+        </button>
+      </div>
+
+      <!-- STATUS ATUAL -->
+      <div style="margin-bottom:16px;">
+        <label style="font-size:11px; font-weight:800; color:#64748b; text-transform:uppercase; display:block; margin-bottom:8px;">
+          ALTERAR STATUS DO SPOOL:
+        </label>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button type="button" class="button compact ${isInst ? 'button-green' : 'button-outline'}" style="font-weight:800; height:42px; justify-content:center;" onclick="spoolSetItemStatus('${spool.id}', 'installed'); closeModal();">
+            🟢 ${isInst ? '✓ Instalado' : 'Marcar Instalado'}
+          </button>
+          <button type="button" class="button compact" style="background:${isRec ? '#0284c7' : '#f0f9ff'}; color:${isRec ? '#ffffff' : '#0369a1'}; border:1.5px solid #0284c7; font-weight:800; height:42px; justify-content:center;" onclick="spoolSetItemStatus('${spool.id}', 'received'); closeModal();">
+            🟡 ${isRec ? '✓ Recebido' : 'Marcar Recebido'}
+          </button>
+          <button type="button" class="button compact" style="background:${isRej ? '#dc2626' : '#fef2f2'}; color:${isRej ? '#ffffff' : '#991b1b'}; border:1.5px solid #ef4444; font-weight:800; height:42px; justify-content:center;" onclick="closeModal(); spoolPromptRejectItem('${spool.id}');">
+            🔴 ${isRej ? '✓ Reprovado' : 'Reprovar / Quarentena'}
+          </button>
+          <button type="button" class="button button-outline compact" style="color:#64748b; border-color:#cbd5e1; font-weight:800; height:42px; justify-content:center;" onclick="spoolSetItemStatus('${spool.id}', 'not-started'); closeModal();">
+            ⚪ ${spool.status === 'not-started' ? '✓ Pendente' : 'Desmarcar (Pendente)'}
+          </button>
+        </div>
+      </div>
+
+      <!-- OBSERVAÇÃO RÁPIDA -->
+      <div style="margin-bottom:16px; background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0;">
+        <label style="font-size:12px; font-weight:800; color:#0f172a; display:block; margin-bottom:6px;">
+          📝 Observação / Notas do Spool:
+        </label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="spoolQuickNoteInput" value="${esc(spool.notes || '')}" placeholder="Adicionar observação..." style="flex:1; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:600; font-size:13px;">
+          <button type="button" class="button button-green compact" onclick="spoolSaveQuickNote('${spool.id}')" style="font-weight:800;">
+            Salvar
+          </button>
+        </div>
+      </div>
+
+      <!-- RODAPÉ COM DETALHES -->
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px solid #e2e8f0; padding-top:12px;">
+        <button type="button" class="button button-outline compact" onclick="closeModal(); spoolOpenTrackingModal('${spool.id}');" style="font-weight:700; color:#0f172a; font-size:12px;">
+          📅 Editar Datas & Sequência Completa
+        </button>
+        <button type="button" class="button compact" style="background:#dc2626; color:#ffffff; font-weight:700; font-size:12px; border:none;" onclick="closeModal(); spoolDeleteItem('${spool.id}');">
+          🗑️ Excluir
+        </button>
+      </div>
+    </div>
+  `, 'modal-medium');
+}
+
+function spoolSaveQuickNote(spoolId) {
+  const item = spoolDb.find(s => s.id === spoolId);
+  if (!item) return;
+  const val = (document.getElementById('spoolQuickNoteInput')?.value || '').trim();
+  item.notes = val;
+  spoolSaveAll(spoolDb);
+  toast('Observação salva com sucesso!');
+  closeModal();
+  renderSpools();
+}
+
+function spoolSetSelectedDate(dateStr, autoActivate = false) {
+  spoolSelectedDate = dateStr;
+  if (autoActivate && spoolDateFilterMode === 'all') {
+    spoolDateFilterMode = 'activity';
+  }
+  renderSpools();
 }
 
 // Modal Rápido de Reprovação (Com Motivos Prontos, Ex: Duplicidade da Fábrica)
@@ -2525,6 +2881,9 @@ const SPOOL_DROPDOWN_SECTORS = [
 const SPOOL_DROPDOWN_DHS = Array.from({ length: 10 }, (_, i) => `DH ${String(i + 1).padStart(2, '0')}`);
 const SPOOL_DROPDOWN_TYPES = ['Trecho Reto', 'Válvula de Ponta', 'Derivação (Ramal)'];
 const SPOOL_DROPDOWN_STATUS = ['Pendente', 'Recebido', 'Instalado', 'Reprovado'];
+const SPOOL_DROPDOWN_SUBAREAS = [...new Set(
+  Object.values(SPOOL_AREA_TREE).flatMap(area => area.subAreas.map(sub => sub.name))
+)];
 
 async function ensureSpoolExcelLibrary() {
   if (window.ExcelJS) return true;
@@ -2546,14 +2905,15 @@ function addSpoolHelperListSheet(workbook) {
   SPOOL_DROPDOWN_DHS.forEach((dh, idx) => { listSheet.getCell(`B${idx + 1}`).value = dh; });
   SPOOL_DROPDOWN_TYPES.forEach((t, idx) => { listSheet.getCell(`C${idx + 1}`).value = t; });
   SPOOL_DROPDOWN_STATUS.forEach((st, idx) => { listSheet.getCell(`D${idx + 1}`).value = st; });
+  SPOOL_DROPDOWN_SUBAREAS.forEach((sub, idx) => { listSheet.getCell(`E${idx + 1}`).value = sub; });
   return listSheet;
 }
 
 function applySpoolExcelDataValidations(sheet, maxRow = 2500) {
   if (!sheet.dataValidations) return;
 
-  // 1. Data Hall (DH) na Coluna B
-  sheet.dataValidations.add(`B2:B${maxRow}`, {
+  // 1. Data Hall (DH) na Coluna C
+  sheet.dataValidations.add(`C2:C${maxRow}`, {
     type: 'list',
     allowBlank: true,
     formulae: ['Listas_Auxiliares!$B$1:$B$10'],
@@ -2562,8 +2922,8 @@ function applySpoolExcelDataValidations(sheet, maxRow = 2500) {
     error: 'Selecione um Data Hall válido (DH 01 a DH 10) na lista suspensa.'
   });
 
-  // 2. Setores / Locais na Coluna C (LISTA SUSPENSA COM OS 7 LOCAIS OFICIAIS)
-  sheet.dataValidations.add(`C2:C${maxRow}`, {
+  // 2. Setores / Locais na Coluna D (LISTA SUSPENSA COM OS 7 LOCAIS OFICIAIS)
+  sheet.dataValidations.add(`D2:D${maxRow}`, {
     type: 'list',
     allowBlank: true,
     formulae: ['Listas_Auxiliares!$A$1:$A$7'],
@@ -2572,8 +2932,16 @@ function applySpoolExcelDataValidations(sheet, maxRow = 2500) {
     error: 'Selecione um dos 7 locais oficiais da obra na lista suspensa.'
   });
 
-  // 3. Classificação na Coluna D
-  sheet.dataValidations.add(`D2:D${maxRow}`, {
+  // 3. Subárea na Coluna E
+  sheet.dataValidations.add(`E2:E${maxRow}`, {
+    type: 'list',
+    allowBlank: true,
+    formulae: [`Listas_Auxiliares!$E$1:$E$${SPOOL_DROPDOWN_SUBAREAS.length}`],
+    showErrorMessage: false
+  });
+
+  // 4. Classificação na Coluna F
+  sheet.dataValidations.add(`F2:F${maxRow}`, {
     type: 'list',
     allowBlank: true,
     formulae: ['Listas_Auxiliares!$C$1:$C$3'],
@@ -2582,8 +2950,8 @@ function applySpoolExcelDataValidations(sheet, maxRow = 2500) {
     error: 'Selecione Trecho Reto, Válvula de Ponta ou Derivação (Ramal).'
   });
 
-  // 4. Status na Coluna F
-  sheet.dataValidations.add(`F2:F${maxRow}`, {
+  // 5. Status na Coluna H
+  sheet.dataValidations.add(`H2:H${maxRow}`, {
     type: 'list',
     allowBlank: true,
     formulae: ['Listas_Auxiliares!$D$1:$D$4'],
@@ -2596,8 +2964,10 @@ function applySpoolExcelDataValidations(sheet, maxRow = 2500) {
 function populateSpoolExcelSheet(sheet, items) {
   sheet.columns = [
     { header: 'TAG / Spool', key: 'tag', width: 16 },
+    { header: 'Parte / Sequência', key: 'parte', width: 18 },
     { header: 'Data Hall (DH)', key: 'dh', width: 16 },
     { header: 'Setor', key: 'setor', width: 24 },
+    { header: 'Subárea', key: 'subarea', width: 26 },
     { header: 'Classificação', key: 'tipo', width: 22 },
     { header: 'Diâmetro', key: 'diametro', width: 12 },
     { header: 'Status', key: 'status', width: 14 },
@@ -2632,8 +3002,10 @@ function populateSpoolExcelSheet(sheet, items) {
 
     const row = sheet.addRow({
       tag: s.number,
+      parte: s.part || s.seq || '',
       dh: normalizeDh(s.dh),
       setor: secName,
+      subarea: s.subArea || '',
       tipo: typeName,
       diametro: s.diameter || '',
       status: statusName,
@@ -2647,19 +3019,20 @@ function populateSpoolExcelSheet(sheet, items) {
     row.alignment = { vertical: 'middle' };
     row.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
     row.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell(5).alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell(6).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
     row.getCell(7).alignment = { vertical: 'middle', horizontal: 'center' };
     row.getCell(8).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(9).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(10).alignment = { vertical: 'middle', horizontal: 'center' };
 
     if (s.status === 'rejected') {
-      row.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
-      row.getCell(6).font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFB91C1C' } };
+      row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+      row.getCell(8).font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFB91C1C' } };
     }
   });
 
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
-  sheet.autoFilter = { from: 'A1', to: `J${Math.max(2, sheet.rowCount)}` };
+  sheet.autoFilter = { from: 'A1', to: `L${Math.max(2, sheet.rowCount)}` };
 
   const maxValidRow = Math.max(2500, items.length + 500);
   applySpoolExcelDataValidations(sheet, maxValidRow);
@@ -2740,7 +3113,7 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
   // Fallback caso ExcelJS não esteja disponível
   if (!window.XLSX) return toast('Biblioteca Excel carregando...', true);
 
-  const header = ['TAG / Spool', 'Data Hall (DH)', 'Setor', 'Classificação', 'Diâmetro', 'Status', 'Data de Recebimento', 'Data de Instalação', 'Responsável', 'Observações'];
+  const header = ['TAG / Spool', 'Parte / Sequência', 'Data Hall (DH)', 'Setor', 'Subárea', 'Classificação', 'Diâmetro', 'Status', 'Data de Recebimento', 'Data de Instalação', 'Responsável', 'Observações'];
   const rows = [header];
   listToExport.forEach(s => {
     const secName = SPOOL_SECTORS[s.area]?.name || s.area || 'Corredor FW A';
@@ -2749,7 +3122,7 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
     else if (s.type === 'branch') typeName = 'Derivação (Ramal)';
     let statusName = s.status === 'installed' ? 'Instalado' : (s.status === 'received' ? 'Recebido' : (s.status === 'rejected' ? 'Reprovado' : 'Pendente'));
     const obsVal = s.status === 'rejected' && s.rejectedReason ? `[REPROVADO: ${s.rejectedReason}] ${s.notes || ''}` : (s.notes || '');
-    rows.push([s.number, normalizeDh(s.dh), secName, typeName, s.diameter || '', statusName, s.receivedDate || '', s.installedDate || '', s.installedBy || s.rejectedBy || '', obsVal]);
+    rows.push([s.number, s.part || s.seq || '', normalizeDh(s.dh), secName, s.subArea || '', typeName, s.diameter || '', statusName, s.receivedDate || '', s.installedDate || '', s.installedBy || s.rejectedBy || '', obsVal]);
   });
 
   const wb = XLSX.utils.book_new();
@@ -2810,8 +3183,8 @@ async function spoolDownloadSampleSpreadsheet() {
 
     const sheet = workbook.addWorksheet('Modelo_Spools');
     const sampleItems = [
-      { number: '1601', dh: 'DH 04', area: 'Corredor FW A', type: 'Trecho Reto', diameter: '8"', status: 'not-started', notes: 'Alimentação AAG' },
-      { number: '1603', dh: 'DH 04', area: 'Corredor FW A', type: 'Trecho Reto', diameter: '8"', status: 'received', notes: 'Alimentação AAG' },
+      { number: '1601', part: '1 de 2', subArea: 'Linha Mestra FW A', dh: 'DH 04', area: 'Corredor FW A', type: 'Trecho Reto', diameter: '8"', status: 'not-started', notes: 'Alimentação AAG' },
+      { number: '1601', part: '2 de 2', subArea: 'Linha Mestra FW A', dh: 'DH 04', area: 'Corredor FW A', type: 'Trecho Reto', diameter: '8"', status: 'received', notes: 'Alimentação AAG' },
       { number: '1602', dh: 'DH 04', area: 'Corredor FW B', type: 'Trecho Reto', diameter: '8"', status: 'received', notes: 'Retorno RAG' },
       { number: '1761', dh: 'DH 04', area: 'Corredor FW A', type: 'Derivação (Ramal)', diameter: '2.1/2"', status: 'received', notes: 'Ramal Fan Wall' },
       { number: 'GER-01', dh: 'DH 04', area: 'Corredor Gerador', type: 'Trecho Reto', diameter: '6"', status: 'not-started', notes: 'Linha de Resfriamento Gerador' },
@@ -2930,7 +3303,7 @@ function spoolOpenImportModal() {
           <span style="font-size:38px; display:block; margin-bottom:8px;">📊</span>
           <strong style="color:#0f172a; font-size:16px; display:block; font-weight:800;">Clique ou Arraste sua Planilha Excel (.xlsx, .xls ou .csv)</strong>
           <span style="color:#475569; font-size:13px; margin-top:6px; display:block; font-weight:600;">
-            O sistema lê automaticamente as colunas: <strong>TAG / Spool</strong>, <strong>Data Hall (DH)</strong>, <strong>Setor</strong>, <strong>Classificação</strong>, <strong>Diâmetro</strong> e <strong>Status</strong> em todas as abas.
+            O sistema lê automaticamente as colunas: <strong>TAG / Spool</strong>, <strong>Parte / Sequência</strong>, <strong>Data Hall (DH)</strong>, <strong>Setor</strong>, <strong>Subárea</strong>, <strong>Classificação</strong>, <strong>Diâmetro</strong> e <strong>Status</strong> em todas as abas.
           </span>
           <input type="file" id="spoolExcelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="spoolHandleExcelUpload(event)">
         </div>
@@ -2978,7 +3351,7 @@ async function spoolHandleExcelUpload(event) {
     }
 
     const parsedSpools = [];
-    const seenSpoolKeys = new Set();
+    const seenSpoolKeys = new Map();
 
     // Se a planilha contiver a aba principal consolidada (ex: "Todos_os_Spools", "Todos os Spools", "Spools_Filtrados"),
     // processa APENAS ela para evitar que abas secundárias desatualizadas sobrescrevam os dados editados pelo usuário
@@ -3022,6 +3395,8 @@ async function spoolHandleExcelUpload(event) {
       let instDateIdx = -1;
       let respIdx = -1;
       let notesIdx = -1;
+      let partIdx = -1;
+      let subAreaIdx = -1;
 
       for (let r = 0; r < Math.min(rows.length, 20); r++) {
         const rowStr = rows[r].map(c => String(c || '').trim().toLowerCase());
@@ -3039,7 +3414,10 @@ async function spoolHandleExcelUpload(event) {
           recDateIdx = rowStr.findIndex(h => /rec.*data|data.*rec/i.test(h));
           instDateIdx = rowStr.findIndex(h => /inst.*data|data.*inst|montad.*em/i.test(h));
           respIdx = rowStr.findIndex(h => /resp|instalador|quem/i.test(h));
-          notesIdx = rowStr.findIndex(h => /obs|observa|descri/i.test(h));
+          notesIdx = rowStr.findIndex(h => /obs|observa|descri|nota/i.test(h));
+          partIdx = rowStr.findIndex(h => /^(?:parte|parte\s*\/\s*sequ[eê]ncia|seq\.?|sequ[eê]ncia|sub.*pe[cç]a|divis[aã]o|conjunto)$/i.test(h));
+          if (partIdx === tagIdx) partIdx = -1;
+          subAreaIdx = rowStr.findIndex(h => /sub.*[aá]rea|sub.*tipo|sub.*setor|subsistema|sistema/i.test(h));
           break;
         }
       }
@@ -3144,8 +3522,20 @@ async function spoolHandleExcelUpload(event) {
         }
 
         const notesVal = notesIdx !== -1 && row[notesIdx] ? String(row[notesIdx]).trim() : '';
+        const partColVal = partIdx !== -1 && row[partIdx] ? String(row[partIdx]).trim() : '';
+        const subAreaColVal = subAreaIdx !== -1 && row[subAreaIdx] ? String(row[subAreaIdx]).trim() : '';
 
-        extractedTags.forEach(tagVal => {
+        extractedTags.forEach(rawTag => {
+          let tagVal = rawTag;
+          let partVal = partColVal;
+
+          // Se a tag contiver "(1 de 2)" ou "- 1/2", extrai tag e parte
+          const tagPartMatch = rawTag.match(/^(.+?)\s*[\(\[\-]\s*(\d+\s*(?:de|\/)\s*\d+|parte\s*\d+|sub\s*\d+)\s*[\)\]]?$/i);
+          if (tagPartMatch) {
+            tagVal = tagPartMatch[1].trim();
+            if (!partVal) partVal = tagPartMatch[2].trim();
+          }
+
           let finalType = typeVal;
           if (typeIdx === -1 || !row[typeIdx]) {
             if (/valv/i.test(tagVal)) finalType = 'valve';
@@ -3156,13 +3546,11 @@ async function spoolHandleExcelUpload(event) {
             }
           }
 
-          const spoolKey = `${targetDh}|${sectorVal}|${tagVal}`;
-          if (seenSpoolKeys.has(spoolKey)) {
-            // Já processado na aba mestre. Não sobrescrever com abas secundárias desatualizadas!
-            return;
-          }
-
-          seenSpoolKeys.add(spoolKey);
+          // Conta ocorrências para manter IDs temporários únicos; as partes são fechadas após ler toda a planilha.
+          let partSuffix = partVal;
+          const baseKey = `${targetDh}|${sectorVal}|${tagVal}`;
+          const currentCount = seenSpoolKeys.get(baseKey) || 0;
+          seenSpoolKeys.set(baseKey, currentCount + 1);
 
           let instDate = '';
           let instAt = '';
@@ -3191,9 +3579,12 @@ async function spoolHandleExcelUpload(event) {
             rejReason = notesVal || 'Reprovado na importação';
           }
 
+          const safePartId = partSuffix ? `-${partSuffix.replace(/[^a-zA-Z0-9]/g, '_')}` : (currentCount > 0 ? `-${currentCount + 1}` : '');
           parsedSpools.push({
-            id: `spool-${targetDh.replace(/\s+/g, '')}-${sectorVal}-${tagVal}`,
+            id: `spool-${targetDh.replace(/\s+/g, '')}-${sectorVal}-${tagVal}${safePartId}`,
             number: tagVal,
+            part: partSuffix || '',
+            subArea: subAreaColVal || '',
             dh: targetDh,
             area: sectorVal,
             type: finalType,
@@ -3213,6 +3604,31 @@ async function spoolHandleExcelUpload(event) {
         });
       }
     }
+
+    // Tags repetidas sem sequência explícita representam peças físicas separadas.
+    // Depois de conhecer o total, nomeia corretamente como "1 de 2", "2 de 2", etc.
+    const repeatedGroups = new Map();
+    parsedSpools.forEach(spool => {
+      const groupKey = [
+        normalizeDh(spool.dh),
+        normalizeSector(spool.area),
+        spoolTextKey(spool.number),
+        spoolCanonicalSubArea(spool.subArea, spool.area)
+      ].join('|');
+      if (!repeatedGroups.has(groupKey)) repeatedGroups.set(groupKey, []);
+      repeatedGroups.get(groupKey).push(spool);
+    });
+
+    repeatedGroups.forEach(group => {
+      if (group.length > 1) {
+        group.forEach((spool, index) => {
+          if (!spool.part) spool.part = `${index + 1} de ${group.length}`;
+        });
+      }
+      group.forEach(spool => {
+        spool.id = spoolBuildStableId(spool);
+      });
+    });
 
     if (!parsedSpools.length) {
       return toast('Nenhum spool válido encontrado nas linhas da planilha.', true);
@@ -3274,13 +3690,17 @@ async function spoolHandleExcelUpload(event) {
                       <span class="spool-tag-pill status-${s.status === 'not-started' ? 'pending' : s.status}" style="display:inline-flex; align-items:center; justify-content:center; font-family:monospace; font-size:13px; font-weight:900; padding:4px 10px; border-radius:5px; background:${s.status === 'installed' ? '#059669' : (s.status === 'received' ? '#0284c7' : (s.status === 'rejected' ? '#dc2626' : '#0f172a'))}; color:#ffffff; border:1px solid #334155;">
                         ${esc(s.number)}
                       </span>
+                      ${s.part ? `<small class="spool-part-badge" style="display:block; width:max-content; margin-top:3px;">${esc(s.part)}</small>` : ''}
                     </td>
                     <td>
                       <strong style="color:#0369a1; font-size:12px; font-weight:800; background:#e0f2fe; padding:2px 8px; border-radius:4px; border:1px solid #bae6fd;">
                         ${esc(normalizeDh(s.dh))}
                       </strong>
                     </td>
-                    <td><strong style="color:#0f172a; font-size:13px;">${esc(SPOOL_SECTORS[s.area]?.name || s.area)}</strong></td>
+                    <td>
+                      <strong style="color:#0f172a; font-size:13px;">${esc(SPOOL_SECTORS[s.area]?.name || s.area)}</strong>
+                      ${s.subArea ? `<small style="display:block; color:#92400e; font-weight:700;">${esc(s.subArea)}</small>` : ''}
+                    </td>
                     <td>
                       ${s.type === 'valve'
                         ? '<span class="badge-valve">🔘 Válvula</span>'
@@ -3337,11 +3757,17 @@ function spoolConfirmImport(importedSpools) {
   } else {
     // merge: atualiza existentes ou adiciona novos
     list.forEach(imp => {
-      const existing = spoolDb.find(s => s.number === imp.number && s.area === imp.area && normalizeDh(s.dh) === normalizeDh(imp.dh));
+      const existing = spoolDb.find(s =>
+        (s.id === imp.id) ||
+        (s.number === imp.number && (s.part || '') === (imp.part || '') && s.area === imp.area && normalizeDh(s.dh) === normalizeDh(imp.dh))
+      );
       if (existing) {
         existing.type = imp.type;
         existing.diameter = imp.diameter;
         existing.status = imp.status;
+        if (imp.part) existing.part = imp.part;
+        if (imp.subArea) existing.subArea = imp.subArea;
+        if (imp.notes) existing.notes = imp.notes;
         if (imp.status === 'installed') {
           existing.installedDate = imp.installedDate || existing.installedDate || new Date().toISOString().slice(0, 10);
           existing.installedAt = imp.installedAt || existing.installedAt || new Date().toISOString();
@@ -3389,9 +3815,14 @@ function spoolConfirmImport(importedSpools) {
 
   // Visualização padrão: Todos os DHs e todos os setores para conferência total
   spoolActiveSector = 'all';
+  spoolActiveSubArea = 'all';
   spoolActiveDh = 'ALL';
   localStorage.setItem('obraflow_spool_active_dh', 'ALL');
   localStorage.setItem('obraflow_spool_active_sector', 'all');
+  localStorage.setItem('obraflow_spool_active_subarea', 'all');
+
+  spoolSelectedIds.clear();
+  spoolMultiSelectMode = false;
 
   spoolSaveAll(spoolDb);
   closeModal();
@@ -3435,11 +3866,24 @@ function spoolClearDh(dhName) {
    ========================================================================== */
 
 function spoolGetSelectedIds() {
-  return Array.from(document.querySelectorAll('.spool-select-check:checked')).map(cb => cb.value);
+  const validIds = new Set(spoolDb.map(s => s.id));
+  spoolSelectedIds = new Set(Array.from(spoolSelectedIds).filter(id => validIds.has(id)));
+  return Array.from(spoolSelectedIds);
+}
+
+function spoolSetSelectionFromCheckbox(checkbox) {
+  if (!checkbox?.value) return;
+  if (checkbox.checked) {
+    spoolSelectedIds.add(checkbox.value);
+  } else {
+    spoolSelectedIds.delete(checkbox.value);
+  }
+  spoolUpdateSelection();
 }
 
 function spoolUpdateSelection() {
   const ids = spoolGetSelectedIds();
+  const selectedSet = new Set(ids);
   const bar = document.getElementById('spoolBatchBar');
   const countEl = document.getElementById('spoolBatchCount');
   const headerCb = document.getElementById('selectAllSpools');
@@ -3447,10 +3891,17 @@ function spoolUpdateSelection() {
   const banner = document.getElementById('spoolTableBatchBanner');
   const bannerCount = document.getElementById('spoolBannerCount');
 
+  // Mantém cartões, mapa e tabela sincronizados com a mesma seleção em memória.
+  allChecks.forEach(cb => {
+    cb.checked = selectedSet.has(cb.value);
+  });
+  spoolSyncCardSelectionUI();
+
   // Atualiza estado do checkbox mestre no cabeçalho
   if (headerCb && allChecks.length > 0) {
-    headerCb.checked = ids.length === allChecks.length && ids.length > 0;
-    headerCb.indeterminate = ids.length > 0 && ids.length < allChecks.length;
+    const visibleSelectedCount = Array.from(allChecks).filter(cb => selectedSet.has(cb.value)).length;
+    headerCb.checked = visibleSelectedCount === allChecks.length;
+    headerCb.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < allChecks.length;
   }
 
   // Atualiza barra flutuante
@@ -3486,16 +3937,14 @@ function spoolToggleSelectAll(headerCheckbox) {
   const isChecked = typeof headerCheckbox === 'boolean' ? headerCheckbox : headerCheckbox.checked;
   const checks = document.querySelectorAll('.spool-select-check');
   checks.forEach(cb => {
-    cb.checked = isChecked;
+    if (isChecked) spoolSelectedIds.add(cb.value);
+    else spoolSelectedIds.delete(cb.value);
   });
   spoolUpdateSelection();
 }
 
 function spoolClearSelection() {
-  const checks = document.querySelectorAll('.spool-select-check');
-  checks.forEach(cb => {
-    cb.checked = false;
-  });
+  spoolSelectedIds.clear();
   const headerCb = document.getElementById('selectAllSpools');
   if (headerCb) {
     headerCb.checked = false;
@@ -3514,6 +3963,8 @@ function spoolBulkDelete() {
 
   const idSet = new Set(ids);
   spoolDb = spoolDb.filter(s => !idSet.has(s.id));
+  spoolSelectedIds.clear();
+  spoolMultiSelectMode = false;
   spoolSaveAll(spoolDb);
   renderSpools();
   toast(`🗑️ ${ids.length} spool(s) excluído(s) com sucesso!`);
@@ -3575,6 +4026,8 @@ function spoolConfirmBulkReject(event) {
   });
 
   spoolSaveAll(spoolDb);
+  spoolSelectedIds.clear();
+  spoolMultiSelectMode = false;
   closeModal();
   renderSpools();
   toast(`🔴 ${ids.length} spool(s) marcados como REPROVADOS (${reason})!`);
@@ -3637,6 +4090,8 @@ function spoolBulkSetStatus(newStatus) {
   });
 
   spoolSaveAll(spoolDb);
+  spoolSelectedIds.clear();
+  spoolMultiSelectMode = false;
   renderSpools();
   const label = newStatus === 'installed' ? 'instalados' : (newStatus === 'received' ? 'recebidos' : 'pendentes');
   toast(`✅ ${ids.length} spool(s) marcados como ${label}!`);
@@ -3691,11 +4146,45 @@ function spoolOpenManualEntryModal() {
         </div>
 
         <label>
+          <span style="font-weight:800; font-size:12px; color:#0f172a; display:block; margin-bottom:4px;">SUBÁREA / LOCAL ESPECÍFICO</span>
+          <input name="subArea" list="spoolManualSubAreas" placeholder="Ex.: Chillers, Bombas Primárias, Linha Mestra FW A" value="${spoolActiveSubArea === 'all' ? '' : esc(spoolActiveSubArea)}" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid #cbd5e1; background:#ffffff; color:#0f172a; font-weight:700;">
+          <datalist id="spoolManualSubAreas">
+            ${SPOOL_DROPDOWN_SUBAREAS.map(name => `<option value="${esc(name)}"></option>`).join('')}
+          </datalist>
+        </label>
+
+        <div style="background:#faf5ff; border:1.5px solid #d8b4fe; border-radius:10px; padding:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
+            <div>
+              <strong style="font-size:12px; color:#6d28d9; display:block;">PARTE / SEQUÊNCIA DO SPOOL *</strong>
+              <small style="color:#64748b; font-weight:600;">Permite cadastrar a mesma TAG como peças físicas diferentes.</small>
+            </div>
+            <span id="spoolManualPartPreview" class="spool-part-badge" style="font-size:13px; padding:5px 10px;">1 de 1</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <label>
+              <span style="font-weight:800; font-size:11px; color:#475569; display:block; margin-bottom:4px;">NÚMERO DESTA PARTE</span>
+              <input type="number" name="partCurrent" min="1" value="1" required oninput="spoolUpdateManualPartPreview(this.form)" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid #c4b5fd; background:#ffffff; color:#0f172a; font-weight:800;">
+            </label>
+            <label>
+              <span style="font-weight:800; font-size:11px; color:#475569; display:block; margin-bottom:4px;">TOTAL DE PARTES</span>
+              <input type="number" name="partTotal" min="1" value="1" required oninput="spoolUpdateManualPartPreview(this.form)" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid #c4b5fd; background:#ffffff; color:#0f172a; font-weight:800;">
+            </label>
+          </div>
+          <small style="display:block; margin-top:7px; color:#6d28d9; font-weight:700;">Exemplos: peça única = 1 de 1 · primeira peça = 1 de 2 · segunda peça = 2 de 2.</small>
+        </div>
+
+        <label>
           <span style="font-weight:800; font-size:12px; color:#0f172a; display:block; margin-bottom:4px;">
-            NÚMEROS DAS TAGS DOS SPOOLS * (Escreva ou cole vários separados por vírgula, espaço ou linha)
+            NÚMEROS DAS TAGS DOS SPOOLS *
           </span>
-          <textarea name="tags" rows="4" required placeholder="Exemplo: 1601, 1603, 1605, 1761, 1762, 1602, 1604, 1801, 1802..." style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #cbd5e1; background:#ffffff; color:#0f172a; font-family:var(--font-mono, monospace); font-size:14px; font-weight:800;"></textarea>
-          <small style="color:#64748b; font-weight:600; display:block; margin-top:4px;">Você pode colar uma lista inteira de uma vez. O sistema cria cada spool automaticamente para o DH selecionado.</small>
+          <textarea name="tags" rows="3" required placeholder="Exemplo: 1601, 1603, 1605..." style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #cbd5e1; background:#ffffff; color:#0f172a; font-family:var(--font-mono, monospace); font-size:14px; font-weight:800;"></textarea>
+          <small style="color:#64748b; font-weight:600; display:block; margin-top:4px;">A parte informada acima será aplicada às TAGs. Também é possível colar “1601 (1 de 2)” e “1601 (2 de 2)” para sequências diferentes no mesmo lote.</small>
+        </label>
+
+        <label>
+          <span style="font-weight:800; font-size:12px; color:#0f172a; display:block; margin-bottom:4px;">OBSERVAÇÕES</span>
+          <textarea name="notes" rows="3" placeholder="Ex.: peça recebida separada, referência do isométrico, restrição de montagem..." style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #cbd5e1; background:#ffffff; color:#0f172a; font-size:13px; font-weight:600; resize:vertical;"></textarea>
         </label>
       </div>
 
@@ -3707,6 +4196,18 @@ function spoolOpenManualEntryModal() {
   `, 'modal-medium');
 }
 
+function spoolUpdateManualPartPreview(form) {
+  if (!form) return;
+  const current = Math.max(1, parseInt(form.elements.partCurrent?.value, 10) || 1);
+  const total = Math.max(1, parseInt(form.elements.partTotal?.value, 10) || 1);
+  const preview = document.getElementById('spoolManualPartPreview');
+  if (preview) {
+    preview.textContent = `${current} de ${total}`;
+    preview.style.background = current <= total ? '#e0e7ff' : '#fee2e2';
+    preview.style.color = current <= total ? '#3730a3' : '#b91c1c';
+  }
+}
+
 function spoolSaveManualBatch(event) {
   event.preventDefault();
   const form = event.target;
@@ -3714,7 +4215,15 @@ function spoolSaveManualBatch(event) {
   const type = form.elements.type.value;
   const dh = normalizeDh(form.elements.dh.value.trim() || 'DH 04');
   const diameter = form.elements.diameter.value.trim() || (type === 'straight' ? '8"' : '2.1/2"');
+  const subArea = (form.elements.subArea?.value || '').trim();
+  const notes = (form.elements.notes?.value || '').trim();
+  const partCurrent = Math.max(1, parseInt(form.elements.partCurrent?.value, 10) || 1);
+  const partTotal = Math.max(1, parseInt(form.elements.partTotal?.value, 10) || 1);
   const rawTags = form.elements.tags.value;
+
+  if (partCurrent > partTotal) {
+    return toast(`A parte atual (${partCurrent}) não pode ser maior que o total de partes (${partTotal}).`, true);
+  }
 
   const tags = rawTags.split(/[\n,;\t]+/).map(t => t.trim()).filter(Boolean);
 
@@ -3722,13 +4231,42 @@ function spoolSaveManualBatch(event) {
     return toast('Por favor, informe pelo menos uma tag.', true);
   }
 
+  const parsedTags = tags.map(rawTag => {
+    const match = rawTag.match(/^(.+?)\s*[\(\[\-]\s*(\d+\s*(?:de|\/)\s*\d+|parte\s*\d+|sub\s*\d+)\s*[\)\]]?$/i);
+    return match
+      ? { number: match[1].trim(), part: match[2].trim(), explicitPart: true }
+      : { number: rawTag, part: `${partCurrent} de ${partTotal}`, explicitPart: false };
+  });
+
+  const repeated = new Map();
+  parsedTags.forEach(item => {
+    if (!repeated.has(item.number)) repeated.set(item.number, []);
+    repeated.get(item.number).push(item);
+  });
+  repeated.forEach(group => {
+    const allUseCommonPart = group.length > 1 && group.every(item => !item.explicitPart);
+    if (!allUseCommonPart) return;
+    const resolvedTotal = Math.max(partTotal, partCurrent + group.length - 1);
+    group.forEach((item, index) => {
+      item.part = `${partCurrent + index} de ${resolvedTotal}`;
+    });
+  });
+
   let count = 0;
-  tags.forEach(tag => {
-    const existing = spoolDb.find(s => s.number === tag && s.area === sector && normalizeDh(s.dh) === dh);
+  let skipped = 0;
+  parsedTags.forEach(({ number, part }) => {
+    const existing = spoolDb.find(s =>
+      s.number === number &&
+      (s.part || '') === part &&
+      s.area === sector &&
+      normalizeDh(s.dh) === dh &&
+      spoolCanonicalSubArea(s.subArea, s.area) === spoolCanonicalSubArea(subArea, sector)
+    );
     if (!existing) {
-      spoolDb.push({
-        id: `spool-${dh.replace(/\s+/g, '')}-${sector}-${tag}`,
-        number: tag,
+      const newSpool = {
+        number,
+        part,
+        subArea,
         dh,
         area: sector,
         type,
@@ -3739,16 +4277,24 @@ function spoolSaveManualBatch(event) {
         installedBy: '',
         receivedDate: '',
         receivedAt: '',
-        notes: ''
-      });
+        notes
+      };
+      newSpool.id = spoolBuildStableId(newSpool);
+      spoolDb.push(newSpool);
       count++;
+    } else {
+      skipped++;
     }
   });
+
+  if (!count) {
+    return toast('Nenhum spool novo foi cadastrado. A TAG, parte, setor, DH e subárea informados já existem.', true);
+  }
 
   spoolSaveAll(spoolDb);
   closeModal();
   renderSpools();
-  toast(`🎉 ${count} spools cadastrados com sucesso no ${SPOOL_SECTORS[sector]?.name} (${dh})!`);
+  toast(`🎉 ${count} spool(s) cadastrado(s) com sucesso${skipped ? ` · ${skipped} duplicado(s) ignorado(s)` : ''}!`);
 }
 
 /* ==========================================================================
@@ -3820,9 +4366,9 @@ function spoolOpenReportPDF(scope = 'daily') {
 
     return `
       <tr style="${s.status === 'rejected' ? 'background:#fff8f8;' : ''}">
-        <td style="text-align:center; font-weight:800; color:#0f172a; padding:6px 8px; border:1px solid #cbd5e1;">${esc(s.number)}</td>
+        <td style="text-align:center; font-weight:800; color:#0f172a; padding:6px 8px; border:1px solid #cbd5e1;">${esc(spoolDisplayNumber(s))}</td>
         <td style="text-align:center; font-weight:700; padding:6px 8px; border:1px solid #cbd5e1;">${esc(normalizeDh(s.dh))}</td>
-        <td style="padding:6px 8px; border:1px solid #cbd5e1;">${esc(secName)}</td>
+        <td style="padding:6px 8px; border:1px solid #cbd5e1;">${esc(secName)}${s.subArea ? `<small style="display:block; color:#92400e;">${esc(s.subArea)}</small>` : ''}</td>
         <td style="font-weight:700; padding:6px 8px; border:1px solid #cbd5e1;">${typeLabel}</td>
         <td style="text-align:center; font-weight:800; padding:6px 8px; border:1px solid #cbd5e1;">${esc(s.diameter || '—')}</td>
         <td style="text-align:center; padding:6px 8px; border:1px solid #cbd5e1;">${statusBadge}</td>
@@ -4030,6 +4576,7 @@ function spoolCopyFilteredReport(customList = null) {
   // Contexto dos filtros ativos
   const filterDesc = [];
   if (spoolActiveSector !== 'all') filterDesc.push(`Setor: *${sectorMeta.name}*`);
+  if (spoolActiveSubArea !== 'all') filterDesc.push(`Subárea: *${spoolActiveSubArea}*`);
   if (spoolActiveDh !== 'ALL') filterDesc.push(`DH: *${spoolActiveDh}*`);
   if (spoolDateFilterMode !== 'all') {
     const modeMap = {
@@ -4097,7 +4644,7 @@ function spoolCopyFilteredReport(customList = null) {
         const dia = s.diameter ? ` (${s.diameter})` : '';
         const dh = s.dh ? ` · ${s.dh}` : '';
         const dt = s.installedDate ? ` — ${formatSpoolDateShort(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '';
-        return `• Tubo ${s.number}${dia}${dh}${dt}`;
+        return `• Tubo ${spoolDisplayNumber(s)}${dia}${dh}${dt}`;
       }).join('\n') + `\n`;
     }
 
@@ -4107,7 +4654,7 @@ function spoolCopyFilteredReport(customList = null) {
         const dia = s.diameter ? ` (${s.diameter})` : '';
         const dh = s.dh ? ` · ${s.dh}` : '';
         const dt = s.receivedDate ? ` — ${formatSpoolDateShort(s.receivedDate)}${s.receivedAt ? ` às ${formatSpoolTime(s.receivedAt)}` : ''}` : '';
-        return `• Spool ${s.number}${dia}${dh}${dt}`;
+        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${dt}`;
       }).join('\n') + `\n`;
     }
 
@@ -4118,7 +4665,7 @@ function spoolCopyFilteredReport(customList = null) {
         const dh = s.dh ? ` · ${s.dh}` : '';
         const rsn = s.rejectedReason ? ` [Motivo: ${s.rejectedReason}]` : '';
         const dt = s.rejectedDate ? ` — ${formatSpoolDateShort(s.rejectedDate)}${s.rejectedAt ? ` às ${formatSpoolTime(s.rejectedAt)}` : ''}` : '';
-        return `• Spool ${s.number}${dia}${dh}${rsn}${dt}`;
+        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${rsn}${dt}`;
       }).join('\n') + `\n`;
     }
 
@@ -4127,13 +4674,13 @@ function spoolCopyFilteredReport(customList = null) {
       text += pending.map(s => {
         const dia = s.diameter ? ` (${s.diameter})` : '';
         const dh = s.dh ? ` · ${s.dh}` : '';
-        return `• Spool ${s.number}${dia}${dh}`;
+        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}`;
       }).join('\n') + `\n`;
     }
   } else {
     text += `\n📋 *PRIMEIRAS 60 TAGS (de ${list.length} itens):*\n`;
     const sample = list.slice(0, 60);
-    text += sample.map(s => `• ${s.number} (${s.dh || 'DH'} - ${s.status === 'installed' ? '🟢' : (s.status === 'received' ? '🟡' : (s.status === 'rejected' ? '🔴' : '⚪'))})`).join('\n');
+    text += sample.map(s => `• ${spoolDisplayNumber(s)} (${s.dh || 'DH'} - ${s.status === 'installed' ? '🟢' : (s.status === 'received' ? '🟡' : (s.status === 'rejected' ? '🔴' : '⚪'))})`).join('\n');
     text += `\n\n_(+ ${list.length - 60} spools não detalhados na mensagem. Baixe a planilha Excel para a relação completa.)_\n`;
   }
 
@@ -4151,7 +4698,11 @@ function spoolCopyFilteredReport(customList = null) {
 
 function spoolCopyDailyReport(dateStr = '') {
   const targetDate = dateStr || spoolSelectedDate || getLocalDateStr();
-  const sectorSpools = spoolDb.filter(s => (spoolActiveSector === 'all' || s.area === spoolActiveSector) && (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh)));
+  const sectorSpools = spoolDb.filter(s =>
+    (spoolActiveSector === 'all' || s.area === spoolActiveSector) &&
+    (spoolActiveSubArea === 'all' || spoolCanonicalSubArea(s.subArea, s.area) === spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector)) &&
+    (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh))
+  );
   const sectorMeta = SPOOL_SECTORS[spoolActiveSector] || { name: 'Todos os Setores' };
 
   const installed = sectorSpools.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate)));
@@ -4172,14 +4723,14 @@ function spoolCopyDailyReport(dateStr = '') {
   text += `🟢 *TOTAL INSTALADO NO DIA:* ${installed.length} itens\n\n`;
 
   text += `📏 *TRECHOS RETOS:* ${straight.length} tubos\n`;
-  text += `${straight.length ? straight.map(s => `• Tubo ${s.number} (${s.diameter || '8"'})${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhum trecho reto hoje'}\n\n`;
+  text += `${straight.length ? straight.map(s => `• Tubo ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhum trecho reto hoje'}\n\n`;
 
   text += `📐 *DERIVAÇÕES (Ramais):* ${branches.length} tubos\n`;
-  text += `${branches.length ? branches.map(s => `• Spool ${s.number} (${s.diameter || '2.1/2"'})${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhuma derivação hoje'}\n`;
+  text += `${branches.length ? branches.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '2.1/2"'})${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhuma derivação hoje'}\n`;
 
   if (rejectedOnDay.length > 0) {
     text += `\n🔴 *REPROVADOS NO DIA:* ${rejectedOnDay.length} tubos\n`;
-    text += `${rejectedOnDay.map(s => `• Spool ${s.number} (${s.diameter || '8"'})${s.rejectedReason ? ` [${s.rejectedReason}]` : ''}`).join('\n')}\n`;
+    text += `${rejectedOnDay.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${s.rejectedReason ? ` [${s.rejectedReason}]` : ''}`).join('\n')}\n`;
   }
 
   text += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -4200,7 +4751,11 @@ function spoolCopyDailyReport(dateStr = '') {
 
 function spoolCopyReceivedDailyReport(dateStr = '') {
   const targetDate = dateStr || spoolSelectedDate || getLocalDateStr();
-  const sectorSpools = spoolDb.filter(s => (spoolActiveSector === 'all' || s.area === spoolActiveSector) && (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh)));
+  const sectorSpools = spoolDb.filter(s =>
+    (spoolActiveSector === 'all' || s.area === spoolActiveSector) &&
+    (spoolActiveSubArea === 'all' || spoolCanonicalSubArea(s.subArea, s.area) === spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector)) &&
+    (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh))
+  );
   const sectorMeta = SPOOL_SECTORS[spoolActiveSector] || { name: 'Todos os Setores' };
 
   const received = sectorSpools.filter(s => (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate)));
@@ -4217,13 +4772,13 @@ function spoolCopyReceivedDailyReport(dateStr = '') {
   text += `🟡 *TOTAL RECEBIDO NO DIA:* ${received.length} peças\n\n`;
 
   text += `📏 *TRECHOS RETOS RECEBIDOS:* ${straight.length} tubos\n`;
-  text += `${straight.length ? straight.map(s => `• Tubo ${s.number} (${s.diameter || '8"'})${s.receivedAt ? ` — ${formatSpoolTime(s.receivedAt)}` : ''}`).join('\n') : '• Nenhum trecho reto recebido hoje'}\n\n`;
+  text += `${straight.length ? straight.map(s => `• Tubo ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${s.receivedAt ? ` — ${formatSpoolTime(s.receivedAt)}` : ''}`).join('\n') : '• Nenhum trecho reto recebido hoje'}\n\n`;
 
   text += `📐 *DERIVAÇÕES (Ramais) RECEBIDAS:* ${branches.length} tubos\n`;
-  text += `${branches.length ? branches.map(s => `• Spool ${s.number} (${s.diameter || '2.1/2"'})${s.receivedAt ? ` — ${formatSpoolTime(s.receivedAt)}` : ''}`).join('\n') : '• Nenhuma derivação recebida hoje'}\n`;
+  text += `${branches.length ? branches.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '2.1/2"'})${s.receivedAt ? ` — ${formatSpoolTime(s.receivedAt)}` : ''}`).join('\n') : '• Nenhuma derivação recebida hoje'}\n`;
 
   if (valves.length > 0) {
-    text += `\n🔘 *VÁLVULAS RECEBIDAS:* ${valves.length}\n${valves.map(s => `• Válvula ${s.number}`).join('\n')}\n`;
+    text += `\n🔘 *VÁLVULAS RECEBIDAS:* ${valves.length}\n${valves.map(s => `• Válvula ${spoolDisplayNumber(s)}`).join('\n')}\n`;
   }
 
   text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -4242,7 +4797,7 @@ function spoolCopyTagsOnly(customList = null) {
   const list = customList || spoolFilterList(spoolDb);
   if (!list.length) return toast('Nenhum spool encontrado para copiar tags.', true);
 
-  const tags = list.map(s => s.number).filter(Boolean);
+  const tags = list.map(spoolDisplayNumber).filter(Boolean);
   const text = tags.join(', ');
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -4476,7 +5031,28 @@ function spoolOpenTrackingModal(spoolId) {
             </div>
           </div>
 
-          <!-- 4. RESPONSÁVEL PELO APONTAMENTO -->
+          <!-- 4. PARTE / SEQUÊNCIA E SUBÁREA -->
+          <div style="background:#faf5ff; border:1.5px solid #d8b4fe; border-radius:10px; padding:14px;">
+            <strong style="font-size:13px; color:#6d28d9; display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+              <span>📦</span> 4. Identificação / Sequência do Spool
+            </strong>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+              <div>
+                <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Parte / Sequência (Ex.: 1 de 2, 2 de 2):</label>
+                <input type="text" id="spoolModalPart" placeholder="Ex.: 1 de 2" value="${esc(spool.part || '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #d8b4fe; font-weight:700;">
+              </div>
+              <div>
+                <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Sub-área / Local Específico:</label>
+                <input type="text" id="spoolModalSubArea" placeholder="Ex.: Chillers, Bombas Primárias..." value="${esc(spool.subArea || '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #d8b4fe; font-weight:700;">
+              </div>
+            </div>
+            <div>
+              <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">📝 Observações / Notas do Spool:</label>
+              <textarea id="spoolModalNotes" rows="2" placeholder="Observações técnicas, restrições, referências de isométrico..." style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #d8b4fe; font-weight:600; font-size:12px; resize:vertical;">${esc(spool.notes || '')}</textarea>
+            </div>
+          </div>
+
+          <!-- 5. RESPONSÁVEL PELO APONTAMENTO -->
           <div>
             <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Responsável pelo Apontamento / Montagem / Inspeção:</label>
             <input type="text" id="spoolModalResp" placeholder="Ex.: Pedro Alves, Equipe HVAC..." value="${esc(spool.installedBy || spool.receivedBy || spool.rejectedBy || '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;">
@@ -4525,6 +5101,14 @@ function spoolSaveModalDates(spoolId) {
   const rejTime = document.getElementById('spoolModalRejTime')?.value || '';
   const rejReason = document.getElementById('spoolModalRejReason')?.value.trim() || '';
   const resp = document.getElementById('spoolModalResp')?.value.trim() || '';
+  const partVal = (document.getElementById('spoolModalPart')?.value || '').trim();
+  const subAreaVal = (document.getElementById('spoolModalSubArea')?.value || '').trim();
+  const notesVal = (document.getElementById('spoolModalNotes')?.value || '').trim();
+
+  // Salvar Parte, Subárea e Observações
+  if (partVal !== undefined) item.part = partVal;
+  if (subAreaVal !== undefined) item.subArea = subAreaVal;
+  if (notesVal !== undefined) item.notes = notesVal;
 
   item.receivedDate = recDate;
   item.receivedAt = recDate ? buildIsoFromLocalDateAndTime(recDate, recTime) : '';
@@ -4594,6 +5178,15 @@ window.spoolSetDateFilterMode = spoolSetDateFilterMode;
 window.spoolQuickFilterDay = spoolQuickFilterDay;
 window.spoolClearDateFilter = spoolClearDateFilter;
 window.spoolToggleStatus = spoolToggleStatus;
+window.spoolHandleTubeTap = spoolHandleTubeTap;
+window.spoolToggleSafeTapMode = spoolToggleSafeTapMode;
+window.spoolToggleMapCollapse = spoolToggleMapCollapse;
+window.spoolToggleMultiSelectMode = spoolToggleMultiSelectMode;
+window.spoolToggleCardSelection = spoolToggleCardSelection;
+window.spoolSelectAllVisible = spoolSelectAllVisible;
+window.spoolOpenQuickActionModal = spoolOpenQuickActionModal;
+window.spoolSaveQuickNote = spoolSaveQuickNote;
+window.spoolSelectSubArea = spoolSelectSubArea;
 window.spoolSetItemStatus = spoolSetItemStatus;
 window.spoolPromptRejectItem = spoolPromptRejectItem;
 window.spoolConfirmRejectItem = spoolConfirmRejectItem;
@@ -4606,6 +5199,7 @@ window.spoolDownloadSampleSpreadsheet = spoolDownloadSampleSpreadsheet;
 window.spoolExportUpdatedSpreadsheet = spoolExportUpdatedSpreadsheet;
 window.spoolOpenExportModal = spoolOpenExportModal;
 window.spoolOpenManualEntryModal = spoolOpenManualEntryModal;
+window.spoolUpdateManualPartPreview = spoolUpdateManualPartPreview;
 window.spoolSaveManualBatch = spoolSaveManualBatch;
 window.spoolCopyDailyReport = spoolCopyDailyReport;
 window.spoolCopyFilteredReport = spoolCopyFilteredReport;
@@ -4619,6 +5213,7 @@ window.spoolTotalCount = spoolTotalCount;
 window.spoolDeleteItem = spoolDeleteItem;
 window.spoolClearDh = spoolClearDh;
 window.spoolToggleSelectAll = spoolToggleSelectAll;
+window.spoolSetSelectionFromCheckbox = spoolSetSelectionFromCheckbox;
 window.spoolUpdateSelection = spoolUpdateSelection;
 window.spoolClearSelection = spoolClearSelection;
 window.spoolBulkDelete = spoolBulkDelete;
@@ -4627,5 +5222,3 @@ window.spoolDownloadSupercoreSpreadsheet = spoolDownloadSupercoreSpreadsheet;
 window.spoolOpenReportPDF = spoolOpenReportPDF;
 window.spoolSaveModalDates = spoolSaveModalDates;
 window.formatSpoolDateDisplay = formatSpoolDateDisplay;
-
-

@@ -645,7 +645,13 @@ function updateAppShellAccess() {
   // O sidebar só é ocultado na tela cheia de acesso público
   const isPublicPage = document.body.classList.contains('public-access-page');
   if (sidebar) sidebar.style.display = isPublicPage ? 'none' : 'flex';
-  if (mainArea) mainArea.style.marginLeft = (!isPublicPage && window.innerWidth > 992) ? '252px' : '0';
+  if (mainArea) {
+    if (isPublicPage || window.innerWidth <= 1024 || document.body.classList.contains('sidebar-collapsed')) {
+      mainArea.style.marginLeft = '0';
+    } else {
+      mainArea.style.marginLeft = '252px';
+    }
+  }
 
   const userBox = document.getElementById('sidebarUserContainer') || document.querySelector('.sidebar-user');
   if (userBox) {
@@ -1423,9 +1429,10 @@ async function submitInviteActivation(event) {
 function logoutUser() {
   currentUser = null;
   localStorage.removeItem('obraflow_user');
+  location.hash = '#login';
   updateAppShellAccess();
   render();
-  toast('Sessão encerrada. O sistema agora está no Modo Operador de Campo.');
+  toast('Sessão encerrada com sucesso.');
 }
 
 function openUserProfileModal() {
@@ -2863,24 +2870,35 @@ function render() {
     const hash = rawHash.split('?')[0] || 'dashboard';
     const isInviteLanding = rawHash.startsWith('convite') || rawHash.startsWith('invite');
     const isLoginLanding = hash === 'login' || hash === 'acesso';
-    const isPublicHome = !currentUser && hash === 'dashboard';
-    document.body.classList.toggle('public-access-page', isInviteLanding || isLoginLanding || isPublicHome);
-    updateAppShellAccess();
+    const isSignupLanding = hash === 'signup' || hash === 'cadastrar';
 
-    if (isInviteLanding || isLoginLanding || isPublicHome) {
+    // SE NÃO ESTIVER AUTENTICADO: BLOQUEIO TOTAL DE TODAS AS TELAS INTERNAS
+    if (!currentUser) {
+      document.body.classList.add('public-access-page');
+      updateAppShellAccess();
       const query = rawHash.includes('?') ? rawHash.split('?')[1] : '';
       const params = new URLSearchParams(query);
       currentPage = 'access';
-      renderAccessLanding(isInviteLanding ? 'invite' : 'login', params);
+      if (isInviteLanding) {
+        renderAccessLanding('invite', params);
+      } else if (isSignupLanding) {
+        renderAccessLanding('signup', params);
+      } else {
+        renderAccessLanding('login', params);
+      }
       return;
-    } else if (hash === 'signup' || hash === 'cadastrar') {
-      setTimeout(() => openLoginModal('signup'), 50);
     }
 
-    if (!currentUser && ['dashboard', 'empresas', 'relatorios', 'romaneios', 'formularios', 'materiais', 'notas-entrada', 'movimentacoes-materiais', 'cautelas', 'radios', 'spools', 'usuarios'].includes(hash) && !hash.startsWith('scan/')) {
-      currentPage = 'equipamentos';
-      renderEquipments();
-    } else if (hash === 'usuarios' && !isAdmin()) {
+    // USUÁRIO AUTENTICADO: LIBERA ACESSO
+    document.body.classList.remove('public-access-page');
+    updateAppShellAccess();
+
+    if (isInviteLanding || isLoginLanding) {
+      location.hash = '#dashboard';
+      return;
+    }
+
+    if (hash === 'usuarios' && !isAdmin()) {
       toast('Acesso a Usuários & Aprovações é exclusivo de Gestores.', true);
       currentPage = 'dashboard';
       renderDashboard();
@@ -6289,8 +6307,43 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-document.getElementById('menuButton').addEventListener('click',()=>{document.getElementById('sidebar').classList.toggle('open');document.getElementById('mobileBackdrop').classList.toggle('open');});
-document.getElementById('mobileBackdrop').addEventListener('click',closeMobileMenu);
+const menuBtn = document.getElementById('menuButton');
+if (menuBtn) {
+  menuBtn.addEventListener('click', () => {
+    if (window.innerWidth <= 1024) {
+      document.body.classList.remove('sidebar-collapsed');
+      document.getElementById('sidebar')?.classList.toggle('open');
+      document.getElementById('mobileBackdrop')?.classList.toggle('open');
+    } else {
+      document.body.classList.toggle('sidebar-collapsed');
+      updateAppShellAccess();
+    }
+  });
+}
+const sidebarCloseBtn = document.getElementById('sidebarCloseButton');
+if (sidebarCloseBtn) {
+  sidebarCloseBtn.addEventListener('click', closeMobileMenu);
+}
+document.getElementById('mobileBackdrop')?.addEventListener('click', closeMobileMenu);
+document.querySelectorAll('.main-nav a, .sidebar a').forEach(a => {
+  a.addEventListener('click', () => {
+    if (window.innerWidth <= 1024 || document.getElementById('sidebar')?.classList.contains('open')) {
+      closeMobileMenu();
+    }
+  });
+});
+let sidebarResizeFrame = 0;
+window.addEventListener('resize', () => {
+  cancelAnimationFrame(sidebarResizeFrame);
+  sidebarResizeFrame = requestAnimationFrame(() => {
+    if (window.innerWidth <= 1024) {
+      document.body.classList.remove('sidebar-collapsed');
+    } else {
+      closeMobileMenu();
+    }
+    updateAppShellAccess();
+  });
+});
 document.getElementById('quickScanButton').addEventListener('click',openScanModal);
 document.getElementById('globalSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){const q=e.target.value.toLowerCase();const eq=equipments.find(x=>`${x.code} ${x.name} ${x.usage?.responsible||''}`.toLowerCase().includes(q));eq?openEquipmentDetails(eq.id):toast('Nenhum equipamento encontrado.',true);}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();document.getElementById('globalSearch').focus();}});

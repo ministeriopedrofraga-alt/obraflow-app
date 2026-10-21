@@ -1062,13 +1062,41 @@ h3 { font-size: 14px; }
   .receiving-item { grid-template-columns: 35px 1fr 110px 125px; }
   .receiving-note { grid-column: 2 / -1; }
 }
-@media (max-width: 760px) {
-  .sidebar { transform: translateX(-100%); transition: transform .25s ease; }
+@media (max-width: 1024px) {
+  .sidebar { transform: translateX(-100%); transition: transform .25s ease; box-shadow: 4px 0 24px rgba(0,0,0,0.35); }
   .sidebar.open { transform: translateX(0); }
   .mobile-backdrop.open { position: fixed; inset: 0; z-index: 25; display: block; background: rgba(8,22,16,.42); }
   .main-area { width: 100%; margin-left: 0 !important; }
-  .topbar { height: 65px; padding: 0 15px; }
   .mobile-menu { display: inline-grid; }
+  .sidebar-close-btn { display: grid !important; }
+}
+body.sidebar-collapsed .sidebar { transform: translateX(-100%); transition: transform .25s ease; }
+body.sidebar-collapsed .main-area { margin-left: 0 !important; }
+body.sidebar-collapsed .mobile-menu { display: inline-grid !important; }
+
+.sidebar-close-btn {
+  display: none;
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgba(255,255,255,0.09);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  color: #dbe5df;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+.sidebar-close-btn:hover {
+  background: rgba(255,255,255,0.18);
+  color: #ffffff;
+}
+
+@media (max-width: 760px) {
+  .topbar { height: 65px; padding: 0 15px; }
   .site-selector { margin-right: auto; }
   .site-selector small, .site-selector > svg { display: none; }
   .site-selector strong { font-size: 11px; }
@@ -3453,6 +3481,114 @@ h3 { font-size: 14px; }
 .data-table.compact th,
 .data-table.compact td {
   padding: 8px 10px;
+}
+
+/* ==========================================================================
+   ENHANCEMENTS: SPOOL MULTI-SELECT, SAFE TAP, MAP COLLAPSE & PART BADGES
+   ========================================================================== */
+
+/* Spool Card Selection Mode */
+.spool-tube-card {
+  position: relative;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.spool-tube-card:active {
+  transform: scale(0.97);
+}
+.spool-tube-card.is-selected {
+  outline: 3px solid #059669 !important;
+  box-shadow: 0 0 14px rgba(5, 150, 105, 0.45) !important;
+  background: #f0fdf4 !important;
+}
+.spool-pipe-seg.is-selected {
+  outline: 3px solid #34d399 !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 16px rgba(52, 211, 153, 0.55) !important;
+}
+.spool-card-select-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 20px;
+  height: 20px;
+  accent-color: #059669;
+  cursor: pointer;
+  z-index: 10;
+}
+
+/* Spool Map Collapsed Banner */
+.spool-map-collapsed-banner {
+  background: #f8fafc;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #1e293b;
+}
+.spool-map-collapsed-banner:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+}
+
+/* Spool Part Badge (e.g. "1 de 2") */
+.spool-part-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  line-height: 1.1;
+  letter-spacing: 0.2px;
+}
+
+/* Sub-area pill */
+.spool-subarea-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  line-height: 1.1;
+}
+
+/* Safe Tap Switch / Indicator */
+.spool-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+.spool-mode-pill.safe-active {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+.spool-mode-pill.quick-active {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
 }
 
 
