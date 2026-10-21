@@ -17,7 +17,7 @@
     <meta property="og:title" content="DataCenter Omnia | Gestão da Obra" />
     <meta property="og:description" content="Acesse seu convite e a plataforma de gestão da obra DataCenter Omnia." />
     <title>Obra DataCenter Omnia | Gestão HVAC & Equipamentos</title>
-    <link rel="stylesheet" href="styles.css?v=20261018_simple_access_v3" />
+    <link rel="stylesheet" href="styles.css?v=20261020_sidebar_profile_v4" />
   </head>
   <body>
     <div class="app-shell">
@@ -45,14 +45,16 @@
           <a href="#relatorios" class="nav-link" data-page="relatorios"><span data-icon="chart"></span>Relatórios</a>
         </nav>
 
-        <div class="sidebar-help">
-          <span data-icon="shield"></span>
-          <div><strong>Gestão da obra</strong><small>Acesso seguro por e-mail e aprovação.</small></div>
-        </div>
-        <div class="sidebar-user" id="sidebarUserContainer" style="cursor:pointer;" title="Clique para ver seu perfil ou alterar seu nome">
-          <span class="avatar" id="sidebarUserAvatar">PA</span>
-          <div style="flex:1; overflow:hidden;"><strong id="sidebarUserName" style="display:block; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">Pedro Alves</strong><small id="sidebarUserRole">Administrador</small></div>
-          <button class="icon-button" id="userAuthActionButton" title="Opções de Usuário / Alterar Perfil"><span data-icon="more"></span></button>
+        <div class="sidebar-footer">
+          <div class="sidebar-help">
+            <span data-icon="shield"></span>
+            <div><strong>Gestão da obra</strong><small>Acesso seguro por e-mail e aprovação.</small></div>
+          </div>
+          <div class="sidebar-user" id="sidebarUserContainer" style="cursor:pointer;" title="Abrir perfil, alterar e-mail ou senha">
+            <span class="avatar" id="sidebarUserAvatar">PA</span>
+            <div style="flex:1; overflow:hidden;"><strong id="sidebarUserName" style="display:block; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">Pedro Alves</strong><small id="sidebarUserRole">Administrador</small></div>
+            <button class="icon-button" id="userAuthActionButton" type="button" title="Perfil, e-mail e senha"><span data-icon="more"></span></button>
+          </div>
         </div>
       </aside>
 
@@ -87,6 +89,6 @@
     <script src="radios.js?v=20261017_1"></script>
     <script src="spools.js?v=20261020_spool_parts_v2"></script>
     <script src="qr-scanner.js?v=20261017_1"></script>
-    <script src="app.js?v=20261020_access_roles_v4"></script>
+    <script src="app.js?v=20261020_profile_credentials_v5"></script>
   </body>
 </html>

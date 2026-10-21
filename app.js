@@ -715,7 +715,7 @@ function updateAppShellAccess() {
   const userBox = document.getElementById('sidebarUserContainer') || document.querySelector('.sidebar-user');
   if (userBox) {
     userBox.style.cursor = 'pointer';
-    userBox.title = 'Clique para ver seu perfil ou alterar seu nome de usuário';
+    userBox.title = 'Abrir perfil, alterar e-mail ou senha';
     userBox.onclick = () => openUserProfileModal();
 
     const authMoreBtn = document.getElementById('userAuthActionButton');
@@ -1503,7 +1503,7 @@ function openUserProfileModal() {
 
   modal(`
     <form onsubmit="saveUserProfile(event)">
-      ${modalHead('👤 Perfil do Usuário', 'Altere seu nome de exibição no app ou gerencie seu acesso.')}
+      ${modalHead('👤 Perfil do Usuário', 'Altere seus dados de acesso e identificação.')}
       <div class="modal-body" style="display:grid; gap:16px;">
         <div style="display:flex; align-items:center; gap:14px; padding:14px; background:#f7f9f8; border:1px solid var(--line); border-radius:10px;">
           <div style="width:48px; height:48px; border-radius:50%; background:var(--primary); color:white; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:16px;">
@@ -1524,6 +1524,30 @@ function openUserProfileModal() {
         <div class="field full">
           <label style="font-weight:700; display:block; margin-bottom:4px;">Empresa / Vínculo</label>
           <input type="text" name="company" value="${esc(company)}" placeholder="Ex: Heating Cooling, AIRTEC..." style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px;" />
+        </div>
+
+        <div class="field full">
+          <label style="font-weight:700; display:block; margin-bottom:4px;">E-mail de acesso <em>*</em></label>
+          <input type="email" name="email" value="${esc(email)}" required autocomplete="email" placeholder="nome@empresa.com.br" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px;" />
+          <small style="color:var(--muted); font-size:11px; margin-top:4px; display:block;">O novo e-mail será usado no próximo acesso.</small>
+        </div>
+
+        <div style="border-top:1px solid var(--line); padding-top:14px; display:grid; gap:12px;">
+          <strong style="font-size:12px;">Alterar senha</strong>
+          <div class="field full">
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Senha atual</label>
+            <input type="password" name="currentPassword" autocomplete="current-password" placeholder="Informe apenas se for trocar a senha" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px;" />
+          </div>
+          <div class="form-grid two">
+            <div class="field">
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Nova senha</label>
+              <input type="password" name="newPassword" minlength="6" autocomplete="new-password" placeholder="Mínimo de 6 caracteres" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px;" />
+            </div>
+            <div class="field">
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Confirmar nova senha</label>
+              <input type="password" name="confirmPassword" minlength="6" autocomplete="new-password" placeholder="Repita a nova senha" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px;" />
+            </div>
+          </div>
         </div>
 
         <div style="border-top:1px solid var(--line); padding-top:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
@@ -1547,29 +1571,93 @@ async function saveUserProfile(event) {
   const data = Object.fromEntries(new FormData(event.target));
   const newName = (data.name || '').trim();
   const newCompany = (data.company || '').trim();
+  const newEmail = (data.email || '').trim().toLowerCase();
+  const currentPassword = String(data.currentPassword || '');
+  const newPassword = String(data.newPassword || '');
+  const confirmPassword = String(data.confirmPassword || '');
   if (!newName) {
     toast('O nome não pode ficar em branco.', true);
     return;
   }
 
-  if (currentUser) {
-    currentUser.name = newName;
-    if (newCompany) currentUser.company = newCompany;
-    localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
+  if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+    toast('Informe um e-mail válido.', true);
+    return;
+  }
 
-    const match = userApprovals.find(u => u.email && u.email.toLowerCase() === (currentUser.email || '').toLowerCase());
-    if (match) {
-      match.name = newName;
-      if (newCompany) match.company = newCompany;
-      match.updated_at = new Date().toISOString();
-      localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
-      saveUserApprovalToSupabase(match);
+  if (!currentUser) return;
+  const oldEmail = String(currentUser.email || '').trim().toLowerCase();
+  const match = userApprovals.find(u =>
+    (currentUser.id && u.id === currentUser.id) ||
+    (u.email && u.email.toLowerCase() === oldEmail)
+  );
+  const duplicatedEmail = userApprovals.some(u =>
+    u !== match && u.email && u.email.toLowerCase() === newEmail
+  );
+  if (duplicatedEmail) {
+    toast('Este e-mail já está cadastrado para outro usuário.', true);
+    return;
+  }
+
+  if (newPassword) {
+    if (newPassword.length < 6) {
+      toast('A nova senha deve ter pelo menos 6 caracteres.', true);
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast('A confirmação da nova senha não confere.', true);
+      return;
+    }
+    if (match?.password && currentPassword !== String(match.password)) {
+      toast('A senha atual está incorreta.', true);
+      return;
+    }
+  } else if (confirmPassword) {
+    toast('Preencha também o campo Nova senha.', true);
+    return;
+  }
+
+  const previousRole = getEffectiveAccessRole();
+  const emailChanged = newEmail !== oldEmail;
+  currentUser.name = newName;
+  currentUser.email = newEmail;
+  currentUser.company = newCompany;
+  if (previousRole === 'admin') currentUser.role = 'admin';
+  localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
+
+  if (match) {
+    match.name = newName;
+    match.email = newEmail;
+    match.company = newCompany;
+    if (previousRole === 'admin') match.role = 'admin';
+    if (newPassword) match.password = newPassword;
+    match.updated_at = new Date().toISOString();
+    localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
+    try {
+      await saveUserApprovalToSupabase(match);
+    } catch (error) {
+      console.warn('Perfil salvo neste dispositivo; sincronização remota indisponível:', error);
+    }
+  }
+
+  const client = getSupabase();
+  if ((emailChanged || newPassword) && client?.auth?.updateUser) {
+    try {
+      const authChanges = {};
+      if (emailChanged) authChanges.email = newEmail;
+      if (newPassword) authChanges.password = newPassword;
+      const { error } = await client.auth.updateUser(authChanges);
+      if (error && !/session/i.test(error.message || '')) {
+        console.warn('Não foi possível atualizar as credenciais no provedor de autenticação:', error);
+      }
+    } catch (error) {
+      console.warn('Atualização externa de credenciais indisponível:', error);
     }
   }
 
   updateAppShellAccess();
   closeModal();
-  toast(`Nome alterado para "${newName}" com sucesso!`);
+  toast(newPassword ? 'Perfil, e-mail e senha atualizados com sucesso!' : 'Perfil atualizado com sucesso!');
   render();
 }
 
