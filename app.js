@@ -315,6 +315,7 @@ let workforce = [];
 let workforceMeta = { source: 'Nenhuma base', updatedAt: '' };
 let workforceAttendance = {};
 let workforceControlMeta = { updatedAt: '' };
+let workforceDeletedPeople = {};
 let workforceView = 'control';
 let workforceControlSubView = 'table';
 let workforceControlMonth = new Date().toISOString().slice(0, 7);
@@ -1682,7 +1683,16 @@ const supabaseRestHeaders = {
   'Content-Type': 'application/json'
 };
 
-async function supabaseRestRequest(path, options = {}) {
+class OfflineWriteQueuedError extends Error {
+  constructor(message = 'Alteracao salva neste aparelho e aguardando internet.', cause = null) {
+    super(message);
+    this.name = 'OfflineWriteQueuedError';
+    this.queued = true;
+    this.cause = cause;
+  }
+}
+
+async function performSupabaseRestRequest(path, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
   try {
@@ -1708,6 +1718,114 @@ async function supabaseRestRequest(path, options = {}) {
     clearTimeout(timeout);
   }
 }
+
+async function sendQueuedSupabaseMutation(record) {
+  return performSupabaseRestRequest(record.path, {
+    method: record.method,
+    headers: record.headers || {},
+    body: record.body,
+    timeoutMs: 20000
+  });
+}
+
+async function flushOfflineMutations({ notify = false } = {}) {
+  const manager = window.ObraflowOfflineSync;
+  if (!manager) return { sent: 0, failed: 0, pending: 0 };
+  const result = await manager.flush(sendQueuedSupabaseMutation);
+  if (notify && result.sent > 0 && result.pending === 0 && typeof toast === 'function') {
+    toast(`${result.sent} alteracao(oes) offline sincronizada(s) com o banco de dados.`);
+  }
+  return result;
+}
+
+async function supabaseRestRequest(path, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
+  const isWrite = !['GET', 'HEAD'].includes(method);
+  const manager = window.ObraflowOfflineSync;
+
+  if (!isWrite) {
+    if (manager && options.flushPending !== false && navigator.onLine !== false) {
+      await flushOfflineMutations();
+      if (await manager.hasConflict(path)) {
+        throw new OfflineWriteQueuedError('Existem alteracoes locais desta tela aguardando sincronizacao.');
+      }
+    }
+    return performSupabaseRestRequest(path, options);
+  }
+
+  if (!manager || options.queueOffline === false) {
+    return performSupabaseRestRequest(path, options);
+  }
+
+  const queuedRecord = await manager.enqueue(path, { ...options, method });
+  if (navigator.onLine === false) {
+    throw new OfflineWriteQueuedError();
+  }
+
+  try {
+    const result = await performSupabaseRestRequest(path, options);
+    await manager.complete(queuedRecord);
+    await manager.refresh();
+    return result;
+  } catch (error) {
+    await manager.refresh();
+    throw new OfflineWriteQueuedError('Alteracao preservada na fila para nova tentativa automatica.', error);
+  }
+}
+
+function updateOfflineSyncStatus(state = {}) {
+  const button = document.getElementById('offlineSyncStatus');
+  const label = document.getElementById('offlineSyncText');
+  if (!button || !label) return;
+  const pending = Number(state.pending || 0);
+  const online = state.online !== false;
+  button.classList.toggle('offline', !online);
+  button.classList.toggle('pending', pending > 0);
+  button.classList.toggle('syncing', Boolean(state.syncing));
+  if (!online) {
+    label.textContent = pending ? `Sem internet - ${pending} pendente(s)` : 'Sem internet';
+  } else if (state.syncing) {
+    label.textContent = pending ? `Sincronizando ${pending}...` : 'Sincronizando...';
+  } else if (pending) {
+    label.textContent = `${pending} alteracao(oes) pendente(s)`;
+  } else {
+    label.textContent = 'Online e sincronizado';
+  }
+  button.title = pending
+    ? `${pending} alteracao(oes) preservada(s) neste aparelho. Clique para tentar sincronizar.`
+    : online ? 'Todos os dados locais foram enviados.' : 'Continue trabalhando; os dados serao enviados quando a internet voltar.';
+}
+
+let activeReconnectSync = null;
+async function synchronizeAfterReconnect({ notify = false } = {}) {
+  if (activeReconnectSync) return activeReconnectSync;
+  activeReconnectSync = (async () => {
+    if (navigator.onLine === false) {
+      await window.ObraflowOfflineSync?.refresh();
+      if (notify) toast('Sem internet. O trabalho continua salvo neste aparelho.', true);
+      return { sent: 0, failed: 0, pending: (await window.ObraflowOfflineSync?.list())?.length || 0 };
+    }
+    const result = await flushOfflineMutations({ notify });
+    if (result.pending > 0) {
+      if (notify) toast(`${result.pending} alteracao(oes) continuam na fila. O app tentara novamente.`, true);
+      return result;
+    }
+    await Promise.allSettled([
+      syncFromSupabase({ pushAfter: hasPendingRemoteSave }),
+      syncPackingSlipsFromSupabase(),
+      syncReceivingInspectionsFromSupabase(),
+      syncWorkforceFromSupabase(),
+      typeof syncRadiosFromSupabase === 'function' ? syncRadiosFromSupabase() : Promise.resolve(),
+      typeof syncSpoolProjectsFromSupabase === 'function' ? syncSpoolProjectsFromSupabase({ force: true }) : Promise.resolve()
+    ]);
+    return result;
+  })().finally(() => {
+    activeReconnectSync = null;
+  });
+  return activeReconnectSync;
+}
+
+window.retryOfflineSync = () => synchronizeAfterReconnect({ notify: true });
 
 function historyDatabasePayload(record) {
   const allowedFields = [
@@ -1744,14 +1862,6 @@ async function persistEquipmentSnapshotRemote() {
       updatedAt: new Date().toISOString(),
       equipments: equipments.map(e => sanitizeEquipment(e))
     };
-    const client = getSupabase();
-    if (client) {
-      try {
-        await client.from('app_metadata').upsert({ key: 'equipment_registry', value: payload });
-      } catch (clientErr) {
-        console.warn('Upsert client app_metadata falhou:', clientErr);
-      }
-    }
     await supabaseRestRequest('app_metadata?on_conflict=key', {
       method: 'POST',
       body: JSON.stringify({ key: 'equipment_registry', value: payload }),
@@ -2003,6 +2113,13 @@ function loadLocalStorageBackup() {
       const parsed = JSON.parse(localWorkforceControlMeta);
       if (parsed && typeof parsed === 'object') workforceControlMeta = parsed;
     }
+    const localWorkforceDeletedPeople = localStorage.getItem('obraflow_workforce_deleted_people');
+    if (localWorkforceDeletedPeople) {
+      const parsed = JSON.parse(localWorkforceDeletedPeople);
+      workforceDeletedPeople = normalizeWorkforceDeletionMap(parsed);
+      workforce = normalizeWorkforcePeople(workforce);
+      pruneDeletedWorkforceAttendance();
+    }
     const localWorkforceMonth = localStorage.getItem('obraflow_workforce_control_month');
     if (/^\d{4}-\d{2}$/.test(localWorkforceMonth || '')) workforceControlMonth = localWorkforceMonth;
     const localWorkforceSummaryDate = localStorage.getItem('obraflow_workforce_summary_date');
@@ -2034,6 +2151,7 @@ function saveLocalBackup() {
     ['obraflow_workforce_meta', workforceMeta],
     ['obraflow_workforce_attendance', workforceAttendance],
     ['obraflow_workforce_control_meta', workforceControlMeta],
+    ['obraflow_workforce_deleted_people', workforceDeletedPeople],
     ['obraflow_packing_slips', packingSlips],
     ['obraflow_receiving_inspections', receivingInspections]
   ];
@@ -2321,6 +2439,75 @@ function workforcePersonKey(personOrCompany, name = '') {
   return `${String(company || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR')}|${String(personName || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR')}`;
 }
 
+function normalizeWorkforceDeletionMap(value) {
+  const normalized = {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return normalized;
+  Object.entries(value).forEach(([storedKey, tombstone]) => {
+    if (!tombstone || typeof tombstone !== 'object') return;
+    const personKey = tombstone.personKey || workforcePersonKey(tombstone.company, tombstone.name) || storedKey;
+    if (!personKey || personKey === '|') return;
+    const deletedAt = tombstone.deletedAt || tombstone.updatedAt || new Date(0).toISOString();
+    const previous = normalized[personKey];
+    if (!previous || (Date.parse(deletedAt) || 0) >= (Date.parse(previous.deletedAt) || 0)) {
+      normalized[personKey] = {
+        personKey,
+        id: tombstone.id ? String(tombstone.id) : '',
+        company: String(tombstone.company || '').replace(/\s+/g, ' ').trim(),
+        name: String(tombstone.name || '').replace(/\s+/g, ' ').trim(),
+        deletedAt
+      };
+    }
+  });
+  return normalized;
+}
+
+function mergeWorkforceDeletionMaps(...sources) {
+  const merged = {};
+  sources.forEach(source => {
+    Object.entries(normalizeWorkforceDeletionMap(source)).forEach(([key, tombstone]) => {
+      const previous = merged[key];
+      if (!previous || (Date.parse(tombstone.deletedAt) || 0) >= (Date.parse(previous.deletedAt) || 0)) {
+        merged[key] = tombstone;
+      }
+    });
+  });
+  return merged;
+}
+
+function isWorkforcePersonDeleted(person) {
+  if (!person) return false;
+  const key = workforcePersonKey(person);
+  if (workforceDeletedPeople[key]) return true;
+  const id = person.id ? String(person.id) : '';
+  return Boolean(id && Object.values(workforceDeletedPeople).some(tombstone => tombstone.id && tombstone.id === id));
+}
+
+function markWorkforcePersonDeleted(person) {
+  const personKey = workforcePersonKey(person);
+  if (!personKey || personKey === '|') return;
+  workforceDeletedPeople[personKey] = {
+    personKey,
+    id: person?.id ? String(person.id) : '',
+    company: String(person?.company || '').replace(/\s+/g, ' ').trim(),
+    name: String(person?.name || '').replace(/\s+/g, ' ').trim(),
+    deletedAt: new Date().toISOString()
+  };
+}
+
+function clearWorkforcePersonDeletion(person) {
+  const key = workforcePersonKey(person);
+  const id = person?.id ? String(person.id) : '';
+  Object.entries(workforceDeletedPeople).forEach(([storedKey, tombstone]) => {
+    if (storedKey === key || (id && tombstone.id === id)) delete workforceDeletedPeople[storedKey];
+  });
+}
+
+function pruneDeletedWorkforceAttendance() {
+  Object.keys(workforceAttendance || {}).forEach(personKey => {
+    if (workforceDeletedPeople[personKey]) delete workforceAttendance[personKey];
+  });
+}
+
 function normalizeWorkforcePeople(people) {
   const deletedKeys = typeof getDeletedUserKeys === 'function' ? new Set(getDeletedUserKeys().map(k => String(k).trim().toLowerCase())) : new Set();
   return (Array.isArray(people) ? people : [])
@@ -2328,6 +2515,7 @@ function normalizeWorkforcePeople(people) {
       if (!person?.company || !person?.name) return false;
       const n = String(person.name).trim().toLowerCase();
       if (n.includes('wallace') || n.includes('walace') || deletedKeys.has(n)) return false;
+      if (isWorkforcePersonDeleted(person)) return false;
       return true;
     })
     .map(person => ({
@@ -2359,50 +2547,51 @@ function normalizeWorkforceAttendanceMap(value) {
 
 function workforceSnapshot() {
   return {
-    version: 2,
+    version: 3,
     updatedAt: workforceControlMeta.updatedAt || new Date().toISOString(),
     meta: workforceMeta,
     people: workforce,
-    attendance: workforceAttendance
+    attendance: workforceAttendance,
+    deletedPeople: workforceDeletedPeople
   };
 }
 
-let isSavingWorkforce = false;
+let workforceRemoteSaveChain = Promise.resolve(true);
 
-async function persistWorkforceControlRemote() {
-  if (isSavingWorkforce) return;
-  isSavingWorkforce = true;
-  try {
-    const snapshot = workforceSnapshot();
-    await supabaseRestRequest('app_metadata?on_conflict=key', {
-      method: 'POST',
-      body: JSON.stringify({ key: 'workforce_control', value: snapshot }),
-      headers: { Prefer: 'resolution=merge-duplicates' }
-    });
-    const remotePeople = workforce.map(person => ({
-      id: person.id || crypto.randomUUID(),
-      company: person.company || '',
-      name: person.name || '',
-      role: person.role || '',
-      status: person.status || '',
-      phone: person.phone || '',
-      accessRole: person.accessRole || 'operator',
-      pin: person.pin || ''
-    }));
-    if (remotePeople.length) {
-      await supabaseRestRequest('workforce?on_conflict=id', {
+function persistWorkforceControlRemote() {
+  const save = async () => {
+    try {
+      const snapshot = workforceSnapshot();
+      await supabaseRestRequest('app_metadata?on_conflict=key', {
         method: 'POST',
-        body: JSON.stringify(remotePeople),
+        body: JSON.stringify({ key: 'workforce_control', value: snapshot }),
         headers: { Prefer: 'resolution=merge-duplicates' }
-      }).catch(err => console.warn('O retrato do efetivo foi salvo, mas o cadastro de workforce não foi atualizado:', err));
+      });
+      const remotePeople = workforce.map(person => ({
+        id: person.id || crypto.randomUUID(),
+        company: person.company || '',
+        name: person.name || '',
+        role: person.role || '',
+        status: person.status || '',
+        phone: person.phone || '',
+        accessRole: person.accessRole || 'operator',
+        pin: person.pin || ''
+      }));
+      if (remotePeople.length) {
+        await supabaseRestRequest('workforce?on_conflict=id', {
+          method: 'POST',
+          body: JSON.stringify(remotePeople),
+          headers: { Prefer: 'resolution=merge-duplicates' }
+        }).catch(err => console.warn('O retrato do efetivo foi salvo, mas o cadastro de workforce não foi atualizado:', err));
+      }
+      return true;
+    } catch (error) {
+      console.warn('Controle de efetivo salvo somente neste aparelho:', error);
+      return false;
     }
-    return true;
-  } catch (error) {
-    console.warn('Controle de efetivo salvo somente neste aparelho:', error);
-    return false;
-  } finally {
-    isSavingWorkforce = false;
-  }
+  };
+  workforceRemoteSaveChain = workforceRemoteSaveChain.catch(() => false).then(save);
+  return workforceRemoteSaveChain;
 }
 
 function scheduleWorkforceRemoteSave(delay = 500) {
@@ -2421,6 +2610,13 @@ async function syncWorkforceFromSupabase() {
     if (remoteSnapshot) {
       const remoteTime = Date.parse(remoteSnapshot.updatedAt || '') || 0;
       const localTime = Date.parse(workforceControlMeta.updatedAt || '') || 0;
+      const localDeletionMap = normalizeWorkforceDeletionMap(workforceDeletedPeople);
+      const remoteDeletionMap = normalizeWorkforceDeletionMap(remoteSnapshot.deletedPeople);
+      const hasUnpublishedLocalDeletion = Object.entries(localDeletionMap).some(([key, tombstone]) => {
+        const remoteTombstone = remoteDeletionMap[key];
+        return !remoteTombstone || (Date.parse(tombstone.deletedAt) || 0) > (Date.parse(remoteTombstone.deletedAt) || 0);
+      });
+      workforceDeletedPeople = mergeWorkforceDeletionMaps(localDeletionMap, remoteDeletionMap);
       const remoteAttendance = normalizeWorkforceAttendanceMap(remoteSnapshot.attendance);
       const localAttendance = workforceAttendance || {};
 
@@ -2439,22 +2635,24 @@ async function syncWorkforceFromSupabase() {
       });
 
       const remotePeople = normalizeWorkforcePeople(remoteSnapshot.people);
-      const mergedPeopleMap = new Map();
 
       if (!workforce.length || remoteTime >= localTime) {
-        workforce.forEach(p => mergedPeopleMap.set(workforcePersonKey(p), p));
-        remotePeople.forEach(p => mergedPeopleMap.set(workforcePersonKey(p), { ...mergedPeopleMap.get(workforcePersonKey(p)), ...p }));
-        workforce = normalizeWorkforcePeople(Array.from(mergedPeopleMap.values()));
+        // O retrato mais novo é autoritativo. Fazer união aqui ressuscitava
+        // pessoas que tinham sido excluídas em outro aparelho.
+        workforce = remotePeople;
         workforceAttendance = mergedAttendance;
         workforceMeta = remoteSnapshot.meta || workforceMeta;
         workforceControlMeta = { updatedAt: remoteSnapshot.updatedAt || '' };
+        if (hasUnpublishedLocalDeletion) {
+          workforceControlMeta = { updatedAt: new Date().toISOString() };
+          scheduleWorkforceRemoteSave(0);
+        }
       } else {
-        remotePeople.forEach(p => mergedPeopleMap.set(workforcePersonKey(p), p));
-        workforce.forEach(p => mergedPeopleMap.set(workforcePersonKey(p), { ...mergedPeopleMap.get(workforcePersonKey(p)), ...p }));
-        workforce = normalizeWorkforcePeople(Array.from(mergedPeopleMap.values()));
+        workforce = normalizeWorkforcePeople(workforce);
         workforceAttendance = mergedAttendance;
         scheduleWorkforceRemoteSave(0);
       }
+      pruneDeletedWorkforceAttendance();
       saveLocalBackup();
       return true;
     }
@@ -4330,17 +4528,15 @@ async function handleEquipmentUpload(event) {
       await persistEquipmentRecords(changedEquipments);
       if (removedEquipments.length > 0) {
         const removedIds = removedEquipments.map(e => e.id);
-        const client = getSupabase();
-        if (client) {
-          await client.from('equipments').delete().in('id', removedIds);
-        } else {
-          for (const reqId of removedIds) {
-            await supabaseRestRequest(`equipments?id=eq.${encodeURIComponent(reqId)}`, { method: 'DELETE' });
-          }
-        }
+        await Promise.all(removedIds.map(reqId =>
+          supabaseRestRequest(`equipments?id=eq.${encodeURIComponent(reqId)}`, { method: 'DELETE' })
+        ));
       }
-      const client = getSupabase();
-      if (client) client.from('app_metadata').upsert({key:'equipment_import_meta',value:equipmentImportMeta});
+      await supabaseRestRequest('app_metadata?on_conflict=key', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ key: 'equipment_import_meta', value: equipmentImportMeta })
+      });
     } catch (error) {
       shared = false;
       console.warn('A planilha foi salva localmente, mas não chegou à base compartilhada:', error);
@@ -5453,6 +5649,8 @@ function savePerson(event,index) {
   const previousKey = previous ? workforcePersonKey(previous) : '';
   if(index===null) { data.id=crypto.randomUUID(); workforce.push(data); } else { workforce[index]={...previous,...data}; }
   const nextPerson = index === null ? data : workforce[index];
+  // Um cadastro manual explícito permite restaurar uma pessoa removida antes.
+  clearWorkforcePersonDeletion(nextPerson);
   const nextKey = workforcePersonKey(nextPerson);
   if (previousKey && previousKey !== nextKey && workforceAttendance[previousKey]) {
     workforceAttendance[nextKey] = { ...(workforceAttendance[nextKey] || {}), ...workforceAttendance[previousKey] };
@@ -5461,12 +5659,44 @@ function savePerson(event,index) {
   workforce=normalizeWorkforcePeople(workforce); workforceMeta={source:'Cadastro manual',updatedAt:new Date().toISOString()}; workforceControlMeta={updatedAt:new Date().toISOString()}; saveLocalBackup(); scheduleWorkforceRemoteSave(0); closeModal(); renderCompanies(); toast(personMessage(index));
 }
 function personMessage(index) { return index===null?'Pessoa adicionada ao efetivo.':'Cadastro atualizado.'; }
-function deletePerson(index) {
-  const person=workforce[index]; if(!person||!confirm(`Excluir ${person.name} da lista de efetivo e suas marcações diárias?`))return; workforce.splice(index,1); delete workforceAttendance[workforcePersonKey(person)]; workforceMeta={source:'Cadastro manual',updatedAt:new Date().toISOString()}; workforceControlMeta={updatedAt:new Date().toISOString()}; if(supabase) supabase.from('workforce').delete().eq('id', person.id); saveLocalBackup(); scheduleWorkforceRemoteSave(0); renderCompanies(); toast('Pessoa removida da lista.');
+async function deletePerson(index) {
+  const person = workforce[index];
+  if (!person || !confirm(`Excluir ${person.name} da lista de efetivo e suas marcações diárias?`)) return;
+
+  markWorkforcePersonDeleted(person);
+  workforce.splice(index, 1);
+  delete workforceAttendance[workforcePersonKey(person)];
+  workforceMeta = { source: 'Cadastro manual', updatedAt: new Date().toISOString() };
+  workforceControlMeta = { updatedAt: new Date().toISOString() };
+  saveLocalBackup();
+  renderCompanies();
+  toast('Pessoa removida. Sincronizando a exclusão...');
+
+  const deletionRequests = [];
+  if (person.id) {
+    deletionRequests.push(supabaseRestRequest(`workforce?id=eq.${encodeURIComponent(person.id)}`, {
+      method: 'DELETE',
+      headers: { Prefer: 'return=representation' }
+    }));
+  }
+  if (person.company && person.name) {
+    deletionRequests.push(supabaseRestRequest(`workforce?company=eq.${encodeURIComponent(person.company)}&name=eq.${encodeURIComponent(person.name)}`, {
+      method: 'DELETE',
+      headers: { Prefer: 'return=representation' }
+    }));
+  }
+  const deletionResults = await Promise.allSettled(deletionRequests);
+  deletionResults.filter(result => result.status === 'rejected').forEach(result => {
+    console.warn('Exclusão da linha de efetivo aguardando sincronização:', result.reason);
+  });
+  const shared = await persistWorkforceControlRemote();
+  toast(shared
+    ? `${person.name} foi removido do efetivo em todos os aparelhos.`
+    : `${person.name} foi removido neste aparelho e será sincronizado quando a conexão voltar.`, !shared);
 }
 function openWorkforceModal() {
   const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
-  modal(`${modalHead('Atualizar empresas e efetivo','Importe ou exporte o mesmo modelo de controle mensal')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('workforceFile').click()"><span>${icon('download')}</span><div><h3>Selecionar planilha de efetivo</h3><p>Formatos .xlsx ou .xls · a aba mais recente será importada</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="workforceFile" type="file" accept=".xlsx,.xls" hidden onchange="handleWorkforceUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${workforce.length} pessoas em ${companies.length} empresas</strong><small>${esc(workforceMeta.source||'Base inicial ainda não carregada')}</small></div></div><div class="company-chips">${companies.map(company=>`<span>${esc(company)} <b>${workforce.filter(person=>person?.company===company).length}</b></span>`).join('')}</div><div class="notice">${icon('alert')} O leitor identifica os cabeçalhos EMPRESA, NOME, FUNÇÃO e STATUS em qualquer coluna e também importa as marcações diárias 1, 0 e FOLGA. A exportação gera este mesmo modelo para o mês selecionado.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar modelo de ${esc(workforceMonthLabel())}</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-small');
+  modal(`${modalHead('Atualizar empresas e efetivo','Adicione várias pessoas de uma vez por planilha')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('workforceFile').click()"><span>${icon('download')}</span><div><h3>Selecionar planilha de efetivo</h3><p>Formatos .xlsx ou .xls · uma pessoa por linha</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="workforceFile" type="file" accept=".xlsx,.xls" hidden onchange="handleWorkforceUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${workforce.length} pessoas em ${companies.length} empresas</strong><small>${esc(workforceMeta.source||'Base inicial ainda não carregada')}</small></div></div><div class="company-chips">${companies.map(company=>`<span>${esc(company)} <b>${workforce.filter(person=>person?.company===company).length}</b></span>`).join('')}</div><div class="notice">${icon('alert')} Use as colunas <strong>EMPRESA, NOME, FUNÇÃO, STATUS e TELEFONE</strong>. A importação inclui pessoas novas e atualiza cadastros existentes sem apagar os demais. Planilhas mensais também podem conter marcações 1, 0 e FOLGA.</div></div><div class="modal-foot" style="flex-wrap:wrap;"><button class="button button-outline" onclick="downloadWorkforceImportTemplate()">${icon('download')} Baixar modelo para cadastro em massa</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar controle de ${esc(workforceMonthLabel())}</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-small');
 }
 
 function workforceSpreadsheetHeader(row) {
@@ -5474,9 +5704,12 @@ function workforceSpreadsheetHeader(row) {
   const company = normalized.findIndex(value => value === 'empresa');
   const name = normalized.findIndex(value => value === 'nome');
   const status = normalized.findIndex(value => value === 'status' || value === 'vinculo status' || value === 'vinculo');
+  const phone = normalized.findIndex(value => value === 'telefone' || value === 'celular' || value === 'whatsapp');
+  const accessRole = normalized.findIndex(value => value === 'perfil de acesso' || value === 'perfil' || value === 'acesso');
+  const pin = normalized.findIndex(value => value === 'pin' || value === 'pin de acesso');
   const roles = normalized.map((value, index) => value === 'funcao' || value === 'funcao auxiliar' ? index : -1).filter(index => index >= 0);
   if (company < 0 || name < 0 || (status < 0 && !roles.length)) return null;
-  return { company, name, status, roles, firstDailyColumn: Math.max(company, name, status, ...roles) + 1 };
+  return { company, name, status, phone, accessRole, pin, roles, firstDailyColumn: Math.max(company, name, status, phone, accessRole, pin, ...roles) + 1 };
 }
 
 function workforceSpreadsheetDateColumns(rows, headerIndex, firstDailyColumn) {
@@ -5522,8 +5755,24 @@ function parseWorkforceSpreadsheet(rows) {
       const auxRole = String(row[header.map.roles[0]] || '').replace(/\s+/g, ' ').trim();
       const role = String(row[header.map.roles[1]] || row[header.map.roles[0]] || '').replace(/\s+/g, ' ').trim();
       const status = header.map.status >= 0 ? String(row[header.map.status] || '').replace(/\s+/g, ' ').trim() : '';
+      const phone = header.map.phone >= 0 ? String(row[header.map.phone] || '').replace(/\s+/g, ' ').trim() : '';
+      const rawAccessRole = header.map.accessRole >= 0 ? String(row[header.map.accessRole] || '').trim() : '';
+      const normalizedAccessRole = rawAccessRole ? normalizeAccessRole(rawAccessRole) : '';
+      const accessRole = normalizedAccessRole ? (['admin', 'gestor'].includes(normalizedAccessRole) ? 'admin' : 'operator') : '';
+      const pin = header.map.pin >= 0 ? String(row[header.map.pin] || '').replace(/\s+/g, ' ').trim() : '';
       const previous = importedByKey.get(key) || existingByKey.get(key) || {};
-      importedByKey.set(key, { ...previous, id: previous.id || crypto.randomUUID(), company, name, auxRole: auxRole || previous.auxRole || '', role: role || previous.role || '', status: status || previous.status || '' });
+      importedByKey.set(key, {
+        ...previous,
+        id: previous.id || crypto.randomUUID(),
+        company,
+        name,
+        auxRole: auxRole || previous.auxRole || '',
+        role: role || previous.role || '',
+        status: status || previous.status || '',
+        phone: phone || previous.phone || '',
+        accessRole: accessRole || previous.accessRole || 'operator',
+        pin: pin || previous.pin || ''
+      });
       dateColumns.forEach((date, column) => {
         const marker = normalizeAttendanceValue(row[column]);
         if (!marker) return;
@@ -5535,6 +5784,34 @@ function parseWorkforceSpreadsheet(rows) {
   });
   if (!importedByKey.size) throw new Error('A planilha não possui pessoas válidas para importar.');
   return { people: normalizeWorkforcePeople([...importedByKey.values()]), attendance: importedAttendance, dates: [...importedDates].sort(), headers: headers.length };
+}
+
+async function downloadWorkforceImportTemplate() {
+  if (!await ensureExcelLibrary()) return toast('Não foi possível carregar o gerador de Excel.', true);
+  const workbook = XLSX.utils.book_new();
+  const registrationSheet = XLSX.utils.aoa_to_sheet([
+    ['EMPRESA', 'NOME', 'FUNÇÃO', 'STATUS', 'TELEFONE', 'PERFIL DE ACESSO', 'PIN'],
+    ['', '', '', '', '', '', '']
+  ]);
+  registrationSheet['!cols'] = [
+    { wch: 24 }, { wch: 34 }, { wch: 26 }, { wch: 16 }, { wch: 20 }, { wch: 20 }, { wch: 12 }
+  ];
+  registrationSheet['!autofilter'] = { ref: 'A1:G1' };
+  const instructionsSheet = XLSX.utils.aoa_to_sheet([
+    ['COMO PREENCHER O CADASTRO EM MASSA'],
+    ['1. Use uma linha para cada funcionário.'],
+    ['2. EMPRESA, NOME e FUNÇÃO são os campos principais.'],
+    ['3. STATUS pode ser DIRETA, INDIRETA ou TERCEIRO.'],
+    ['4. PERFIL DE ACESSO pode ser OPERADOR, GESTOR ou ADMIN.'],
+    ['5. TELEFONE e PIN são opcionais.'],
+    ['6. Não altere os nomes dos cabeçalhos da primeira linha.'],
+    ['7. Ao importar, pessoas novas são incluídas e as existentes são atualizadas.']
+  ]);
+  instructionsSheet['!cols'] = [{ wch: 92 }];
+  XLSX.utils.book_append_sheet(workbook, registrationSheet, 'CADASTRO');
+  XLSX.utils.book_append_sheet(workbook, instructionsSheet, 'INSTRUCOES');
+  XLSX.writeFile(workbook, 'Modelo_Cadastro_Em_Massa_Efetivo.xlsx');
+  toast('Modelo de cadastro em massa baixado. Preencha uma pessoa por linha.');
 }
 
 async function handleWorkforceUpload(event) {
@@ -5552,6 +5829,9 @@ async function handleWorkforceUpload(event) {
     }
     if (!sheetName) throw new Error('Nenhuma aba possui os cabeçalhos EMPRESA e NOME do controle de efetivo.');
     const imported = parseWorkforceSpreadsheet(rows);
+    const existingKeysBeforeImport = new Set(workforce.map(person => workforcePersonKey(person)));
+    const addedCount = imported.people.filter(person => !existingKeysBeforeImport.has(workforcePersonKey(person))).length;
+    const updatedCount = imported.people.length - addedCount;
 
     // Mescla pessoas da planilha com as que já existem no sistema, evitando perda de dados cadastrais
     const existingMap = new Map();
@@ -5587,8 +5867,8 @@ async function handleWorkforceUpload(event) {
     workforceView='control'; renderCompanies(); openWorkforceModal();
     const shared = await persistWorkforceControlRemote();
     toast(shared
-      ? `${imported.people.length} pessoas e ${imported.dates.length} dia(s) mesclados com sucesso em todos os aparelhos.`
-      : `${imported.people.length} pessoas e ${imported.dates.length} dia(s) mesclados neste aparelho. A base compartilhada está indisponível.`, !shared);
+      ? `${addedCount} pessoa(s) adicionada(s), ${updatedCount} atualizada(s) e ${imported.dates.length} dia(s) mesclados em todos os aparelhos.`
+      : `${addedCount} pessoa(s) adicionada(s) e ${updatedCount} atualizada(s) neste aparelho. A sincronização ficará pendente.`, !shared);
   } catch(error) { toast(error.message||'Não foi possível ler esta planilha.',true); }
   finally { event.target.value=''; }
 }
@@ -6007,13 +6287,7 @@ async function deleteEquipment(id) {
   localDataRevision += 1;
   persistEquipmentSnapshotRemote();
   try {
-    const client = getSupabase();
-    if (client) {
-      const { error } = await client.from('equipments').delete().eq('id', id);
-      if (error) console.warn('Exclusão na tabela equipments:', error);
-    } else {
-      await supabaseRestRequest(`equipments?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
-    }
+    await supabaseRestRequest(`equipments?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
   } catch (error) {
     console.warn('Exclusão direta na tabela falhou (sincronizado via app_metadata):', error);
   }
@@ -6486,16 +6760,21 @@ window.addEventListener('resize', () => {
   });
 });
 document.getElementById('quickScanButton').addEventListener('click',openScanModal);
+document.getElementById('offlineSyncStatus')?.addEventListener('click', window.retryOfflineSync);
 document.getElementById('globalSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){const q=e.target.value.toLowerCase();const eq=equipments.find(x=>`${x.code} ${x.name} ${x.usage?.responsible||''}`.toLowerCase().includes(q));eq?openEquipmentDetails(eq.id):toast('Nenhum equipamento encontrado.',true);}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();document.getElementById('globalSearch').focus();}});
 window.addEventListener('hashchange',render);
-window.addEventListener('focus',()=>syncFromSupabase({ pushAfter: hasPendingRemoteSave }));
-window.addEventListener('online',()=>syncFromSupabase({ pushAfter: hasPendingRemoteSave }));
+window.ObraflowOfflineSync?.subscribe(updateOfflineSyncStatus);
+window.addEventListener('focus',()=>{
+  if (navigator.onLine !== false) synchronizeAfterReconnect();
+});
+window.addEventListener('online',()=>synchronizeAfterReconnect({ notify: true }));
+window.addEventListener('offline',()=>window.ObraflowOfflineSync?.refresh());
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible') syncFromSupabase({ pushAfter: hasPendingRemoteSave });
+  if(document.visibilityState==='visible' && navigator.onLine !== false) synchronizeAfterReconnect();
 });
 setInterval(()=>{
-  if(document.visibilityState==='visible') syncFromSupabase({ pushAfter: hasPendingRemoteSave });
+  if(document.visibilityState==='visible' && navigator.onLine !== false) syncFromSupabase({ pushAfter: hasPendingRemoteSave });
 },5000);
 window.addEventListener('beforeunload', () => {
   if (typeof workforceRemoteSaveTimer !== 'undefined' && workforceRemoteSaveTimer) persistWorkforceControlRemote();

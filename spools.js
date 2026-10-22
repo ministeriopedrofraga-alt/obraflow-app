@@ -1,13 +1,6 @@
 /* ==========================================================================
    OBRAFLOW — CONTROLE OPERACIONAL DE SPOOLS & TUBULAÇÕES
-   Setores Oficiais:
-   1. Corredor FW A
-   2. Corredor FW B
-   3. Corredor Gerador
-   4. Salas Elétricas
-   5. CAG (Central de Água Gelada)
-   6. SUPERCORE
-   7. Salas RMUs
+   Os setores exibidos no aplicativo são lidos dos dados da planilha.
    Subir Planilha · Baixar Planilha Atualizada · Filtros Avançados · Campo DH
    ========================================================================== */
 
@@ -36,7 +29,7 @@ function normalizeDh(rawDh) {
 
 // Normalização inteligente de setores (reconhece variações de digitação na planilha)
 function normalizeSector(rawSec) {
-  if (!rawSec) return 'fw-a';
+  if (!rawSec) return '';
   const s = String(rawSec).toLowerCase().trim();
   if (/gerador/.test(s)) return 'gerador';
   if (/el[eé]tric/.test(s)) return 'eletricas';
@@ -58,6 +51,55 @@ const SPOOL_SECTORS = {
   'supercore': { id: 'supercore', name: 'SUPERCORE', icon: '⚡', line: 'Barramento Principal & Prumadas' },
   'rmus': { id: 'rmus', name: 'Salas RMUs', icon: '🔌', line: 'Distribuição Elétrica & Refrigeração' }
 };
+
+// A lista exibida nos filtros vem exclusivamente dos spools cadastrados/importados.
+// Este mapa serve apenas para apresentar nomes e ícones conhecidos, sem criar setores.
+function spoolSectorDisplayName(spool) {
+  if (!spool) return '';
+  const exactSpreadsheetName = String(spool.sectorName || '').trim();
+  if (exactSpreadsheetName) return exactSpreadsheetName;
+  const sectorId = String(spool.area || '').trim();
+  return SPOOL_SECTORS[sectorId]?.name || sectorId;
+}
+
+function spoolGetAvailableSectors(items = spoolDb) {
+  const sectorsById = new Map();
+  const sectorsWithExactName = new Set();
+
+  (Array.isArray(items) ? items : []).forEach(spool => {
+    const id = String(spool?.area || '').trim();
+    if (!id) return;
+
+    const exactSpreadsheetName = String(spool?.sectorName || '').trim();
+    const existing = sectorsById.get(id);
+    if (existing) {
+      if (exactSpreadsheetName && !sectorsWithExactName.has(id)) {
+        existing.name = exactSpreadsheetName;
+        sectorsWithExactName.add(id);
+      }
+      return;
+    }
+
+    const knownMeta = SPOOL_SECTORS[id] || {};
+    sectorsById.set(id, {
+      id,
+      name: spoolSectorDisplayName(spool),
+      icon: knownMeta.icon || '📍',
+      line: knownMeta.line || 'Setor informado na planilha'
+    });
+    if (exactSpreadsheetName) sectorsWithExactName.add(id);
+  });
+
+  return Array.from(sectorsById.values());
+}
+
+function spoolGetSectorMeta(sectorId, items = spoolDb) {
+  if (sectorId === 'all') {
+    return { id: 'all', name: 'Todos os Setores da Obra', icon: '🌐' };
+  }
+  return spoolGetAvailableSectors(items).find(sector => sector.id === sectorId)
+    || { id: sectorId, name: SPOOL_SECTORS[sectorId]?.name || sectorId || 'Setor', icon: SPOOL_SECTORS[sectorId]?.icon || '📍' };
+}
 
 // Árvore Hierárquica de Áreas e Subtipos (Preparada para os ramos e sub-áreas da obra)
 const SPOOL_AREA_TREE = {
@@ -156,6 +198,36 @@ function spoolCanonicalSubArea(value, sectorId = '') {
   }
 
   return valueKey;
+}
+
+// Assim como os setores, as subáreas visíveis nos filtros são obtidas
+// exclusivamente dos registros carregados da planilha.
+function spoolGetAvailableSubAreas(items = spoolDb, sectorId = 'all') {
+  const subAreasById = new Map();
+
+  (Array.isArray(items) ? items : []).forEach(spool => {
+    if (sectorId !== 'all' && spool?.area !== sectorId) return;
+
+    const name = String(spool?.subArea || '').trim();
+    if (!name) return;
+
+    const id = spoolCanonicalSubArea(name, spool.area);
+    if (!id || subAreasById.has(id)) return;
+
+    subAreasById.set(id, {
+      id,
+      name,
+      sectorId: String(spool.area || '').trim()
+    });
+  });
+
+  return Array.from(subAreasById.values());
+}
+
+function spoolSubAreaDisplayName(subAreaId, items = spoolDb, sectorId = 'all') {
+  if (!subAreaId || subAreaId === 'all') return 'Todas as Subáreas';
+  const targetId = spoolCanonicalSubArea(subAreaId, sectorId);
+  return spoolGetAvailableSubAreas(items, sectorId).find(sub => sub.id === targetId)?.name || subAreaId;
 }
 
 function spoolDisplayNumber(spool) {
@@ -925,23 +997,6 @@ const DEFAULT_OFFICIAL_SPOOLS = [
 ];
 const SUPERCORE_DH04_INITIAL_SPOOLS = DEFAULT_OFFICIAL_SPOOLS.filter(s => s.area === 'supercore');
 
-function spoolEnsureOfficialSpools(list) {
-  DEFAULT_OFFICIAL_SPOOLS.forEach(def => {
-    let match = list.find(s => s.id === def.id);
-    if (!match) {
-      match = list.find(s => s.number === def.number && normalizeDh(s.dh) === normalizeDh(def.dh) && normalizeSector(s.area) === normalizeSector(def.area));
-    }
-    if (!match) {
-      list.push({ ...def });
-    }
-  });
-  return true;
-}
-
-function spoolEnsureSupercoreDh04Spools(list) {
-  return spoolEnsureOfficialSpools(list);
-}
-
 // Carregar Spools do LocalStorage com auto-cura e sanitização de DH e Setores
 function spoolLoadAll() {
   let list = [];
@@ -1163,9 +1218,9 @@ function buildIsoFromLocalDateAndTime(dateStr, timeStr) {
 // Base principal de spools
 let spoolDb = spoolLoadAll();
 
-// Auto-salvar dados sanitizados
+// Auto-salvar apenas os dados sanitizados. Não reinsere setores ou spools que
+// tenham sido removidos/substituídos por uma planilha importada.
 if (spoolDb.length > 0) {
-  spoolEnsureSupercoreDh04Spools(spoolDb);
   try {
     localStorage.setItem(SPOOL_STORE_KEY, JSON.stringify(spoolDb));
   } catch (e) {}
@@ -1181,6 +1236,7 @@ let spoolTypeFilter = 'all'; // 'all', 'straight', 'valve', 'branch'
 let spoolDiameterFilter = 'all';
 let spoolListFilter = 'all';
 let spoolSearchTerm = '';
+let spoolSearchRenderTimer = null;
 let spoolSelectedDate = getLocalDateStr(); // YYYY-MM-DD no fuso local
 let spoolDateFilterMode = 'all'; // 'all' (todas as datas), 'activity' (atividade no dia), 'installed' (instalados no dia), 'received' (recebidos no dia)
 let spoolSafeTapMode = localStorage.getItem('obraflow_spool_safe_tap') !== 'false'; // Padrão: Modo Seguro (sem risco de desmarcar no tablet)
@@ -1305,7 +1361,7 @@ function spoolFilterList(sourceList) {
       const matchPart = (s.part || s.seq || '').toLowerCase().includes(q);
       const matchSub = (s.subArea || '').toLowerCase().includes(q);
       const matchDh = (s.dh || '').toLowerCase().includes(q);
-      const secName = (SPOOL_SECTORS[s.area]?.name || s.area || '').toLowerCase();
+      const secName = spoolSectorDisplayName(s).toLowerCase();
       const matchSec = secName.includes(q);
       const matchDia = (s.diameter || '').toLowerCase().includes(q);
       const matchNotes = (s.notes || '').toLowerCase().includes(q);
@@ -1345,6 +1401,23 @@ function renderSpools() {
 
   const todayStr = getLocalDateStr();
   const filterDate = spoolSelectedDate || todayStr;
+  const availableSectors = spoolGetAvailableSectors(spoolDb);
+
+  // Um setor salvo de uma planilha antiga não pode manter a tela vazia depois
+  // que outra planilha, com setores diferentes, substituir a base.
+  if (spoolActiveSector !== 'all' && !availableSectors.some(sector => sector.id === spoolActiveSector)) {
+    spoolActiveSector = 'all';
+    spoolActiveSubArea = 'all';
+    localStorage.setItem('obraflow_spool_active_sector', 'all');
+    localStorage.setItem('obraflow_spool_active_subarea', 'all');
+  }
+
+  const availableSubAreas = spoolGetAvailableSubAreas(spoolDb, spoolActiveSector);
+  const activeSubAreaKey = spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector);
+  if (spoolActiveSubArea !== 'all' && !availableSubAreas.some(sub => sub.id === activeSubAreaKey)) {
+    spoolActiveSubArea = 'all';
+    localStorage.setItem('obraflow_spool_active_subarea', 'all');
+  }
 
   // Atualizar badge do menu lateral com o total de spools cadastrados
   const navCount = document.getElementById('navSpoolCount');
@@ -1378,7 +1451,7 @@ function renderSpools() {
   const totalPending = baseSectorSpools.filter(s => s.status === 'not-started').length;
   const totalInstalled = baseSectorSpools.filter(s => s.status === 'installed').length;
 
-  const sectorMeta = SPOOL_SECTORS[spoolActiveSector] || { name: 'Todos os Setores da Obra', icon: '🌐' };
+  const sectorMeta = spoolGetSectorMeta(spoolActiveSector, spoolDb);
 
   // Lista dinâmica de diâmetros presentes no banco
   const availableDiameters = [...new Set(spoolDb.map(s => s.diameter).filter(Boolean))].sort();
@@ -1424,7 +1497,7 @@ function renderSpools() {
       </div>
     ` : ''}
 
-    <!-- 1. SELEÇÃO DE SETOR OFICIAL (FW A, FW B, GERADOR, SALAS ELÉTRICAS, CAG, SUPERCORE, RMUS) -->
+    <!-- 1. SETORES LIDOS DOS DADOS DA PLANILHA -->
     <div class="spool-sector-bar" aria-label="Setores da Obra">
       <button type="button" class="spool-sector-btn ${spoolActiveSector === 'all' ? 'active' : ''}" onclick="spoolSelectSector('all')">
         <span>🌐</span>
@@ -1432,20 +1505,48 @@ function renderSpools() {
         <span class="spool-sector-badge">${spoolDb.filter(s => s.status === 'installed' && (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh))).length}/${spoolDb.filter(s => (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh))).length}</span>
       </button>
 
-      ${Object.values(SPOOL_SECTORS).map(sec => {
+      ${availableSectors.map(sec => {
         const count = spoolDb.filter(s => s.area === sec.id && (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh))).length;
         const done = spoolDb.filter(s => s.area === sec.id && (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh)) && s.status === 'installed').length;
         return `
-          <button type="button" class="spool-sector-btn ${spoolActiveSector === sec.id ? 'active' : ''}" onclick="spoolSelectSector('${sec.id}')">
+          <button type="button" class="spool-sector-btn ${spoolActiveSector === sec.id ? 'active' : ''}" data-sector="${esc(sec.id)}" onclick="spoolSelectSector(this.dataset.sector)">
             <span>${sec.icon}</span>
-            <span>${sec.name}</span>
+            <span>${esc(sec.name)}</span>
             <span class="spool-sector-badge">${done}/${count}</span>
           </button>
         `;
       }).join('')}
     </div>
 
-    <!-- 2. SELETOR DE DATA HALL (DH 01 A DH 10) COM CONTAGEM REAL E BOTÃO DE LIMPEZA -->
+    ${availableSubAreas.length ? `
+      <!-- 2. SUBÁREAS LIDAS DOS DADOS DA PLANILHA -->
+      <div class="spool-subarea-bar" aria-label="Subáreas da Obra">
+        <span class="spool-subarea-label">🗂️ SUBÁREAS:</span>
+        <button type="button" class="spool-subarea-btn ${spoolActiveSubArea === 'all' ? 'active' : ''}" onclick="spoolSelectSubArea('all')">
+          <span>Todas as Subáreas</span>
+          <span class="spool-sector-badge">${spoolDb.filter(s =>
+            (spoolActiveSector === 'all' || s.area === spoolActiveSector) &&
+            (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh))
+          ).length}</span>
+        </button>
+        ${availableSubAreas.map(sub => {
+          const subItems = spoolDb.filter(s =>
+            (spoolActiveSector === 'all' || s.area === spoolActiveSector) &&
+            (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh)) &&
+            spoolCanonicalSubArea(s.subArea, s.area) === sub.id
+          );
+          const done = subItems.filter(s => s.status === 'installed').length;
+          return `
+            <button type="button" class="spool-subarea-btn ${spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector) === sub.id ? 'active' : ''}" data-subarea="${esc(sub.id)}" onclick="spoolSelectSubArea(this.dataset.subarea)">
+              <span>📍 ${esc(sub.name)}</span>
+              <span class="spool-sector-badge">${done}/${subItems.length}</span>
+            </button>
+          `;
+        }).join('')}
+      </div>
+    ` : ''}
+
+    <!-- 3. SELETOR DE DATA HALL (DH 01 A DH 10) COM CONTAGEM REAL E BOTÃO DE LIMPEZA -->
     <div class="spool-dh-bar" style="margin-bottom:16px; display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
       <span style="font-size:11px; font-weight:900; color:#475569; text-transform:uppercase; margin-right:6px;">PROJETO POR DATA HALL:</span>
       <button type="button" class="spool-dh-pill ${spoolActiveDh === 'ALL' ? 'active' : ''}" onclick="spoolSelectDh('ALL')" title="Ver todos os Data Halls juntos">
@@ -1526,33 +1627,29 @@ function renderSpools() {
         </select>
       </div>
 
-      <!-- Filtro Setor com todos os 7 setores -->
+      <!-- Filtro Setor: somente valores existentes nos dados da planilha -->
       <div class="spool-filter-group">
         <label class="spool-filter-label" for="spoolFilterSectorSelect">📍 Setor da Obra:</label>
         <select id="spoolFilterSectorSelect" class="spool-filter-select" onchange="spoolSelectSector(this.value)">
           <option value="all" ${spoolActiveSector === 'all' ? 'selected' : ''}>Todos os Setores</option>
-          ${Object.values(SPOOL_SECTORS).map(sec => `
-            <option value="${sec.id}" ${spoolActiveSector === sec.id ? 'selected' : ''}>${sec.icon} ${sec.name}</option>
+          ${availableSectors.map(sec => `
+            <option value="${esc(sec.id)}" ${spoolActiveSector === sec.id ? 'selected' : ''}>${sec.icon} ${esc(sec.name)}</option>
           `).join('')}
         </select>
       </div>
 
-      <!-- Filtro por Subtipo / Sub-área (aparece apenas quando o setor selecionado tem sub-áreas definidas) -->
-      ${(() => {
-        const sectorTree = SPOOL_AREA_TREE[spoolActiveSector];
-        if (!sectorTree || !sectorTree.subAreas || !sectorTree.subAreas.length) return '';
-        return `
-          <div class="spool-filter-group">
-            <label class="spool-filter-label" for="spoolFilterSubAreaSelect">🗂️ Sub-área:</label>
-            <select id="spoolFilterSubAreaSelect" class="spool-filter-select" onchange="spoolSelectSubArea(this.value)">
-              <option value="all" ${spoolActiveSubArea === 'all' ? 'selected' : ''}>Todas as Sub-áreas</option>
-              ${sectorTree.subAreas.map(sub => `
-                <option value="${sub.id}" ${spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector) === sub.id ? 'selected' : ''}>${sub.name}</option>
-              `).join('')}
-            </select>
-          </div>
-        `;
-      })()}
+      <!-- Filtro Subárea: somente valores existentes nos dados da planilha -->
+      ${availableSubAreas.length ? `
+        <div class="spool-filter-group">
+          <label class="spool-filter-label" for="spoolFilterSubAreaSelect">🗂️ Subárea:</label>
+          <select id="spoolFilterSubAreaSelect" class="spool-filter-select" onchange="spoolSelectSubArea(this.value)">
+            <option value="all" ${spoolActiveSubArea === 'all' ? 'selected' : ''}>Todas as Subáreas</option>
+            ${availableSubAreas.map(sub => `
+              <option value="${esc(sub.id)}" ${spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector) === sub.id ? 'selected' : ''}>${esc(sub.name)}</option>
+            `).join('')}
+          </select>
+        </div>
+      ` : ''}
 
       <!-- Filtro Status -->
       <div class="spool-filter-group">
@@ -1627,7 +1724,7 @@ function renderSpools() {
       <!-- Campo de Busca Textual -->
       <div class="spool-filter-group" style="flex:1; min-width:180px;">
         <label class="spool-filter-label" for="spoolSearchInput">🔍 Buscar por Tag / DH:</label>
-        <input type="search" id="spoolSearchInput" class="spool-filter-input" placeholder="Buscar tag (ex: 1601), DH, setor..." value="${esc(spoolSearchTerm)}" oninput="spoolSearchTerm = this.value; renderSpools();" style="width:100%;">
+        <input type="search" id="spoolSearchInput" class="spool-filter-input" placeholder="Buscar tag (ex: 1601), DH, setor..." value="${esc(spoolSearchTerm)}" oninput="spoolHandleSearchInput(this)" autocomplete="off" style="width:100%;">
       </div>
 
       <!-- Botão Limpar Filtros -->
@@ -1677,7 +1774,7 @@ function renderSpools() {
       </div>
 
       <div style="font-size:12px; font-weight:800; color:#475569;">
-        Mostrando <strong>${filteredSpools.length}</strong> de <strong>${spoolDb.length}</strong> spools cadastrados
+        Mostrando <strong id="spoolVisibleCount">${filteredSpools.length}</strong> de <strong>${spoolDb.length}</strong> spools cadastrados
       </div>
     </div>
 
@@ -1777,34 +1874,9 @@ function renderSpools() {
       </div>
     ` : ''}
 
-    <!-- 6. QUADRADOS DOS TUBOS COM TODAS AS TAGS 100% VISÍVEIS -->
-    <div class="spool-tube-grid-wrap">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <strong style="color:#0f172a; font-size:15px; display:flex; align-items:center; gap:6px;">
-            <span>${sectorMeta.icon}</span> MAPA DOS TUBOS · ${sectorMeta.name} (${spoolActiveDh === 'ALL' ? 'Todos os DHs' : spoolActiveDh})
-          </strong>
-          <button type="button" onclick="spoolToggleMapCollapse()" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px; font-weight:700; color:#475569; display:flex; align-items:center; gap:4px;" title="${spoolMapCollapsed ? 'Expandir mapa visual' : 'Recolher mapa visual'}">
-            ${spoolMapCollapsed ? '▼ Expandir Mapa' : '▲ Recolher Mapa'}
-          </button>
-        </div>
-        <div style="display:flex; gap:12px; font-size:11px; font-weight:800; color:#475569; align-items:center;">
-          <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#ffffff; border:2px solid #cbd5e1; display:inline-block;"></i> Pendente</span>
-          <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#f0f9ff; border:2px solid #0284c7; display:inline-block;"></i> Recebido</span>
-          <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#ecfdf5; border:2px solid #10b981; display:inline-block;"></i> Instalado</span>
-          <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#fef2f2; border:2px solid #ef4444; display:inline-block;"></i> Reprovado</span>
-        </div>
-      </div>
-
-      ${spoolMapCollapsed ? `
-        <div class="spool-map-collapsed-banner" onclick="spoolToggleMapCollapse()" style="background:#f1f5f9; border:1.5px dashed #94a3b8; border-radius:10px; padding:14px 20px; text-align:center; cursor:pointer; color:#64748b; font-weight:700; font-size:13px;">
-          📦 Mapa visual recolhido · ${filteredSpools.length} spools no filtro atual · <span style="color:#0284c7; text-decoration:underline;">Clique para expandir</span>
-        </div>
-      ` : spoolRenderTubeSquares(filteredSpools, filterDate)}
+    <div id="spoolSearchResults">
+      ${spoolRenderSearchResults(filteredSpools, filterDate)}
     </div>
-
-    <!-- 7. TABELA OPERACIONAL COM TAGS EM ALTO CONTRASTE E COLUNA DATA HALL (DH) -->
-    ${spoolRenderTubeTable(filteredSpools, filterDate)}
 
     <!-- BARRA FLUTUANTE DE AÇÕES EM MASSA (EXCLUSÃO E STATUS EM LOTE) -->
     <div id="spoolBatchBar" class="batch-checklist-bar" style="display:none;">
@@ -1905,6 +1977,40 @@ function spoolRenderPipelineBar(sectorSpools, sectorMeta) {
 /* ==========================================================================
    RENDERIZAÇÃO DOS QUADRADOS DOS TUBOS
    ========================================================================== */
+function spoolRenderSearchResults(list, filterDate) {
+  const sectorMeta = spoolGetSectorMeta(spoolActiveSector, spoolDb);
+  return `
+    <!-- 6. QUADRADOS DOS TUBOS COM TODAS AS TAGS VISIVEIS -->
+    <div class="spool-tube-grid-wrap">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <strong style="color:#0f172a; font-size:15px; display:flex; align-items:center; gap:6px;">
+            <span>${sectorMeta.icon}</span> MAPA DOS TUBOS · ${sectorMeta.name} (${spoolActiveDh === 'ALL' ? 'Todos os DHs' : spoolActiveDh})
+          </strong>
+          <button type="button" onclick="spoolToggleMapCollapse()" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px; font-weight:700; color:#475569; display:flex; align-items:center; gap:4px;" title="${spoolMapCollapsed ? 'Expandir mapa visual' : 'Recolher mapa visual'}">
+            ${spoolMapCollapsed ? '▼ Expandir Mapa' : '▲ Recolher Mapa'}
+          </button>
+        </div>
+        <div style="display:flex; gap:12px; font-size:11px; font-weight:800; color:#475569; align-items:center;">
+          <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#ffffff; border:2px solid #cbd5e1; display:inline-block;"></i> Pendente</span>
+          <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#f0f9ff; border:2px solid #0284c7; display:inline-block;"></i> Recebido</span>
+          <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#ecfdf5; border:2px solid #10b981; display:inline-block;"></i> Instalado</span>
+          <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#fef2f2; border:2px solid #ef4444; display:inline-block;"></i> Reprovado</span>
+        </div>
+      </div>
+
+      ${spoolMapCollapsed ? `
+        <div class="spool-map-collapsed-banner" onclick="spoolToggleMapCollapse()" style="background:#f1f5f9; border:1.5px dashed #94a3b8; border-radius:10px; padding:14px 20px; text-align:center; cursor:pointer; color:#64748b; font-weight:700; font-size:13px;">
+          📦 Mapa visual recolhido · ${list.length} spools no filtro atual · <span style="color:#0284c7; text-decoration:underline;">Clique para expandir</span>
+        </div>
+      ` : spoolRenderTubeSquares(list, filterDate)}
+    </div>
+
+    <!-- 7. TABELA OPERACIONAL COM TAGS EM ALTO CONTRASTE E COLUNA DATA HALL (DH) -->
+    ${spoolRenderTubeTable(list, filterDate)}
+  `;
+}
+
 function spoolRenderTubeSquares(list, filterDate) {
   if (!list.length) {
     return `
@@ -2211,6 +2317,22 @@ function spoolSelectDh(dhName) {
   renderSpools();
 }
 
+function spoolHandleSearchInput(input) {
+  spoolSearchTerm = input?.value || '';
+
+  window.clearTimeout(spoolSearchRenderTimer);
+  spoolSearchRenderTimer = window.setTimeout(() => {
+    // Atualiza apenas os resultados. Manter o input no DOM evita que o teclado
+    // virtual perca o foco a cada algarismo em celulares e tablets.
+    const results = document.getElementById('spoolSearchResults');
+    if (!results || input !== document.getElementById('spoolSearchInput')) return;
+    const filteredSpools = spoolFilterList(spoolDb);
+    results.innerHTML = spoolRenderSearchResults(filteredSpools, spoolSelectedDate || getLocalDateStr());
+    const visibleCount = document.getElementById('spoolVisibleCount');
+    if (visibleCount) visibleCount.textContent = filteredSpools.length;
+  }, 80);
+}
+
 function spoolSetFilter(filterKey) {
   spoolListFilter = filterKey;
   if (filterKey === 'installed_today') {
@@ -2406,7 +2528,7 @@ function spoolOpenQuickActionModal(spoolId) {
   const isInst = spool.status === 'installed';
   const isRec = spool.status === 'received';
   const isRej = spool.status === 'rejected';
-  const sector = SPOOL_SECTORS[spool.area] || { name: spool.area || 'Setor' };
+  const sector = spoolGetSectorMeta(spool.area, [spool]);
 
   modal(`
     <div style="background:#ffffff; color:#0f172a; padding:18px;">
@@ -2505,7 +2627,7 @@ function spoolPromptRejectItem(spoolId) {
 
   modal(`
     <form onsubmit="spoolConfirmRejectItem(event, '${item.id}')">
-      ${modalHead('Reprovar Spool / Tubulação', `Spool ${esc(item.number)} · ${esc(item.dh || 'DH 04')} · ${esc(SPOOL_SECTORS[item.area]?.name || item.area)}`)}
+      ${modalHead('Reprovar Spool / Tubulação', `Spool ${esc(item.number)} · ${esc(item.dh || 'DH 04')} · ${esc(spoolSectorDisplayName(item))}`)}
       <div class="modal-body" style="display:grid; gap:14px; background:#ffffff; color:#0f172a;">
         <div style="background:#fef2f2; border:1.5px solid #f87171; border-radius:10px; padding:12px 14px; display:flex; align-items:flex-start; gap:10px;">
           <span style="font-size:24px; line-height:1;">⛔</span>
@@ -2695,7 +2817,7 @@ function spoolOpenExportModal() {
   const formattedDate = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
   const installedTodayCount = spoolDb.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate))).length;
 
-  const activeSectorName = spoolActiveSector === 'all' ? 'Todos os Setores' : (SPOOL_SECTORS[spoolActiveSector]?.name || spoolActiveSector);
+  const activeSectorName = spoolGetSectorMeta(spoolActiveSector, spoolDb).name;
 
   modal(`
     <div style="padding:18px;">
@@ -2838,7 +2960,7 @@ function spoolOpenExportModal() {
               <span style="font-size:20px;">📄</span>
               <div>
                 <strong style="color:#0f172a; font-size:14px; display:block;">5. Baixar Modelo em Branco (Com Listas Suspensas)</strong>
-                <small style="color:#64748b;">Planilha padrão com dropdowns nativos dos 7 locais para preencher e importar</small>
+                <small style="color:#64748b;">Planilha padrão com dropdowns dos setores presentes nos dados atuais</small>
               </div>
             </div>
             <p style="margin:6px 0 0 28px; font-size:12px; color:#475569; line-height:1.4;">
@@ -2862,28 +2984,15 @@ function spoolOpenExportModal() {
 /* ==========================================================================
    EXPORTAÇÃO: BAIXAR PLANILHA COM LISTAS SUSPENSAS (EXCEL .xlsx)
    - Validação de Dados nativa do Excel para:
-     * Setores/Locais: Corredor FW A, Corredor FW B, Corredor Gerador, Salas Elétricas, CAG, SUPERCORE, Salas RMUs
+     * Setores/Locais: somente os presentes nos dados cadastrados/importados
      * Data Halls: DH 01 a DH 10
      * Classificação: Trecho Reto, Válvula de Ponta, Derivação (Ramal)
      * Status: Pendente, Recebido, Instalado
    ========================================================================== */
 
-const SPOOL_DROPDOWN_SECTORS = [
-  'Corredor FW A',
-  'Corredor FW B',
-  'Corredor Gerador',
-  'Salas Elétricas',
-  'CAG',
-  'SUPERCORE',
-  'Salas RMUs'
-];
-
 const SPOOL_DROPDOWN_DHS = Array.from({ length: 10 }, (_, i) => `DH ${String(i + 1).padStart(2, '0')}`);
 const SPOOL_DROPDOWN_TYPES = ['Trecho Reto', 'Válvula de Ponta', 'Derivação (Ramal)'];
 const SPOOL_DROPDOWN_STATUS = ['Pendente', 'Recebido', 'Instalado', 'Reprovado'];
-const SPOOL_DROPDOWN_SUBAREAS = [...new Set(
-  Object.values(SPOOL_AREA_TREE).flatMap(area => area.subAreas.map(sub => sub.name))
-)];
 
 async function ensureSpoolExcelLibrary() {
   if (window.ExcelJS) return true;
@@ -2899,17 +3008,19 @@ async function ensureSpoolExcelLibrary() {
   return !!window.ExcelJS;
 }
 
-function addSpoolHelperListSheet(workbook) {
+function addSpoolHelperListSheet(workbook, items = spoolDb) {
   const listSheet = workbook.addWorksheet('Listas_Auxiliares', { state: 'hidden' });
-  SPOOL_DROPDOWN_SECTORS.forEach((sec, idx) => { listSheet.getCell(`A${idx + 1}`).value = sec; });
+  const sectorNames = spoolGetAvailableSectors(items).map(sector => sector.name);
+  const subAreaNames = spoolGetAvailableSubAreas(items).map(subArea => subArea.name);
+  sectorNames.forEach((sec, idx) => { listSheet.getCell(`A${idx + 1}`).value = sec; });
   SPOOL_DROPDOWN_DHS.forEach((dh, idx) => { listSheet.getCell(`B${idx + 1}`).value = dh; });
   SPOOL_DROPDOWN_TYPES.forEach((t, idx) => { listSheet.getCell(`C${idx + 1}`).value = t; });
   SPOOL_DROPDOWN_STATUS.forEach((st, idx) => { listSheet.getCell(`D${idx + 1}`).value = st; });
-  SPOOL_DROPDOWN_SUBAREAS.forEach((sub, idx) => { listSheet.getCell(`E${idx + 1}`).value = sub; });
+  subAreaNames.forEach((sub, idx) => { listSheet.getCell(`E${idx + 1}`).value = sub; });
   return listSheet;
 }
 
-function applySpoolExcelDataValidations(sheet, maxRow = 2500) {
+function applySpoolExcelDataValidations(sheet, maxRow = 2500, sectorCount = 0, subAreaCount = 0) {
   if (!sheet.dataValidations) return;
 
   // 1. Data Hall (DH) na Coluna C
@@ -2922,23 +3033,27 @@ function applySpoolExcelDataValidations(sheet, maxRow = 2500) {
     error: 'Selecione um Data Hall válido (DH 01 a DH 10) na lista suspensa.'
   });
 
-  // 2. Setores / Locais na Coluna D (LISTA SUSPENSA COM OS 7 LOCAIS OFICIAIS)
-  sheet.dataValidations.add(`D2:D${maxRow}`, {
-    type: 'list',
-    allowBlank: true,
-    formulae: ['Listas_Auxiliares!$A$1:$A$7'],
-    showErrorMessage: true,
-    errorTitle: 'Setor / Local Inválido',
-    error: 'Selecione um dos 7 locais oficiais da obra na lista suspensa.'
-  });
+  // 2. Setores / Locais na Coluna D, limitados aos setores realmente existentes.
+  if (sectorCount > 0) {
+    sheet.dataValidations.add(`D2:D${maxRow}`, {
+      type: 'list',
+      allowBlank: true,
+      formulae: [`Listas_Auxiliares!$A$1:$A$${sectorCount}`],
+      showErrorMessage: true,
+      errorTitle: 'Setor / Local Inválido',
+      error: 'Selecione um setor existente nos dados da planilha.'
+    });
+  }
 
-  // 3. Subárea na Coluna E
-  sheet.dataValidations.add(`E2:E${maxRow}`, {
-    type: 'list',
-    allowBlank: true,
-    formulae: [`Listas_Auxiliares!$E$1:$E$${SPOOL_DROPDOWN_SUBAREAS.length}`],
-    showErrorMessage: false
-  });
+  // 3. Subárea na Coluna E, limitada aos valores presentes nos dados.
+  if (subAreaCount > 0) {
+    sheet.dataValidations.add(`E2:E${maxRow}`, {
+      type: 'list',
+      allowBlank: true,
+      formulae: [`Listas_Auxiliares!$E$1:$E$${subAreaCount}`],
+      showErrorMessage: false
+    });
+  }
 
   // 4. Classificação na Coluna F
   sheet.dataValidations.add(`F2:F${maxRow}`, {
@@ -2961,7 +3076,7 @@ function applySpoolExcelDataValidations(sheet, maxRow = 2500) {
   });
 }
 
-function populateSpoolExcelSheet(sheet, items) {
+function populateSpoolExcelSheet(sheet, items, validationItems = items) {
   sheet.columns = [
     { header: 'TAG / Spool', key: 'tag', width: 16 },
     { header: 'Parte / Sequência', key: 'parte', width: 18 },
@@ -2988,7 +3103,7 @@ function populateSpoolExcelSheet(sheet, items) {
 
   // Linhas de dados
   items.forEach(s => {
-    const secName = SPOOL_SECTORS[s.area]?.name || s.area || 'Corredor FW A';
+    const secName = spoolSectorDisplayName(s);
     let typeName = 'Trecho Reto';
     if (s.type === 'valve') typeName = 'Válvula de Ponta';
     else if (s.type === 'branch') typeName = 'Derivação (Ramal)';
@@ -3035,7 +3150,12 @@ function populateSpoolExcelSheet(sheet, items) {
   sheet.autoFilter = { from: 'A1', to: `L${Math.max(2, sheet.rowCount)}` };
 
   const maxValidRow = Math.max(2500, items.length + 500);
-  applySpoolExcelDataValidations(sheet, maxValidRow);
+  applySpoolExcelDataValidations(
+    sheet,
+    maxValidRow,
+    spoolGetAvailableSectors(validationItems).length,
+    spoolGetAvailableSubAreas(validationItems).length
+  );
 }
 
 async function downloadExcelJsWorkbook(workbook, filename) {
@@ -3096,8 +3216,8 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
     workbook.creator = 'Heating Cooling';
     workbook.created = new Date();
 
-    // 1. Cria aba oculta com os 7 setores, 10 DHs, 3 tipos e 3 status
-    addSpoolHelperListSheet(workbook);
+    // 1. Cria aba oculta usando apenas os setores presentes nos dados exportados.
+    addSpoolHelperListSheet(workbook, listToExport);
 
     // 2. Aba Principal
     const sheetTitle = scope === 'daily' ? 'Fechamento_Dia' : (scope === 'filtered' ? 'Spools_Filtrados' : 'Todos_os_Spools');
@@ -3116,7 +3236,7 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
   const header = ['TAG / Spool', 'Parte / Sequência', 'Data Hall (DH)', 'Setor', 'Subárea', 'Classificação', 'Diâmetro', 'Status', 'Data de Recebimento', 'Data de Instalação', 'Responsável', 'Observações'];
   const rows = [header];
   listToExport.forEach(s => {
-    const secName = SPOOL_SECTORS[s.area]?.name || s.area || 'Corredor FW A';
+    const secName = spoolSectorDisplayName(s);
     let typeName = 'Trecho Reto';
     if (s.type === 'valve') typeName = 'Válvula de Ponta';
     else if (s.type === 'branch') typeName = 'Derivação (Ramal)';
@@ -3133,7 +3253,7 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
 }
 
 /* ==========================================================================
-   EXPORTAÇÃO: MODELO PRÉ-FORMATADO COM LISTA SUSPENSA DOS 7 LOCAIS
+   EXPORTAÇÃO: MODELO PRÉ-FORMATADO COM OS SETORES EXISTENTES
    ========================================================================== */
 
 async function spoolDownloadSupercoreSpreadsheet() {
@@ -3144,18 +3264,20 @@ async function spoolDownloadSupercoreSpreadsheet() {
     workbook.creator = 'Heating Cooling';
     workbook.created = new Date();
 
-    addSpoolHelperListSheet(workbook);
-    const sheet = workbook.addWorksheet('SUPERCORE_DH04');
     const items = spoolDb.filter(s => normalizeDh(s.dh) === 'DH 04' && s.area === 'supercore');
-    populateSpoolExcelSheet(sheet, items.length ? items : SUPERCORE_DH04_INITIAL_SPOOLS.map(sc => ({
+    const exportItems = items.length ? items : SUPERCORE_DH04_INITIAL_SPOOLS.map(sc => ({
       number: sc.number,
       dh: 'DH 04',
       area: 'supercore',
+      sectorName: 'SUPERCORE',
       type: 'straight',
       diameter: '10"',
       status: sc.status,
       notes: sc.notes
-    })));
+    }));
+    addSpoolHelperListSheet(workbook, exportItems);
+    const sheet = workbook.addWorksheet('SUPERCORE_DH04');
+    populateSpoolExcelSheet(sheet, exportItems);
     await downloadExcelJsWorkbook(workbook, 'Planilha_Spools_SUPERCORE_DH04.xlsx');
     toast('Planilha SUPERCORE DH 04 com listas suspensas baixada com sucesso!');
     return;
@@ -3179,37 +3301,26 @@ async function spoolDownloadSampleSpreadsheet() {
     workbook.creator = 'Heating Cooling';
     workbook.created = new Date();
 
-    addSpoolHelperListSheet(workbook);
-
+    addSpoolHelperListSheet(workbook, spoolDb);
     const sheet = workbook.addWorksheet('Modelo_Spools');
-    const sampleItems = [
-      { number: '1601', part: '1 de 2', subArea: 'Linha Mestra FW A', dh: 'DH 04', area: 'Corredor FW A', type: 'Trecho Reto', diameter: '8"', status: 'not-started', notes: 'Alimentação AAG' },
-      { number: '1601', part: '2 de 2', subArea: 'Linha Mestra FW A', dh: 'DH 04', area: 'Corredor FW A', type: 'Trecho Reto', diameter: '8"', status: 'received', notes: 'Alimentação AAG' },
-      { number: '1602', dh: 'DH 04', area: 'Corredor FW B', type: 'Trecho Reto', diameter: '8"', status: 'received', notes: 'Retorno RAG' },
-      { number: '1761', dh: 'DH 04', area: 'Corredor FW A', type: 'Derivação (Ramal)', diameter: '2.1/2"', status: 'received', notes: 'Ramal Fan Wall' },
-      { number: 'GER-01', dh: 'DH 04', area: 'Corredor Gerador', type: 'Trecho Reto', diameter: '6"', status: 'not-started', notes: 'Linha de Resfriamento Gerador' },
-      { number: 'GER-02', dh: 'DH 04', area: 'Corredor Gerador', type: 'Derivação (Ramal)', diameter: '3"', status: 'not-started', notes: 'Ramal de Dreno Gerador' },
-      { number: 'ELE-101', dh: 'DH 04', area: 'Salas Elétricas', type: 'Trecho Reto', diameter: '4"', status: 'not-started', notes: 'Circuito Elétrico Auxiliar' },
-      { number: 'CAG-01', dh: 'DH 04', area: 'CAG', type: 'Trecho Reto', diameter: '10"', status: 'installed', notes: 'Barramento Chiller CAG' },
-      { number: 'CAG-V01', dh: 'DH 04', area: 'CAG', type: 'Válvula de Ponta', diameter: '10"', status: 'installed', notes: 'Válvula Borboleta Entrada CAG' },
-      { number: 'SC-01', dh: 'DH 04', area: 'SUPERCORE', type: 'Trecho Reto', diameter: '10"', status: 'not-started', notes: 'Prumada Principal' },
-      { number: 'RMU-01', dh: 'DH 04', area: 'Salas RMUs', type: 'Trecho Reto', diameter: '6"', status: 'not-started', notes: 'Alimentação RMU' }
-    ];
-
-    populateSpoolExcelSheet(sheet, sampleItems);
+    populateSpoolExcelSheet(sheet, [], spoolDb);
     await downloadExcelJsWorkbook(workbook, 'Modelo_Importacao_Spools_Lista_Suspensa.xlsx');
-    toast('Planilha modelo com lista suspensa dos 7 locais baixada com sucesso!');
+    toast('Planilha modelo com os setores atuais baixada com sucesso!');
     return;
   }
 
-  // Fallback direto para o arquivo pré-gerado com listas suspensas nativas
-  const link = document.createElement('a');
-  link.href = 'Modelo_Importacao_Spools_Lista_Suspensa.xlsx';
-  link.download = 'Modelo_Importacao_Spools_Lista_Suspensa.xlsx';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  toast('Planilha modelo com lista suspensa baixada!');
+  // Fallback sem lista fixa: gera um modelo vazio em vez de servir setores antigos.
+  if (window.XLSX) {
+    const header = ['TAG / Spool', 'Parte / Sequência', 'Data Hall (DH)', 'Setor', 'Subárea', 'Classificação', 'Diâmetro', 'Status', 'Data de Recebimento', 'Data de Instalação', 'Responsável', 'Observações'];
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet([header]);
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Modelo_Spools');
+    XLSX.writeFile(workbook, 'Modelo_Importacao_Spools.xlsx');
+    toast('Planilha modelo vazia baixada com sucesso!');
+    return;
+  }
+
+  toast('Não foi possível gerar a planilha modelo neste dispositivo.', true);
 }
 
 /* ==========================================================================
@@ -3218,10 +3329,14 @@ async function spoolDownloadSampleSpreadsheet() {
 
 function spoolOpenImportModal() {
   const currentDh = (spoolActiveDh === 'ALL' ? 'DH 04' : spoolActiveDh);
+  const availableSectors = spoolGetAvailableSectors(spoolDb);
+  const selectedSector = spoolActiveSector !== 'all' && availableSectors.some(sec => sec.id === spoolActiveSector)
+    ? spoolActiveSector
+    : '';
 
   modal(`
     <div>
-      ${modalHead('Subir Planilha de Spools (Excel / CSV)', `Setores: Corredor FW A/B, Gerador, Salas Elétricas, CAG, SUPERCORE, RMUs`)}
+      ${modalHead('Subir Planilha de Spools (Excel / CSV)', 'Os setores serão lidos diretamente da coluna Setor da planilha')}
       <div class="modal-body" style="display:grid; gap:16px; background:#ffffff; color:#0f172a;">
         
         <!-- Seleção de DH e Setor Padrão para itens sem coluna específica -->
@@ -3244,8 +3359,9 @@ function spoolOpenImportModal() {
               SETOR PADRÃO (Se a planilha não informar setor)
             </span>
             <select id="spoolImportDefaultSector" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid #cbd5e1; background:#ffffff; color:#0f172a; font-weight:700;">
-              ${Object.values(SPOOL_SECTORS).map(sec => `
-                <option value="${sec.id}" ${sec.id === (spoolActiveSector === 'all' ? 'fw-a' : spoolActiveSector) ? 'selected' : ''}>${sec.icon} ${sec.name}</option>
+              <option value="" ${selectedSector ? '' : 'selected'}>Não preencher — ler da planilha</option>
+              ${availableSectors.map(sec => `
+                <option value="${esc(sec.id)}" ${sec.id === selectedSector ? 'selected' : ''}>${sec.icon} ${esc(sec.name)}</option>
               `).join('')}
             </select>
           </label>
@@ -3341,7 +3457,8 @@ async function spoolHandleExcelUpload(event) {
 
   try {
     const defaultDh = normalizeDh(document.getElementById('spoolImportDefaultDh')?.value || 'DH 04');
-    const defaultSector = document.getElementById('spoolImportDefaultSector')?.value || 'fw-a';
+    const defaultSector = document.getElementById('spoolImportDefaultSector')?.value || '';
+    const defaultSectorName = defaultSector ? spoolGetSectorMeta(defaultSector, spoolDb).name : '';
 
     const data = await file.arrayBuffer();
     const workbook = XLSX.read(data, { type: 'array' });
@@ -3435,7 +3552,10 @@ async function spoolHandleExcelUpload(event) {
       }
 
       let currentDh = sheetDh;
-      let currentSector = defaultSector;
+      // Se a coluna Setor existe, somente seus valores (com preenchimento para
+      // baixo) são usados. O setor padrão vale apenas para planilhas sem a coluna.
+      let currentSector = sectorIdx === -1 ? defaultSector : '';
+      let currentSectorName = sectorIdx === -1 ? defaultSectorName : '';
 
       // 3. PROCESSAR LINHAS
       for (let i = headerRowIndex + 1; i < rows.length; i++) {
@@ -3461,9 +3581,11 @@ async function spoolHandleExcelUpload(event) {
 
         // Setor na coluna: se informado, atualiza o preenchimento contínuo
         if (sectorIdx !== -1 && row[sectorIdx] && String(row[sectorIdx]).trim()) {
-          currentSector = normalizeSector(row[sectorIdx]);
+          currentSectorName = String(row[sectorIdx]).trim();
+          currentSector = normalizeSector(currentSectorName);
         }
         const sectorVal = currentSector;
+        const sectorNameVal = currentSectorName;
 
         // Tag:
         const rawTagVal = tagIdx !== -1 && row[tagIdx] !== undefined ? String(row[tagIdx]).trim() : '';
@@ -3587,6 +3709,7 @@ async function spoolHandleExcelUpload(event) {
             subArea: subAreaColVal || '',
             dh: targetDh,
             area: sectorVal,
+            sectorName: sectorNameVal,
             type: finalType,
             diameter: diaVal,
             status: statusVal,
@@ -3654,6 +3777,26 @@ async function spoolHandleExcelUpload(event) {
       </span>
     `).join('');
 
+    const sectorSummaryHtml = spoolGetAvailableSectors(parsedSpools).map(sector => {
+      const count = parsedSpools.filter(spool => spool.area === sector.id).length;
+      return `
+        <span style="display:inline-flex; align-items:center; gap:6px; background:#f0fdf4; color:#166534; padding:4px 10px; border-radius:6px; font-weight:800; font-size:12px; border:1px solid #bbf7d0;">
+          ${sector.icon} <strong>${esc(sector.name)}:</strong> ${count} spools
+        </span>
+      `;
+    }).join('');
+
+    const subAreaSummaryHtml = spoolGetAvailableSubAreas(parsedSpools).map(subArea => {
+      const count = parsedSpools.filter(spool =>
+        spoolCanonicalSubArea(spool.subArea, spool.area) === subArea.id
+      ).length;
+      return `
+        <span style="display:inline-flex; align-items:center; gap:6px; background:#faf5ff; color:#6b21a8; padding:4px 10px; border-radius:6px; font-weight:800; font-size:12px; border:1px solid #e9d5ff;">
+          🗂️ <strong>${esc(subArea.name)}:</strong> ${count} spools
+        </span>
+      `;
+    }).join('');
+
     const previewContainer = document.getElementById('spoolImportPreviewArea');
     if (previewContainer) {
       previewContainer.innerHTML = `
@@ -3665,6 +3808,8 @@ async function spoolHandleExcelUpload(event) {
               </strong>
               <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;">
                 ${dhSummaryHtml}
+                ${sectorSummaryHtml}
+                ${subAreaSummaryHtml}
               </div>
             </div>
             <button type="button" class="button button-green" onclick="spoolConfirmImport()" style="font-weight:800; padding:10px 18px;">
@@ -3698,7 +3843,7 @@ async function spoolHandleExcelUpload(event) {
                       </strong>
                     </td>
                     <td>
-                      <strong style="color:#0f172a; font-size:13px;">${esc(SPOOL_SECTORS[s.area]?.name || s.area)}</strong>
+                      <strong style="color:#0f172a; font-size:13px;">${esc(spoolSectorDisplayName(s))}</strong>
                       ${s.subArea ? `<small style="display:block; color:#92400e; font-weight:700;">${esc(s.subArea)}</small>` : ''}
                     </td>
                     <td>
@@ -3765,6 +3910,7 @@ function spoolConfirmImport(importedSpools) {
         existing.type = imp.type;
         existing.diameter = imp.diameter;
         existing.status = imp.status;
+        if (imp.sectorName) existing.sectorName = imp.sectorName;
         if (imp.part) existing.part = imp.part;
         if (imp.subArea) existing.subArea = imp.subArea;
         if (imp.notes) existing.notes = imp.notes;
@@ -3836,7 +3982,7 @@ function spoolDeleteItem(spoolId) {
   const item = spoolDb.find(s => s.id === spoolId || s.number === spoolId);
   if (!item) return toast('Spool não encontrado.', true);
 
-  if (!confirm(`Deseja realmente excluir o spool ${item.number} (${item.dh} · ${SPOOL_SECTORS[item.area]?.name || item.area})?`)) {
+  if (!confirm(`Deseja realmente excluir o spool ${item.number} (${item.dh} · ${spoolSectorDisplayName(item)})?`)) {
     return;
   }
 
@@ -4098,11 +4244,22 @@ function spoolBulkSetStatus(newStatus) {
 }
 
 /* ==========================================================================
-   MODAL 2: ESCREVER SPOOLS MANUALMENTE (COM OS 7 SETORES OFICIAIS)
+   MODAL 2: ESCREVER SPOOLS MANUALMENTE (SETORES PRESENTES NOS DADOS)
    ========================================================================== */
 
 function spoolOpenManualEntryModal() {
-  const currentSector = SPOOL_SECTORS[spoolActiveSector] || SPOOL_SECTORS['fw-a'];
+  const availableSectors = spoolGetAvailableSectors(spoolDb);
+  if (!availableSectors.length) {
+    return toast('Importe uma planilha com a coluna Setor antes de cadastrar spools manualmente.', true);
+  }
+  const selectedSector = spoolActiveSector !== 'all' && availableSectors.some(sec => sec.id === spoolActiveSector)
+    ? spoolActiveSector
+    : availableSectors[0].id;
+  const currentSector = spoolGetSectorMeta(selectedSector, spoolDb);
+  const availableSubAreaOptions = spoolGetAvailableSubAreas(spoolDb);
+  const activeSubAreaName = spoolActiveSubArea === 'all'
+    ? ''
+    : spoolSubAreaDisplayName(spoolActiveSubArea, spoolDb, selectedSector);
   const currentDh = (spoolActiveDh === 'ALL' ? 'DH 04' : spoolActiveDh);
 
   modal(`
@@ -4113,8 +4270,8 @@ function spoolOpenManualEntryModal() {
           <label>
             <span style="font-weight:800; font-size:12px; color:#0f172a; display:block; margin-bottom:4px;">SETOR *</span>
             <select name="sector" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid #cbd5e1; background:#ffffff; color:#0f172a; font-weight:700;">
-              ${Object.values(SPOOL_SECTORS).map(sec => `
-                <option value="${sec.id}" ${sec.id === (spoolActiveSector === 'all' ? 'fw-a' : spoolActiveSector) ? 'selected' : ''}>${sec.icon} ${sec.name}</option>
+              ${availableSectors.map(sec => `
+                <option value="${esc(sec.id)}" ${sec.id === selectedSector ? 'selected' : ''}>${sec.icon} ${esc(sec.name)}</option>
               `).join('')}
             </select>
           </label>
@@ -4147,9 +4304,9 @@ function spoolOpenManualEntryModal() {
 
         <label>
           <span style="font-weight:800; font-size:12px; color:#0f172a; display:block; margin-bottom:4px;">SUBÁREA / LOCAL ESPECÍFICO</span>
-          <input name="subArea" list="spoolManualSubAreas" placeholder="Ex.: Chillers, Bombas Primárias, Linha Mestra FW A" value="${spoolActiveSubArea === 'all' ? '' : esc(spoolActiveSubArea)}" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid #cbd5e1; background:#ffffff; color:#0f172a; font-weight:700;">
+          <input name="subArea" list="spoolManualSubAreas" placeholder="Digite a subárea exatamente como consta na planilha" value="${esc(activeSubAreaName)}" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid #cbd5e1; background:#ffffff; color:#0f172a; font-weight:700;">
           <datalist id="spoolManualSubAreas">
-            ${SPOOL_DROPDOWN_SUBAREAS.map(name => `<option value="${esc(name)}"></option>`).join('')}
+            ${availableSubAreaOptions.map(subArea => `<option value="${esc(subArea.name)}"></option>`).join('')}
           </datalist>
         </label>
 
@@ -4212,6 +4369,7 @@ function spoolSaveManualBatch(event) {
   event.preventDefault();
   const form = event.target;
   const sector = form.elements.sector.value;
+  const sectorName = spoolGetSectorMeta(sector, spoolDb).name;
   const type = form.elements.type.value;
   const dh = normalizeDh(form.elements.dh.value.trim() || 'DH 04');
   const diameter = form.elements.diameter.value.trim() || (type === 'straight' ? '8"' : '2.1/2"');
@@ -4269,6 +4427,7 @@ function spoolSaveManualBatch(event) {
         subArea,
         dh,
         area: sector,
+        sectorName,
         type,
         diameter,
         status: 'not-started',
@@ -4306,7 +4465,7 @@ function spoolOpenReportPDF(scope = 'daily') {
   const formattedDate = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
   const nowFormatted = new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-  const sectorMeta = SPOOL_SECTORS[spoolActiveSector] || { name: 'Todos os Setores da Obra' };
+  const sectorMeta = spoolGetSectorMeta(spoolActiveSector, spoolDb);
   const dhLabel = spoolActiveDh === 'ALL' ? 'Todos os Data Halls' : spoolActiveDh;
 
   let reportTitle = 'RELATÓRIO DIÁRIO DE MONTAGEM DE SPOOLS';
@@ -4340,7 +4499,7 @@ function spoolOpenReportPDF(scope = 'daily') {
   const percInstalled = totalItems ? Math.round((installedCount / totalItems) * 100) : 0;
 
   const tableRows = items.map(s => {
-    const secName = SPOOL_SECTORS[s.area]?.name || s.area || '—';
+    const secName = spoolSectorDisplayName(s) || '—';
     const typeLabel = s.type === 'straight' ? '📏 Trecho Reto' : (s.type === 'branch' ? '📐 Derivação' : '📏 Tubo');
     
     let statusBadge = '<span style="display:inline-block; padding:2px 8px; border-radius:4px; font-weight:800; font-size:10px; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">⚪ Pendente</span>';
@@ -4571,12 +4730,14 @@ function spoolCopyFilteredReport(customList = null) {
 
   const targetDate = spoolSelectedDate || getLocalDateStr();
   const dateFormatted = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
-  const sectorMeta = SPOOL_SECTORS[spoolActiveSector] || { name: 'Todos os Setores' };
+  const sectorMeta = spoolGetSectorMeta(spoolActiveSector, spoolDb);
 
   // Contexto dos filtros ativos
   const filterDesc = [];
   if (spoolActiveSector !== 'all') filterDesc.push(`Setor: *${sectorMeta.name}*`);
-  if (spoolActiveSubArea !== 'all') filterDesc.push(`Subárea: *${spoolActiveSubArea}*`);
+  if (spoolActiveSubArea !== 'all') {
+    filterDesc.push(`Subárea: *${spoolSubAreaDisplayName(spoolActiveSubArea, spoolDb, spoolActiveSector)}*`);
+  }
   if (spoolActiveDh !== 'ALL') filterDesc.push(`DH: *${spoolActiveDh}*`);
   if (spoolDateFilterMode !== 'all') {
     const modeMap = {
@@ -4703,7 +4864,7 @@ function spoolCopyDailyReport(dateStr = '') {
     (spoolActiveSubArea === 'all' || spoolCanonicalSubArea(s.subArea, s.area) === spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector)) &&
     (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh))
   );
-  const sectorMeta = SPOOL_SECTORS[spoolActiveSector] || { name: 'Todos os Setores' };
+  const sectorMeta = spoolGetSectorMeta(spoolActiveSector, spoolDb);
 
   const installed = sectorSpools.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate)));
   const straight = installed.filter(s => s.type === 'straight');
@@ -4756,7 +4917,7 @@ function spoolCopyReceivedDailyReport(dateStr = '') {
     (spoolActiveSubArea === 'all' || spoolCanonicalSubArea(s.subArea, s.area) === spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector)) &&
     (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh))
   );
-  const sectorMeta = SPOOL_SECTORS[spoolActiveSector] || { name: 'Todos os Setores' };
+  const sectorMeta = spoolGetSectorMeta(spoolActiveSector, spoolDb);
 
   const received = sectorSpools.filter(s => (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate)));
   const straight = received.filter(s => s.type === 'straight');
@@ -4935,7 +5096,7 @@ function spoolOpenTrackingModal(spoolId) {
 
   const isInst = spool.status === 'installed';
   const isRec = spool.status === 'received';
-  const sector = SPOOL_SECTORS[spool.area] || { name: spool.area || 'Setor da Obra' };
+  const sector = spoolGetSectorMeta(spool.area, [spool]);
   const todayStr = getLocalDateStr();
 
   modal(`

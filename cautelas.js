@@ -1,29 +1,82 @@
 let cautelasList = [];
+const CAUTELAS_STORE_KEY = 'obraflow_employee_checkouts';
 
-async function fetchCautelas() {
+function loadLocalCautelas() {
   try {
-    const client = await waitForSupabaseClient();
-    if (!client) return;
-    const { data, error } = await client.from('employee_checkouts').select('*').order('checkout_date', { ascending: false });
-    if (error) throw error;
-    cautelasList = data || [];
-  } catch (err) {
-    console.error('Erro ao buscar saídas de ferramentas e EPIs:', err);
+    const stored = JSON.parse(localStorage.getItem(CAUTELAS_STORE_KEY) || '[]');
+    if (Array.isArray(stored)) cautelasList = stored;
+  } catch (error) {
+    console.warn('Não foi possível carregar as cautelas deste aparelho:', error);
+  }
+  return cautelasList;
+}
+
+function saveLocalCautelas() {
+  try {
+    localStorage.setItem(CAUTELAS_STORE_KEY, JSON.stringify(cautelasList));
+    return true;
+  } catch (error) {
+    console.warn('Não foi possível salvar as cautelas neste aparelho:', error);
+    return false;
   }
 }
 
-async function saveCautela(cautelaData) {
+function cautelaTimestamp(record) {
+  return Date.parse(record?._localUpdatedAt || record?.returned_date || record?.checkout_date || record?.created_at || 0) || 0;
+}
+
+function cautelaDatabasePayload(record) {
+  const fields = ['id', 'collaborator_name', 'item_description', 'quantity', 'checkout_type', 'status', 'signature_url', 'notes', 'checkout_date', 'returned_date'];
+  return Object.fromEntries(fields
+    .filter(field => record?.[field] !== undefined)
+    .map(field => [field, record[field]]));
+}
+
+async function fetchCautelas() {
+  loadLocalCautelas();
   try {
-    const client = await waitForSupabaseClient();
-    if (!client) throw new Error('Supabase não disponível');
-    const { error } = await client.from('employee_checkouts').insert([cautelaData]);
-    if (error) throw error;
-    await fetchCautelas();
-    renderCautelas();
-    toast('Saída registrada com sucesso!');
+    if (navigator.onLine === false || typeof supabaseRestRequest !== 'function') return cautelasList;
+    const rows = await supabaseRestRequest('employee_checkouts?select=*&order=checkout_date.desc');
+    const merged = new Map((rows || []).map(record => [String(record.id), record]));
+    cautelasList.forEach(localRecord => {
+      const remoteRecord = merged.get(String(localRecord.id));
+      if (!remoteRecord || cautelaTimestamp(localRecord) > cautelaTimestamp(remoteRecord)) {
+        merged.set(String(localRecord.id), localRecord);
+      }
+    });
+    cautelasList = Array.from(merged.values()).sort((a, b) => cautelaTimestamp(b) - cautelaTimestamp(a));
+    saveLocalCautelas();
   } catch (err) {
-    console.error(err);
-    toast('Erro ao registrar a saída.', true);
+    console.warn('Saídas compartilhadas indisponíveis; mantendo a cópia local:', err);
+  }
+  return cautelasList;
+}
+
+async function saveCautela(cautelaData) {
+  const now = new Date().toISOString();
+  const record = {
+    ...cautelaData,
+    id: cautelaData.id || crypto.randomUUID?.() || `cautela-${Date.now()}`,
+    checkout_date: cautelaData.checkout_date || now,
+    _localUpdatedAt: now
+  };
+  const existingIndex = cautelasList.findIndex(item => String(item.id) === String(record.id));
+  if (existingIndex >= 0) cautelasList[existingIndex] = record;
+  else cautelasList.unshift(record);
+  saveLocalCautelas();
+  if (typeof currentPage !== 'undefined' && currentPage === 'cautelas') renderCautelas();
+  try {
+    await supabaseRestRequest('employee_checkouts?on_conflict=id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(cautelaDatabasePayload(record))
+    });
+    toast('Saída registrada com sucesso!');
+    return true;
+  } catch (err) {
+    console.warn('Saída preservada neste aparelho e aguardando sincronização:', err);
+    toast('Saída salva neste aparelho. O envio será automático quando a internet voltar.');
+    return false;
   }
 }
 
@@ -299,18 +352,23 @@ window.submitNovaCautela = function(event) {
 
 window.returnCautela = async function(id) {
   if (!confirm('Confirmar a devolução deste item?')) return;
+  const record = cautelasList.find(item => String(item.id) === String(id));
+  if (!record) return toast('Entrega não encontrada.', true);
+  const returnedAt = new Date().toISOString();
+  record.status = 'RETURNED';
+  record.returned_date = returnedAt;
+  record._localUpdatedAt = returnedAt;
+  saveLocalCautelas();
+  renderCautelas();
   try {
-    const client = await waitForSupabaseClient();
-    const { error } = await client.from('employee_checkouts').update({
-      status: 'RETURNED',
-      returned_date: new Date().toISOString()
-    }).eq('id', id);
-    if (error) throw error;
+    await supabaseRestRequest(`employee_checkouts?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ status: 'RETURNED', returned_date: returnedAt })
+    });
     toast('Devolução registrada com sucesso.');
-    await fetchCautelas();
-    renderCautelas();
   } catch (error) {
-    console.error(error);
-    toast('Erro ao registrar a devolução.', true);
+    console.warn('Devolução preservada neste aparelho e aguardando sincronização:', error);
+    toast('Devolução salva neste aparelho. O envio será automático quando a internet voltar.');
   }
 };
