@@ -27,6 +27,19 @@ function normalizeDh(rawDh) {
   return str || 'DH 04';
 }
 
+// Aceita 10, 10 pol, 10 polegadas ou 10" e grava sempre com o símbolo de polegada.
+function spoolNormalizeDiameter(rawDiameter) {
+  let value = String(rawDiameter || '').trim();
+  if (!value) return '';
+  value = value
+    .replace(/[″”]/g, '"')
+    .replace(/\s*(?:polegadas?|pol\.?)\s*$/i, '"')
+    .replace(/\s*"\s*$/, '"')
+    .trim();
+  if (!value.endsWith('"') && /\d/.test(value)) value += '"';
+  return value;
+}
+
 // Normalização inteligente de setores (reconhece variações de digitação na planilha)
 function normalizeSector(rawSec) {
   if (!rawSec) return '';
@@ -1887,6 +1900,9 @@ function renderSpools() {
         <button type="button" class="button compact" style="background:#059669; color:#ffffff; font-weight:700; border:none; height:32px; padding:4px 12px; border-radius:6px; cursor:pointer;" onclick="spoolCopySelectedSpools()" title="Copiar spools selecionados para WhatsApp">
           📋 Copiar Marcados
         </button>
+        <button type="button" class="button compact" style="background:#2563eb; color:#ffffff; font-weight:800; border:none; height:32px; padding:4px 12px; border-radius:6px; cursor:pointer;" onclick="spoolOpenBulkEdit()" title="Alterar diâmetro e outros dados dos spools selecionados">
+          ✏️ Editar Selecionados
+        </button>
         <button type="button" class="button compact" style="background:#dc2626; color:#ffffff; font-weight:800; border:none; height:32px; padding:4px 14px; border-radius:6px; cursor:pointer;" onclick="spoolBulkDelete()">
           🗑️ Excluir Selecionados
         </button>
@@ -2126,7 +2142,7 @@ function spoolRenderTubeTable(list, filterDate) {
             </button>
           `}
           <span style="font-size:12px; color:#64748b;">
-            Clique em <strong>[Recebido]</strong> ou <strong>[Instalado]</strong> para status, ou <strong>[🗑️]</strong> para excluir.
+            Marque as linhas para <strong>editar em massa</strong>, mudar o status ou excluir.
           </span>
         </div>
       </div>
@@ -2144,6 +2160,9 @@ function spoolRenderTubeTable(list, filterDate) {
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <button type="button" class="button compact" onclick="spoolCopySelectedSpools()" style="background:#059669; color:#ffffff; font-weight:700; border:none; height:30px; padding:4px 12px; border-radius:6px; cursor:pointer; font-size:12px;" title="Copiar spools marcados para WhatsApp">
             📋 Copiar Marcados
+          </button>
+          <button type="button" class="button compact" onclick="spoolOpenBulkEdit()" style="background:#2563eb; color:#ffffff; font-weight:800; border:none; height:30px; padding:4px 12px; border-radius:6px; cursor:pointer; font-size:12px;" title="Alterar diâmetro e outros dados dos spools marcados">
+            ✏️ Editar Selecionados
           </button>
           <button type="button" class="button compact" onclick="spoolBulkDelete()" style="background:#dc2626; color:#ffffff; font-weight:800; border:none; height:30px; padding:4px 14px; border-radius:6px; cursor:pointer; font-size:12px;">
             🗑️ Excluir Selecionados
@@ -4099,6 +4118,150 @@ function spoolClearSelection() {
   spoolUpdateSelection();
 }
 
+function spoolOpenBulkEdit() {
+  const ids = spoolGetSelectedIds();
+  if (!ids.length) return toast('Selecione ao menos um spool para editar.', true);
+
+  const idSet = new Set(ids);
+  const selectedItems = spoolDb.filter(s => idSet.has(s.id));
+  const commonValue = key => {
+    const values = [...new Set(selectedItems.map(item => String(item?.[key] || '').trim()))];
+    return values.length === 1 ? values[0] : '';
+  };
+  const commonDiameter = commonValue('diameter');
+  const commonDh = commonValue('dh');
+  const commonSector = commonValue('area');
+  const commonType = commonValue('type');
+  const commonSubArea = commonValue('subArea');
+  const availableDiameters = [...new Set([
+    '1/2"', '3/4"', '1"', '1.1/2"', '2"', '2.1/2"', '3"', '4"', '6"', '8"', '10"', '12"',
+    ...spoolDb.map(s => spoolNormalizeDiameter(s.diameter)).filter(Boolean)
+  ])].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+  const availableDhs = [...new Set([
+    ...SPOOL_DROPDOWN_DHS,
+    ...spoolDb.map(s => normalizeDh(s.dh)).filter(Boolean)
+  ])].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+  const availableSectors = spoolGetAvailableSectors(spoolDb);
+
+  const fieldStyle = 'gap:10px; align-items:center; padding:11px 12px; border:1px solid #dbe4ee; border-radius:9px; background:#ffffff;';
+  const controlStyle = 'width:100%; min-height:38px; padding:7px 10px; border:1.5px solid #cbd5e1; border-radius:7px; background:#ffffff; color:#0f172a; font-weight:700;';
+
+  modal(`
+    <form onsubmit="spoolConfirmBulkEdit(event)">
+      ${modalHead('Editar Spools Selecionados', `${ids.length} spool(s) serão atualizados ao mesmo tempo`)}
+      <div class="modal-body" style="display:grid; gap:14px; background:#f8fafc; color:#0f172a;">
+        <div style="padding:12px 14px; border:1.5px solid #93c5fd; border-radius:10px; background:#eff6ff;">
+          <strong style="display:block; color:#1d4ed8; font-size:13px;">✏️ Edição em massa de ${ids.length} spools</strong>
+          <small style="display:block; margin-top:3px; color:#475569; font-weight:600; line-height:1.45;">Somente os campos marcados abaixo serão alterados. Status, datas, responsáveis e observações serão preservados.</small>
+        </div>
+
+        <div style="display:grid; gap:8px;">
+          <div class="spool-bulk-edit-row" style="${fieldStyle} border-color:#60a5fa; background:#eff6ff;">
+            <input type="checkbox" id="spoolBulkUseDiameter" checked onchange="document.getElementById('spoolBulkDiameter').disabled = !this.checked" style="width:18px; height:18px; cursor:pointer;">
+            <span><strong style="display:block; font-size:12px; color:#1e3a8a;">DIÂMETRO</strong><small style="color:#64748b;">Campo principal</small></span>
+            <span>
+              <input id="spoolBulkDiameter" list="spoolBulkDiameterOptions" required value="${esc(commonDiameter)}" placeholder="Ex.: 10, 10 pol ou 10\"" style="${controlStyle}">
+              <datalist id="spoolBulkDiameterOptions">${availableDiameters.map(value => `<option value="${esc(value)}"></option>`).join('')}</datalist>
+              <small style="display:block; margin-top:4px; color:#64748b;">Você pode digitar <strong>10</strong>; o sistema salvará como <strong>10&quot;</strong>.</small>
+            </span>
+          </div>
+
+          <div class="spool-bulk-edit-row" style="${fieldStyle}">
+            <input type="checkbox" id="spoolBulkUseDh" onchange="document.getElementById('spoolBulkDh').disabled = !this.checked" style="width:18px; height:18px; cursor:pointer;">
+            <span><strong style="display:block; font-size:12px;">DATA HALL</strong><small style="color:#64748b;">Opcional</small></span>
+            <select id="spoolBulkDh" required disabled style="${controlStyle}">${commonDh ? '' : '<option value="" selected>Selecione o Data Hall...</option>'}${availableDhs.map(value => `<option value="${esc(value)}" ${commonDh && value === normalizeDh(commonDh) ? 'selected' : ''}>${esc(value)}</option>`).join('')}</select>
+          </div>
+
+          <div class="spool-bulk-edit-row" style="${fieldStyle}">
+            <input type="checkbox" id="spoolBulkUseSector" onchange="document.getElementById('spoolBulkSector').disabled = !this.checked" style="width:18px; height:18px; cursor:pointer;">
+            <span><strong style="display:block; font-size:12px;">SETOR</strong><small style="color:#64748b;">Opcional</small></span>
+            <select id="spoolBulkSector" required disabled style="${controlStyle}">${commonSector ? '' : '<option value="" selected>Selecione o setor...</option>'}${availableSectors.map(sector => `<option value="${esc(sector.id)}" ${sector.id === commonSector ? 'selected' : ''}>${sector.icon || '📍'} ${esc(sector.name)}</option>`).join('')}</select>
+          </div>
+
+          <div class="spool-bulk-edit-row" style="${fieldStyle}">
+            <input type="checkbox" id="spoolBulkUseType" onchange="document.getElementById('spoolBulkType').disabled = !this.checked" style="width:18px; height:18px; cursor:pointer;">
+            <span><strong style="display:block; font-size:12px;">CLASSIFICAÇÃO</strong><small style="color:#64748b;">Opcional</small></span>
+            <select id="spoolBulkType" required disabled style="${controlStyle}">
+              ${commonType ? '' : '<option value="" selected>Selecione a classificação...</option>'}
+              <option value="straight" ${commonType === 'straight' ? 'selected' : ''}>📏 Trecho Reto (Linha)</option>
+              <option value="branch" ${commonType === 'branch' ? 'selected' : ''}>📐 Derivação (Ramal)</option>
+              <option value="valve" ${commonType === 'valve' ? 'selected' : ''}>🔘 Válvula</option>
+            </select>
+          </div>
+
+          <div class="spool-bulk-edit-row" style="${fieldStyle}">
+            <input type="checkbox" id="spoolBulkUseSubArea" onchange="document.getElementById('spoolBulkSubArea').disabled = !this.checked" style="width:18px; height:18px; cursor:pointer;">
+            <span><strong style="display:block; font-size:12px;">SUBÁREA / LOCAL</strong><small style="color:#64748b;">Opcional</small></span>
+            <span>
+              <input id="spoolBulkSubArea" disabled value="${esc(commonSubArea)}" placeholder="Ex.: Barramento / Coletor CAG" style="${controlStyle}">
+              <small style="display:block; margin-top:4px; color:#64748b;">Se marcado e deixado vazio, limpa a subárea dos selecionados.</small>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="button" style="background:#2563eb; color:#ffffff; font-weight:800; border:none;">
+          💾 Aplicar aos ${ids.length} Spools
+        </button>
+      </div>
+    </form>
+  `, 'modal-medium');
+}
+
+function spoolConfirmBulkEdit(event) {
+  event.preventDefault();
+  const ids = spoolGetSelectedIds();
+  if (!ids.length) {
+    closeModal();
+    return toast('A seleção não está mais disponível.', true);
+  }
+
+  const changes = {};
+  const summary = [];
+  if (document.getElementById('spoolBulkUseDiameter')?.checked) {
+    const diameter = spoolNormalizeDiameter(document.getElementById('spoolBulkDiameter')?.value);
+    if (!diameter) return toast('Informe o novo diâmetro.', true);
+    changes.diameter = diameter;
+    summary.push(`Diâmetro: ${diameter}`);
+  }
+  if (document.getElementById('spoolBulkUseDh')?.checked) {
+    const dh = normalizeDh(document.getElementById('spoolBulkDh')?.value);
+    changes.dh = dh;
+    summary.push(`Data Hall: ${dh}`);
+  }
+  if (document.getElementById('spoolBulkUseSector')?.checked) {
+    const area = normalizeSector(document.getElementById('spoolBulkSector')?.value);
+    const sectorMeta = spoolGetSectorMeta(area, spoolDb);
+    changes.area = area;
+    changes.sectorName = sectorMeta.name;
+    summary.push(`Setor: ${sectorMeta.name}`);
+  }
+  if (document.getElementById('spoolBulkUseType')?.checked) {
+    const type = document.getElementById('spoolBulkType')?.value || '';
+    if (!['straight', 'branch', 'valve'].includes(type)) return toast('Selecione uma classificação válida.', true);
+    changes.type = type;
+    summary.push(`Classificação: ${type === 'straight' ? 'Trecho Reto' : (type === 'branch' ? 'Derivação' : 'Válvula')}`);
+  }
+  if (document.getElementById('spoolBulkUseSubArea')?.checked) {
+    const subArea = String(document.getElementById('spoolBulkSubArea')?.value || '').trim();
+    changes.subArea = subArea;
+    summary.push(`Subárea: ${subArea || 'limpar'}`);
+  }
+
+  if (!summary.length) return toast('Marque ao menos um campo para alterar.', true);
+  if (!confirm(`Aplicar estas alterações em ${ids.length} spool(s)?\n\n${summary.join('\n')}`)) return;
+
+  const idSet = new Set(ids);
+  spoolDb = spoolDb.map(spool => idSet.has(spool.id) ? { ...spool, ...changes } : spool);
+  spoolSaveAll(spoolDb);
+  spoolSelectedIds.clear();
+  spoolMultiSelectMode = false;
+  closeModal();
+  renderSpools();
+  toast(`✅ ${ids.length} spool(s) atualizados em massa · ${summary.join(' · ')}`);
+}
+
 function spoolBulkDelete() {
   const ids = spoolGetSelectedIds();
   if (!ids.length) return toast('Selecione ao menos um spool para excluir.', true);
@@ -5377,6 +5540,8 @@ window.spoolToggleSelectAll = spoolToggleSelectAll;
 window.spoolSetSelectionFromCheckbox = spoolSetSelectionFromCheckbox;
 window.spoolUpdateSelection = spoolUpdateSelection;
 window.spoolClearSelection = spoolClearSelection;
+window.spoolOpenBulkEdit = spoolOpenBulkEdit;
+window.spoolConfirmBulkEdit = spoolConfirmBulkEdit;
 window.spoolBulkDelete = spoolBulkDelete;
 window.spoolBulkSetStatus = spoolBulkSetStatus;
 window.spoolDownloadSupercoreSpreadsheet = spoolDownloadSupercoreSpreadsheet;

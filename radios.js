@@ -216,6 +216,21 @@ function radioStatusBadge(status) {
   return `<span class="status ${cssClass}">${radioStatusLabel(status)}</span>`;
 }
 
+function radioWorkforceValue(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR');
+}
+
+function radioFindWorkforcePerson(personName, companyName = '') {
+  const people = typeof workforce !== 'undefined' && Array.isArray(workforce) ? workforce : [];
+  const targetName = radioWorkforceValue(personName);
+  const targetCompany = radioWorkforceValue(companyName);
+  const matches = people.filter(person => person?.name
+    && !String(person.name).startsWith('[CADASTRO EMPRESA')
+    && radioWorkforceValue(person.name) === targetName
+    && (!targetCompany || radioWorkforceValue(person.company) === targetCompany));
+  return matches.length === 1 ? matches[0] : null;
+}
+
 function radioCompanyOptions(selectedCompany = '') {
   const people = typeof workforce !== 'undefined' && Array.isArray(workforce) ? workforce : [];
   const companies = [...new Set(people.map(p => p?.company).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -264,14 +279,7 @@ window.handleRadioCompanyChange = function(companyName, personSelectId) {
     if (match) {
       personSelect.value = match.name;
     } else {
-      const existingOpt = [...personSelect.options].find(opt => (opt.value || '').trim().toLowerCase() === (currentPerson || '').trim().toLowerCase());
-      if (existingOpt) {
-        personSelect.value = existingOpt.value;
-      } else {
-        const opt = new Option(currentPerson, currentPerson, true, true);
-        personSelect.add(opt);
-        personSelect.value = currentPerson;
-      }
+      personSelect.value = '';
     }
   }
 };
@@ -303,69 +311,6 @@ window.handleRadioPersonChange = function(personName, companySelectId) {
       personSelect.value = person.name;
     }
   }
-};
-
-window.openQuickAddCompanyModal = function(targetSelectId = 'radioCheckoutCompany') {
-  modal(`
-    <form onsubmit="submitQuickAddCompany(event, '${esc(targetSelectId)}')">
-      ${modalHead('Cadastrar nova empresa', 'Adicionar empreiteira ao cadastro da obra')}
-      <div class="modal-body">
-        <div class="form-grid">
-          <div class="field full">
-            <label>Nome da empresa <em>*</em></label>
-            <input name="companyName" required placeholder="Ex.: FORT MUNCK, AIR TEC, HEATING COOLING, etc." style="text-transform: uppercase;">
-          </div>
-        </div>
-      </div>
-      <div class="modal-foot">
-        <button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button>
-        <button class="button button-green">${icon('plus')} Salvar empresa</button>
-      </div>
-    </form>
-  `, 'modal-small');
-};
-
-window.submitQuickAddCompany = function(event, targetSelectId) {
-  event.preventDefault();
-  const data = new FormData(event.target);
-  const companyName = String(data.get('companyName') || '').replace(/\s+/g, ' ').trim().toUpperCase();
-  if (!companyName) return toast('Digite o nome da empresa.', true);
-
-  if (typeof workforce !== 'undefined' && Array.isArray(workforce)) {
-    const exists = workforce.some(p => (p.company || '').trim().toUpperCase() === companyName);
-    if (!exists) {
-      workforce.push({
-        id: crypto.randomUUID?.() || `wf-comp-${Date.now()}`,
-        company: companyName,
-        name: `[CADASTRO EMPRESA ${companyName}]`,
-        role: 'Representante',
-        status: 'DIRETA'
-      });
-      if (typeof saveLocalBackup === 'function') saveLocalBackup();
-      if (typeof scheduleWorkforceRemoteSave === 'function') scheduleWorkforceRemoteSave(0);
-      if (typeof renderCompanies === 'function' && currentPage === 'empresas') renderCompanies();
-    }
-  }
-
-  closeModal();
-
-  const companySelect = document.getElementById(targetSelectId);
-  if (companySelect) {
-    let found = [...companySelect.options].find(opt => opt.value.trim().toUpperCase() === companyName);
-    if (!found) {
-      const opt = new Option(companyName, companyName, true, true);
-      companySelect.add(opt);
-    } else {
-      companySelect.value = found.value;
-    }
-
-    const personSelectId = targetSelectId === 'radioCheckoutCompany' ? 'radioCheckoutCollaborator' : 'radioAssetCollaborator';
-    if (typeof handleRadioCompanyChange === 'function') {
-      handleRadioCompanyChange(companyName, personSelectId);
-    }
-  }
-
-  toast(`Empresa ${companyName} cadastrada com sucesso.`);
 };
 
 function normalizedRadioHeader(value) {
@@ -469,6 +414,7 @@ window.handleRadioSpreadsheet = async function(event) {
   if (!file) return;
   try {
     if (!await ensureExcelLibrary()) throw new Error('Leitor de Excel indisponível. Verifique a conexão.');
+    if (typeof workforceReadyPromise?.then === 'function') await workforceReadyPromise;
     const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
     const imported = [];
     workbook.SheetNames.forEach(sheetName => {
@@ -541,10 +487,22 @@ window.handleRadioSpreadsheet = async function(event) {
     });
 
     const deliveryRows = imported.filter(item => item.isDelivery && item.collaborator);
+    const openDeliveries = deliveryRows.filter(item => !item.returnDate);
+    const invalidHolders = openDeliveries.filter(item => !radioFindWorkforcePerson(item.collaborator, item.company));
+    if (invalidHolders.length) {
+      const names = [...new Set(invalidHolders.map(item => item.collaborator))].slice(0, 5).join(', ');
+      throw new Error(`A planilha possui rádio em aberto para pessoa fora do efetivo: ${names}. Cadastre-a primeiro em Empresas & Efetivo.`);
+    }
+    openDeliveries.forEach(item => {
+      const person = radioFindWorkforcePerson(item.collaborator, item.company);
+      item.collaborator = person.name;
+      item.company = person.company;
+    });
     const assets = Array.from(assetMap.values()).map(asset => {
       const deliveries = deliveryRows.filter(item => item.code === asset.code).sort((a, b) => Date.parse(b.deliveryDate || 0) - Date.parse(a.deliveryDate || 0));
       const openDelivery = deliveries.find(item => !item.returnDate);
-      const status = asset._registration ? asset.status : openDelivery ? 'in-use' : asset.status || 'available';
+      const importedStatus = asset.status === 'in-use' && !openDelivery ? 'available' : asset.status;
+      const status = openDelivery ? 'in-use' : importedStatus || 'available';
       delete asset._registration;
       return {
         ...asset,
@@ -863,23 +821,6 @@ window.openRadioAssetModal = function(id = '') {
       <div class="field"><label>Modelo</label><input name="model" value="${esc(radio.model || '')}" placeholder="Ex.: DEP450"></div>
       <div class="field"><label>Número de série</label><input name="serial" value="${esc(radio.serial || '')}"></div>
       <div class="field"><label>Canal / frequência</label><input name="channel" value="${esc(radio.channel || '')}" placeholder="Ex.: Canal 03"></div>
-      
-      <div class="field">
-        <label>Empresa <button type="button" class="button-link-inline" onclick="openQuickAddCompanyModal('radioAssetCompany')">+ Cadastrar empresa</button></label>
-        <select id="radioAssetCompany" name="company" onchange="handleRadioCompanyChange(this.value, 'radioAssetCollaborator')">
-          <option value="">Selecione a empresa</option>
-          ${radioCompanyOptions(radio.usage?.company || '')}
-        </select>
-      </div>
-
-      <div class="field">
-        <label>Funcionário (Colaborador) <button type="button" class="button-link-inline" onclick="openPersonModal()">+ Nova pessoa</button></label>
-        <select id="radioAssetCollaborator" name="collaborator" onchange="handleRadioPersonChange(this.value, 'radioAssetCompany')">
-          <option value="">Selecione o funcionário</option>
-          ${radioPeopleOptions(radio.usage?.company || '', radio.usage?.collaborator || '')}
-        </select>
-      </div>
-
       <div class="field full"><label>Situação <em>*</em></label><select name="status" required ${radio.status === 'in-use' ? 'disabled' : ''}><option value="available" ${(radio.status || 'available') === 'available' ? 'selected' : ''}>Disponível</option><option value="maintenance" ${radio.status === 'maintenance' ? 'selected' : ''}>Manutenção</option>${radio.status === 'in-use' ? '<option value="in-use" selected>Em uso</option>' : ''}</select></div>
       <div class="field full"><label>Observações</label><textarea name="notes" placeholder="Acessórios, condição, carregador ou outras informações...">${esc(radio.notes || '')}</textarea></div>
     </div></div>
@@ -897,16 +838,7 @@ window.submitRadioAsset = async function(event, id = '') {
     radioAssets.push(radio);
   }
 
-  const comp = String(data.get('company') || '').trim();
-  const collab = String(data.get('collaborator') || '').trim();
-  if (collab || comp) {
-    radio.usage = {
-      ...(radio.usage || {}),
-      company: comp,
-      collaborator: collab
-    };
-  }
-
+  const nextStatus = radio.status === 'in-use' ? 'in-use' : data.get('status');
   Object.assign(radio, {
     code,
     assetNumber: String(data.get('assetNumber') || '').trim(),
@@ -914,9 +846,10 @@ window.submitRadioAsset = async function(event, id = '') {
     model: String(data.get('model') || '').trim(),
     serial: String(data.get('serial') || '').trim(),
     channel: String(data.get('channel') || '').trim(),
-    status: radio.status === 'in-use' ? 'in-use' : data.get('status'),
+    status: nextStatus,
     notes: String(data.get('notes') || '').trim()
   });
+  if (nextStatus !== 'in-use') radio.usage = null;
   radioAssets.sort((a, b) => String(a.code).localeCompare(String(b.code), 'pt-BR'));
   const synced = await persistRadioAsset(radio);
   closeModal(); renderRadios();
@@ -930,19 +863,20 @@ window.openRadioCheckoutModal = function(id) {
     <div class="modal-body">
       <div class="form-grid">
         <div class="field">
-          <label>Empresa <button type="button" class="button-link-inline" onclick="openQuickAddCompanyModal('radioCheckoutCompany')">+ Cadastrar empresa</button></label>
-          <select id="radioCheckoutCompany" name="company" onchange="handleRadioCompanyChange(this.value, 'radioCheckoutCollaborator')">
-            <option value="">Selecione ou todas as empresas</option>
+          <label>Empresa <em>*</em></label>
+          <select id="radioCheckoutCompany" name="company" required onchange="handleRadioCompanyChange(this.value, 'radioCheckoutCollaborator')">
+            <option value="">Selecione a empresa</option>
             ${radioCompanyOptions()}
           </select>
         </div>
 
         <div class="field">
-          <label>Funcionário (Colaborador) <em>*</em> <button type="button" class="button-link-inline" onclick="openPersonModal()">+ Nova pessoa</button></label>
+          <label>Funcionário do efetivo <em>*</em></label>
           <select id="radioCheckoutCollaborator" name="collaborator" required onchange="handleRadioPersonChange(this.value, 'radioCheckoutCompany')">
             <option value="">Selecione o funcionário</option>
             ${radioPeopleOptions()}
           </select>
+          <small>Somente pessoas do cadastro Empresas &amp; Efetivo podem receber rádio.</small>
         </div>
 
         <div class="field"><label>Local / frente de serviço <em>*</em></label><input name="location" required placeholder="Ex.: Data Hall 04"></div>
@@ -958,6 +892,8 @@ window.submitRadioCheckout = async function(event, id) {
   const radio = radioAssets.find(item => String(item.id) === String(id));
   if (!radio || radio.status !== 'available') return toast('Este rádio não está mais disponível.', true);
   const data = new FormData(event.target);
+  const selectedPerson = radioFindWorkforcePerson(data.get('collaborator'), data.get('company'));
+  if (!selectedPerson) return toast('Selecione uma pessoa válida da lista de efetivo antes de entregar o rádio.', true);
   const signature = data.get('operatorSign');
   if (!signature) {
     toast('Registre a assinatura de quem recebeu o rádio.', true);
@@ -965,8 +901,8 @@ window.submitRadioCheckout = async function(event, id) {
   }
   const occurredAt = new Date().toISOString();
   const usage = {
-    collaborator: String(data.get('collaborator') || '').trim(),
-    company: String(data.get('company') || '').trim(),
+    collaborator: selectedPerson.name,
+    company: selectedPerson.company,
     location: String(data.get('location') || '').trim(),
     expectedReturn: data.get('expectedReturn') || '',
     notes: String(data.get('notes') || '').trim(),

@@ -323,6 +323,8 @@ let workforceSummaryDate = new Date().toISOString().slice(0, 10);
 let workforceRemoteSaveTimer = null;
 let workforceReadyPromise = Promise.resolve();
 let lastWorkforceSyncTime = 0;
+let workforceDataRevision = 0;
+let activeWorkforceSync = null;
 function getDeletedUserKeys() {
   try {
     const raw = localStorage.getItem('obraflow_deleted_users');
@@ -2477,9 +2479,13 @@ function mergeWorkforceDeletionMaps(...sources) {
 function isWorkforcePersonDeleted(person) {
   if (!person) return false;
   const key = workforcePersonKey(person);
-  if (workforceDeletedPeople[key]) return true;
   const id = person.id ? String(person.id) : '';
-  return Boolean(id && Object.values(workforceDeletedPeople).some(tombstone => tombstone.id && tombstone.id === id));
+  const tombstones = Object.entries(workforceDeletedPeople)
+    .filter(([storedKey, tombstone]) => storedKey === key || (id && tombstone.id === id))
+    .map(([, tombstone]) => tombstone);
+  if (!tombstones.length) return false;
+  const personUpdatedAt = Date.parse(person.updatedAt || person.createdAt || '') || 0;
+  return tombstones.some(tombstone => (Date.parse(tombstone.deletedAt || '') || 0) >= personUpdatedAt);
 }
 
 function markWorkforcePersonDeleted(person) {
@@ -2502,6 +2508,19 @@ function clearWorkforcePersonDeletion(person) {
   });
 }
 
+function pruneObsoleteWorkforceDeletions() {
+  Object.entries(workforceDeletedPeople).forEach(([storedKey, tombstone]) => {
+    const restoredPerson = workforce.find(person => {
+      const sameId = tombstone.id && person.id && String(tombstone.id) === String(person.id);
+      return sameId || storedKey === workforcePersonKey(person);
+    });
+    if (!restoredPerson) return;
+    const restoredAt = Date.parse(restoredPerson.updatedAt || restoredPerson.createdAt || '') || 0;
+    const deletedAt = Date.parse(tombstone.deletedAt || '') || 0;
+    if (restoredAt > deletedAt) delete workforceDeletedPeople[storedKey];
+  });
+}
+
 function pruneDeletedWorkforceAttendance() {
   Object.keys(workforceAttendance || {}).forEach(personKey => {
     if (workforceDeletedPeople[personKey]) delete workforceAttendance[personKey];
@@ -2514,6 +2533,7 @@ function normalizeWorkforcePeople(people) {
     .filter(person => {
       if (!person?.company || !person?.name) return false;
       const n = String(person.name).trim().toLowerCase();
+      if (n.startsWith('[cadastro empresa')) return false;
       if (n.includes('wallace') || n.includes('walace') || deletedKeys.has(n)) return false;
       if (isWorkforcePersonDeleted(person)) return false;
       return true;
@@ -2528,6 +2548,31 @@ function normalizeWorkforcePeople(people) {
       status: String(person.status || '').replace(/\s+/g, ' ').trim()
     }))
     .sort((a, b) => safeSort(a?.company, b?.company) || safeSort(a?.name, b?.name));
+}
+
+function mergeWorkforcePeople(localPeople, remotePeople, preferLocalOnTie = false) {
+  const merged = [];
+  const add = (person, source) => {
+    if (!person?.company || !person?.name) return;
+    const id = person.id ? String(person.id) : '';
+    const key = workforcePersonKey(person);
+    const existingIndex = merged.findIndex(item =>
+      (id && item.person.id && String(item.person.id) === id) || workforcePersonKey(item.person) === key
+    );
+    if (existingIndex < 0) {
+      merged.push({ person, source });
+      return;
+    }
+    const existing = merged[existingIndex];
+    const candidateTime = Date.parse(person.updatedAt || person.createdAt || '') || 0;
+    const existingTime = Date.parse(existing.person.updatedAt || existing.person.createdAt || '') || 0;
+    const candidateWins = candidateTime > existingTime
+      || (candidateTime === existingTime && ((preferLocalOnTie && source === 'local') || (!preferLocalOnTie && source === 'remote')));
+    if (candidateWins) merged[existingIndex] = { person, source };
+  };
+  (Array.isArray(remotePeople) ? remotePeople : []).forEach(person => add(person, 'remote'));
+  (Array.isArray(localPeople) ? localPeople : []).forEach(person => add(person, 'local'));
+  return normalizeWorkforcePeople(merged.map(item => item.person));
 }
 
 function normalizeWorkforceAttendanceMap(value) {
@@ -2546,8 +2591,9 @@ function normalizeWorkforceAttendanceMap(value) {
 }
 
 function workforceSnapshot() {
+  pruneObsoleteWorkforceDeletions();
   return {
-    version: 3,
+    version: 5,
     updatedAt: workforceControlMeta.updatedAt || new Date().toISOString(),
     meta: workforceMeta,
     people: workforce,
@@ -2567,23 +2613,7 @@ function persistWorkforceControlRemote() {
         body: JSON.stringify({ key: 'workforce_control', value: snapshot }),
         headers: { Prefer: 'resolution=merge-duplicates' }
       });
-      const remotePeople = workforce.map(person => ({
-        id: person.id || crypto.randomUUID(),
-        company: person.company || '',
-        name: person.name || '',
-        role: person.role || '',
-        status: person.status || '',
-        phone: person.phone || '',
-        accessRole: person.accessRole || 'operator',
-        pin: person.pin || ''
-      }));
-      if (remotePeople.length) {
-        await supabaseRestRequest('workforce?on_conflict=id', {
-          method: 'POST',
-          body: JSON.stringify(remotePeople),
-          headers: { Prefer: 'resolution=merge-duplicates' }
-        }).catch(err => console.warn('O retrato do efetivo foi salvo, mas o cadastro de workforce não foi atualizado:', err));
-      }
+      lastWorkforceSyncTime = Date.now();
       return true;
     } catch (error) {
       console.warn('Controle de efetivo salvo somente neste aparelho:', error);
@@ -2596,16 +2626,17 @@ function persistWorkforceControlRemote() {
 
 function scheduleWorkforceRemoteSave(delay = 500) {
   clearTimeout(workforceRemoteSaveTimer);
-  workforceRemoteSaveTimer = setTimeout(() => persistWorkforceControlRemote(), delay);
+  workforceRemoteSaveTimer = setTimeout(() => {
+    workforceRemoteSaveTimer = null;
+    persistWorkforceControlRemote();
+  }, delay);
 }
 
 async function syncWorkforceFromSupabase() {
-  try {
-    const [controlRows, peopleRows, metadataRows] = await Promise.all([
-      supabaseRestRequest('app_metadata?key=eq.workforce_control&select=value').catch(() => null),
-      supabaseRestRequest('workforce?select=*').catch(() => null),
-      supabaseRestRequest('app_metadata?key=eq.workforce_meta&select=value').catch(() => null)
-    ]);
+  if (activeWorkforceSync) return activeWorkforceSync;
+  activeWorkforceSync = (async () => {
+    const revisionAtStart = workforceDataRevision;
+    const controlRows = await supabaseRestRequest('app_metadata?key=eq.workforce_control&select=value');
     const remoteSnapshot = Array.isArray(controlRows) && controlRows[0]?.value?.version >= 2 ? controlRows[0].value : null;
     if (remoteSnapshot) {
       const remoteTime = Date.parse(remoteSnapshot.updatedAt || '') || 0;
@@ -2619,60 +2650,59 @@ async function syncWorkforceFromSupabase() {
       workforceDeletedPeople = mergeWorkforceDeletionMaps(localDeletionMap, remoteDeletionMap);
       const remoteAttendance = normalizeWorkforceAttendanceMap(remoteSnapshot.attendance);
       const localAttendance = workforceAttendance || {};
+      const localChangedDuringSync = workforceDataRevision !== revisionAtStart;
+      const localWins = localChangedDuringSync || localTime > remoteTime;
 
-      // Combina as marcações remotas e locais de forma inteligente por dia, garantindo que marcações não se percam
-      const mergedAttendance = { ...remoteAttendance };
-      Object.entries(localAttendance).forEach(([personKey, dates]) => {
+      // A fonte mais recente vence conflitos do mesmo dia; dias exclusivos das
+      // duas cópias continuam preservados.
+      const baseAttendance = localWins ? remoteAttendance : localAttendance;
+      const winningAttendance = localWins ? localAttendance : remoteAttendance;
+      const mergedAttendance = Object.fromEntries(Object.entries(baseAttendance).map(([personKey, dates]) => [personKey, { ...dates }]));
+      Object.entries(winningAttendance).forEach(([personKey, dates]) => {
         if (!mergedAttendance[personKey]) {
           mergedAttendance[personKey] = { ...dates };
         } else {
           Object.entries(dates).forEach(([d, val]) => {
-            if (val || !mergedAttendance[personKey][d]) {
-              mergedAttendance[personKey][d] = val;
-            }
+            if (val) mergedAttendance[personKey][d] = val;
           });
         }
       });
 
-      const remotePeople = normalizeWorkforcePeople(remoteSnapshot.people);
+      workforce = mergeWorkforcePeople(workforce, remoteSnapshot.people, localWins);
+      const remoteNeedsCleanup = (Array.isArray(remoteSnapshot.people) ? remoteSnapshot.people : [])
+        .some(person => String(person?.name || '').trim().toLowerCase().startsWith('[cadastro empresa'));
 
-      if (!workforce.length || remoteTime >= localTime) {
-        // O retrato mais novo é autoritativo. Fazer união aqui ressuscitava
-        // pessoas que tinham sido excluídas em outro aparelho.
-        workforce = remotePeople;
+      if (!localWins) {
         workforceAttendance = mergedAttendance;
         workforceMeta = remoteSnapshot.meta || workforceMeta;
         workforceControlMeta = { updatedAt: remoteSnapshot.updatedAt || '' };
-        if (hasUnpublishedLocalDeletion) {
-          workforceControlMeta = { updatedAt: new Date().toISOString() };
-          scheduleWorkforceRemoteSave(0);
-        }
       } else {
-        workforce = normalizeWorkforcePeople(workforce);
         workforceAttendance = mergedAttendance;
-        scheduleWorkforceRemoteSave(0);
       }
       pruneDeletedWorkforceAttendance();
+      pruneObsoleteWorkforceDeletions();
+      if (localWins || hasUnpublishedLocalDeletion || remoteNeedsCleanup) {
+        workforceControlMeta = { updatedAt: new Date().toISOString() };
+        scheduleWorkforceRemoteSave(0);
+      }
       saveLocalBackup();
+      lastWorkforceSyncTime = Date.now();
       return true;
     }
-    if (Array.isArray(peopleRows) && peopleRows.length) {
-      const merged = new Map(workforce.filter(person => person?.name).map(person => [workforcePersonKey(person), person]));
-      peopleRows.filter(person => person?.name).forEach(person => {
-        const key = workforcePersonKey(person);
-        merged.set(key, { ...(merged.get(key) || {}), ...person });
-      });
-      workforce = normalizeWorkforcePeople(Array.from(merged.values()));
-    }
-    if (Array.isArray(metadataRows) && metadataRows[0]?.value) {
-      workforceMeta = metadataRows[0].value;
-    }
+
+    // workforce_control é a fonte única. Em instalações antigas sem esse
+    // retrato, a cópia local/seed é publicada apenas para iniciar a base.
+    workforce = normalizeWorkforcePeople(workforce);
+    if (!workforceControlMeta.updatedAt) workforceControlMeta = { updatedAt: new Date().toISOString() };
     saveLocalBackup();
-    return true;
-  } catch (error) {
+    return persistWorkforceControlRemote();
+  })().catch(error => {
     console.warn('Sincronização do cadastro de funcionários indisponível; mantendo a cópia local:', error);
     return false;
-  }
+  }).finally(() => {
+    activeWorkforceSync = null;
+  });
+  return activeWorkforceSync;
 }
 
 function recordTimestamp(record) {
@@ -4029,7 +4059,7 @@ function renderDashboard() {
 
   const companies = [...new Set(workforce.map(person => person?.company).filter(Boolean))].sort(safeSort);
   if (!workforceSummaryDate.startsWith(workforceControlMonth)) workforceSummaryDate = `${workforceControlMonth}-01`;
-  const presentToday = workforce.filter(person => workforceAttendanceValue(person, workforceSummaryDate) === '1').length;
+  const presentToday = workforce.filter(person => isPresentAttendanceValue(workforceAttendanceValue(person, workforceSummaryDate))).length;
 
   const heightBreakdown = getEquipmentHeightBreakdown();
 
@@ -5281,38 +5311,65 @@ function normalizeAttendanceValue(value) {
   if (value === 1 || String(value).trim() === '1') return '1';
   if (value === 0 || String(value).trim() === '0') return '0';
   const normalized = normalizeSpreadsheetHeader(value);
+  if (normalized === 'd' || normalized === 'dia' || normalized === 'diurno') return 'D';
+  if (normalized === 'n' || normalized === 'noite' || normalized === 'noturno') return 'N';
   if (normalized === 'p' || normalized === 'presente') return '1';
   if (normalized === 'a' || normalized === 'ausente' || normalized === 'falta') return '0';
   if (normalized.includes('folga')) return 'FOLGA';
   return '';
 }
 
+function isPresentAttendanceValue(value) {
+  return ['1', 'D', 'N'].includes(normalizeAttendanceValue(value));
+}
+
+function workforceAttendanceMatchesFilter(value, filter) {
+  const normalized = normalizeAttendanceValue(value);
+  if (filter === 'PRESENT') return isPresentAttendanceValue(normalized);
+  if (filter === 'EMPTY') return !normalized;
+  return !filter || normalized === filter;
+}
+
+function attendancePresentation(value) {
+  const normalized = normalizeAttendanceValue(value);
+  if (normalized === 'D') return { value: 'D', state: 'day', label: 'D', title: 'Presente · turno diurno' };
+  if (normalized === 'N') return { value: 'N', state: 'night', label: 'N', title: 'Presente · turno noturno' };
+  if (normalized === '1') return { value: '1', state: 'present', label: 'P', title: 'Presente · turno não informado' };
+  if (normalized === '0') return { value: '0', state: 'absent', label: '0', title: 'Ausente' };
+  if (normalized === 'FOLGA') return { value: 'FOLGA', state: 'off', label: 'F', title: 'Folga' };
+  return { value: '', state: 'empty', label: '·', title: 'Sem marcação' };
+}
+
 function workforceAttendanceValue(person, date) {
-  return workforceAttendance[workforcePersonKey(person)]?.[date] || '';
+  return normalizeAttendanceValue(workforceAttendance[workforcePersonKey(person)]?.[date]);
 }
 
 function workforceAttendanceCell(person, date) {
   const value = workforceAttendanceValue(person, date);
-  const state = value === '1' ? 'present' : value === '0' ? 'absent' : value === 'FOLGA' ? 'off' : 'empty';
-  const label = value === 'FOLGA' ? 'F' : value || '·';
-  const title = value === '1' ? 'Presente' : value === '0' ? 'Ausente' : value === 'FOLGA' ? 'Folga' : 'Sem marcação';
+  const presentation = attendancePresentation(value);
   const encodedKey = encodeURIComponent(workforcePersonKey(person)).replace(/'/g, '%27');
-  return `<button type="button" class="attendance-cell ${state}" data-value="${value}" data-date="${date}" title="${title} · clique para alterar" onclick="cycleWorkforceAttendance('${encodedKey}','${date}',this)">${label}</button>`;
+  return `<button type="button" class="attendance-cell ${presentation.state}" data-value="${presentation.value}" data-date="${date}" title="${presentation.title} · clique para alterar" onclick="cycleWorkforceAttendance('${encodedKey}','${date}',this)">${presentation.label}</button>`;
 }
 
 function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
   const companies = [...new Set(workforce.map(person => person?.company).filter(Boolean))].sort(safeSort);
+  let totalDay = 0;
+  let totalNight = 0;
   let totalDaily = 0;
   let totalGeral = 0;
 
   const rows = companies.map(company => {
     const people = workforce.filter(person => person?.company === company);
-    const dailyCount = people.filter(person => workforceAttendanceValue(person, date) === '1').length;
+    const dayCount = people.filter(person => workforceAttendanceValue(person, date) === 'D').length;
+    const nightCount = people.filter(person => workforceAttendanceValue(person, date) === 'N').length;
+    const dailyCount = people.filter(person => isPresentAttendanceValue(workforceAttendanceValue(person, date))).length;
     const geralCount = people.length;
-    return { company, dailyCount, geralCount };
+    return { company, dayCount, nightCount, dailyCount, geralCount };
   }).filter(row => row.dailyCount > 0);
 
   rows.forEach(row => {
+    totalDay += row.dayCount;
+    totalNight += row.nightCount;
     totalDaily += row.dailyCount;
     totalGeral += row.geralCount;
   });
@@ -5320,6 +5377,8 @@ function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
   const rowsHTML = rows.map(row => `
       <tr>
         <td class="quadro-col-company">${esc(row.company)}</td>
+        <td class="quadro-col-shift quadro-col-day">${row.dayCount}</td>
+        <td class="quadro-col-shift quadro-col-night">${row.nightCount}</td>
         <td class="quadro-col-daily">${row.dailyCount}</td>
         <td class="quadro-col-geral">${row.geralCount}</td>
       </tr>
@@ -5332,16 +5391,20 @@ function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
           <thead>
             <tr>
               <th>EMPRESA</th>
-              <th>TOTAL DE EFETIVOS DIÁRIO</th>
+              <th>DIURNO</th>
+              <th>NOTURNO</th>
+              <th>PRESENTES</th>
               <th>GERAL</th>
             </tr>
           </thead>
           <tbody>
-            ${rowsHTML || '<tr><td colspan="3" style="text-align:center;">Nenhum efetivo registrado hoje</td></tr>'}
+            ${rowsHTML || '<tr><td colspan="5" style="text-align:center;">Nenhum efetivo registrado nesta data</td></tr>'}
           </tbody>
           <tfoot>
             <tr>
               <td class="quadro-col-company">TOTAL</td>
+              <td class="quadro-col-shift quadro-col-day">${totalDay}</td>
+              <td class="quadro-col-shift quadro-col-night">${totalNight}</td>
               <td class="quadro-col-daily">${totalDaily}</td>
               <td class="quadro-col-geral">${totalGeral}</td>
             </tr>
@@ -5361,14 +5424,17 @@ function renderWorkforceDailyCardsHTML(companies) {
   const cards = workforce.map(person => {
     const encodedKey = encodeURIComponent(workforcePersonKey(person)).replace(/'/g, '%27');
     const val = workforceAttendanceValue(person, date);
+    const presentation = attendancePresentation(val);
     return `
       <div class="workforce-mobile-card" data-person-key="${encodedKey}" data-company="${esc(person.company)}" data-search="${esc(`${person.name} ${person.company} ${person.role || ''}`.toLowerCase())}">
         <div class="workforce-mobile-card-info">
           <strong>${esc(person.name)}</strong>
           <small>${esc(person.company)} · ${esc(person.role || 'Sem função')}</small>
+          <span class="workforce-shift-status ${presentation.state}">${esc(presentation.title)}</span>
         </div>
         <div class="workforce-mobile-card-actions">
-          <button type="button" class="mobile-att-btn att-present ${val === '1' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', '1')">1 Pres.</button>
+          <button type="button" class="mobile-att-btn att-day ${val === 'D' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', 'D')">D Diurno</button>
+          <button type="button" class="mobile-att-btn att-night ${val === 'N' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', 'N')">N Noturno</button>
           <button type="button" class="mobile-att-btn att-absent ${val === '0' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', '0')">0 Aus.</button>
           <button type="button" class="mobile-att-btn att-off ${val === 'FOLGA' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', 'FOLGA')">F Folga</button>
           <button type="button" class="mobile-att-btn att-clear" onclick="setWorkforceAttendance('${encodedKey}', '${date}', '')" title="Limpar marcação">✕</button>
@@ -5407,10 +5473,12 @@ function setWorkforceControlSubView(subView) {
 function updateWorkforceSummaryUI(date = workforceSummaryDate) {
   const summary = document.getElementById('workforceDailySummary');
   if (summary) summary.innerHTML = workforceDailySummaryHTML(date);
-  const presentCount = workforce.filter(person => workforceAttendanceValue(person, date) === '1').length;
+  const presentCount = workforce.filter(person => isPresentAttendanceValue(workforceAttendanceValue(person, date))).length;
+  const dayCount = workforce.filter(person => workforceAttendanceValue(person, date) === 'D').length;
+  const nightCount = workforce.filter(person => workforceAttendanceValue(person, date) === 'N').length;
   const metric = document.querySelector('.workforce-summary > div:nth-child(3) p');
   if (metric) {
-    metric.innerHTML = `<strong>${presentCount}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${date}T12:00:00`))}</small>`;
+    metric.innerHTML = `<strong>${presentCount}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${date}T12:00:00`))} · ${dayCount} diurno · ${nightCount} noturno</small>`;
   }
   document.querySelectorAll('[data-total-date="' + date + '"]').forEach(cell => {
     cell.textContent = presentCount;
@@ -5419,11 +5487,13 @@ function updateWorkforceSummaryUI(date = workforceSummaryDate) {
 
 function setWorkforceAttendance(encodedKey, date, value) {
   const key = decodeURIComponent(encodedKey);
+  const normalizedValue = normalizeAttendanceValue(value);
   if (!workforceAttendance[key]) workforceAttendance[key] = {};
-  if (value) workforceAttendance[key][date] = value;
+  if (normalizedValue) workforceAttendance[key][date] = normalizedValue;
   else delete workforceAttendance[key][date];
   if (!Object.keys(workforceAttendance[key]).length) delete workforceAttendance[key];
   workforceControlMeta = { updatedAt: new Date().toISOString() };
+  workforceDataRevision++;
   saveLocalBackup();
   scheduleWorkforceRemoteSave();
   
@@ -5431,18 +5501,26 @@ function setWorkforceAttendance(encodedKey, date, value) {
   const card = document.querySelector(`.workforce-mobile-card[data-person-key="${encodedKey}"]`);
   if (card) {
     card.querySelectorAll('.mobile-att-btn').forEach(btn => btn.classList.remove('active'));
-    if (value === '1') card.querySelector('.att-present')?.classList.add('active');
-    else if (value === '0') card.querySelector('.att-absent')?.classList.add('active');
-    else if (value === 'FOLGA') card.querySelector('.att-off')?.classList.add('active');
+    if (normalizedValue === 'D') card.querySelector('.att-day')?.classList.add('active');
+    else if (normalizedValue === 'N') card.querySelector('.att-night')?.classList.add('active');
+    else if (normalizedValue === '0') card.querySelector('.att-absent')?.classList.add('active');
+    else if (normalizedValue === 'FOLGA') card.querySelector('.att-off')?.classList.add('active');
+    const shiftStatus = card.querySelector('.workforce-shift-status');
+    if (shiftStatus) {
+      const presentation = attendancePresentation(normalizedValue);
+      shiftStatus.className = `workforce-shift-status ${presentation.state}`;
+      shiftStatus.textContent = presentation.title;
+    }
   }
 
   // Atualiza a célula correspondente na tabela mensal se estiver presente
   const cellBtn = document.querySelector(`button.attendance-cell[data-date="${date}"][onclick*="${encodedKey}"]`);
   if (cellBtn) {
-    cellBtn.dataset.value = value;
-    cellBtn.className = `attendance-cell ${value === '1' ? 'present' : value === '0' ? 'absent' : value === 'FOLGA' ? 'off' : 'empty'}`;
-    cellBtn.textContent = value === 'FOLGA' ? 'F' : value || '·';
-    cellBtn.title = `${value === '1' ? 'Presente' : value === '0' ? 'Ausente' : value === 'FOLGA' ? 'Folga' : 'Sem marcação'} · clique para alterar`;
+    const presentation = attendancePresentation(normalizedValue);
+    cellBtn.dataset.value = presentation.value;
+    cellBtn.className = `attendance-cell ${presentation.state}`;
+    cellBtn.textContent = presentation.label;
+    cellBtn.title = `${presentation.title} · clique para alterar`;
   }
 
   updateWorkforceSummaryUI(date);
@@ -5451,16 +5529,18 @@ function setWorkforceAttendance(encodedKey, date, value) {
 
 function renderWorkforceControl(companies) {
   const dates = workforceMonthDates();
+  const tableWidth = 145 + 235 + 72 + (dates.length * 44);
+  const mobileTableWidth = 140 + (dates.length * 44);
   const rows = workforce.map(person => {
     const encodedKey = encodeURIComponent(workforcePersonKey(person)).replace(/'/g, '%27');
-    return `<tr class="workforce-control-row" data-company="${esc(person.company)}" data-search="${esc(`${person.name} ${person.company} ${person.role || ''}`.toLowerCase())}">
+    return `<tr class="workforce-control-row" data-person-key="${encodedKey}" data-company="${esc(person.company)}" data-search="${esc(`${person.name} ${person.company} ${person.role || ''}`.toLowerCase())}">
       <td class="workforce-sticky-company">${esc(person.company)}</td>
       <td class="workforce-sticky-person"><strong>${esc(person.name)}</strong><small><span class="mobile-company-tag">${esc(person.company)} · </span>${esc(person.role || '—')}</small></td>
       <td class="workforce-col-vinculo" title="${esc(person.status || '')}">${esc(person.status === 'DIRETA' ? 'DIR' : person.status === 'INDIRETA' ? 'IND' : person.status === 'TERCEIRO' ? 'TER' : person.status || '—')}</td>
       ${dates.map(date => `<td>${workforceAttendanceCell(person, date)}</td>`).join('')}
     </tr>`;
   }).join('');
-  const totals = dates.map(date => `<td class="attendance-total" data-total-date="${date}">${workforce.filter(person => workforceAttendanceValue(person, date) === '1').length}</td>`).join('');
+  const totals = dates.map(date => `<td class="attendance-total" data-total-date="${date}">${workforce.filter(person => isPresentAttendanceValue(workforceAttendanceValue(person, date))).length}</td>`).join('');
   
   const formattedSummaryDate = new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`));
 
@@ -5469,15 +5549,20 @@ function renderWorkforceControl(companies) {
       <div class="month-switcher"><button class="icon-button" type="button" title="Mês anterior" onclick="shiftWorkforceMonth(-1)">${icon('chevron')}</button><label><span>Mês do controle</span><input id="workforceMonth" type="month" value="${workforceControlMonth}" onchange="changeWorkforceMonth(this.value)"></label><button class="icon-button next" type="button" title="Próximo mês" onclick="shiftWorkforceMonth(1)">${icon('chevron')}</button></div>
       <label class="search-box">${icon('search')}<input id="workforceControlSearch" type="search" placeholder="Buscar pessoa ou função..." oninput="filterWorkforceControl()"></label>
       <label class="filter-field"><span>Empresa</span><select id="workforceControlCompany" onchange="filterWorkforceControl()"><option value="">Todas</option>${companies.map(company => `<option value="${esc(company)}">${esc(company)}</option>`).join('')}</select></label>
+      <label class="filter-field"><span>Situação na data selecionada</span><select id="workforceShiftFilter" onchange="filterWorkforceControl()"><option value="PRESENT">Todos os turnos presentes</option><option value="D">Somente turno diurno</option><option value="N">Somente turno noturno</option><option value="1">Presente sem turno definido</option><option value="0">Ausentes</option><option value="FOLGA">Folga</option><option value="EMPTY">Sem marcação</option><option value="">Todos os cadastrados</option></select></label>
     </div>
     <div class="attendance-guide">
-      <span><i class="present">1</i> Presente</span>
-      <span><i class="absent">0</i> Ausente</span>
-      <span><i class="off">F</i> Folga</span>
-      <small>Clique em uma marcação para alternar. As alterações são salvas automaticamente.</small>
+      <strong class="attendance-guide-title">Legenda da marcação diária</strong>
+      <span><i class="day">D</i><b>Presente</b> · Turno diurno</span>
+      <span><i class="night">N</i><b>Presente</b> · Turno noturno</span>
+      <span><i class="present">P</i><b>Presente</b> · Turno ainda não definido</span>
+      <span><i class="absent">0</i>Ausente</span>
+      <span><i class="off">F</i>Folga</span>
+      <span><i class="empty">·</i>Sem marcação</span>
+      <small><b>D e N contam como presença.</b> O P identifica uma marcação antiga: escolha D ou N para informar o turno. O filtro usa a data selecionada no resumo ou no cabeçalho da grade.</small>
     </div>
     <div class="workforce-daily-head">
-      <div><strong>Resumo do dia</strong><small>Presentes / cadastrados por empresa</small></div>
+      <div><strong>Resumo do dia</strong><small>Diurno, noturno, presentes e cadastrados por empresa</small></div>
       <input type="date" id="workforceSummaryDate" value="${workforceSummaryDate}" onchange="changeWorkforceSummaryDate(this.value)">
     </div>
     <div class="workforce-daily-summary" id="workforceDailySummary">${workforceDailySummaryHTML()}</div>
@@ -5491,7 +5576,8 @@ function renderWorkforceControl(companies) {
 
     ${workforceControlSubView === 'daily' ? renderWorkforceDailyCardsHTML(companies) : `
       <div class="table-wrap workforce-control-table-wrap">
-        <table class="data-table workforce-control-table">
+        <table class="data-table workforce-control-table" style="--workforce-table-width:${tableWidth}px;--workforce-table-mobile-width:${mobileTableWidth}px;">
+          <colgroup><col class="workforce-company-column"><col class="workforce-person-column"><col class="workforce-status-column">${dates.map(() => '<col class="workforce-day-column">').join('')}</colgroup>
           <thead>
             <tr>
               <th class="workforce-sticky-company">Empresa</th>
@@ -5501,7 +5587,7 @@ function renderWorkforceControl(companies) {
                 const label = workforceDayLabel(date);
                 const isSelected = date === workforceSummaryDate;
                 const isWeekend = ['sáb','dom'].includes(label.weekday);
-                return `<th class="${isWeekend ? 'weekend' : ''} ${isSelected ? 'selected-day' : ''}" data-date-col="${date}"><span>${label.day}</span><small>${label.weekday}</small></th>`;
+                return `<th class="${isWeekend ? 'weekend' : ''} ${isSelected ? 'selected-day' : ''}" data-date-col="${date}" title="Selecionar dia ${label.day}" onclick="changeWorkforceSummaryDate('${date}')"><span>${label.day}</span><small>${label.weekday}</small></th>`;
               }).join('')}
             </tr>
           </thead>
@@ -5522,19 +5608,24 @@ function renderWorkforceControl(companies) {
 }
 
 function renderWorkforceDirectory(companies) {
-  return `<div class="simple-filters workforce-filters"><label class="search-box">${icon('search')}<input id="workforceSearch" type="search" placeholder="Buscar nome, função ou empresa..." oninput="filterWorkforce()"></label><label class="filter-field"><span>Empresa</span><select id="workforceCompany" onchange="filterWorkforce()"><option value="">Todas</option>${companies.map(company=>`<option>${esc(company)}</option>`).join('')}</select></label></div><article class="panel"><div class="panel-head"><div><h2>Pessoas cadastradas</h2><p>Disponíveis na lista de responsáveis dos checklists</p></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Nome</th><th>Empresa</th><th>Função</th><th>Vínculo</th><th></th></tr></thead><tbody>${workforce.map((person,index)=>`<tr class="workforce-row" data-company="${esc(person?.company||'')}" data-search="${esc(`${person?.name||''} ${person?.company||''} ${person?.role||''}`.toLowerCase())}"><td><strong>${esc(person?.name||'')}</strong></td><td>${esc(person?.company||'')}</td><td>${esc(person?.role||'—')}</td><td>${esc(person?.status||'—')}</td><td><div class="control-row-actions"><button class="icon-button" title="Editar" onclick="openPersonModal(${index})">${icon('edit')}</button><button class="icon-button" title="Excluir" onclick="deletePerson(${index})">${icon('trash')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="no-filter-results" id="noWorkforceResults">Nenhuma pessoa encontrada.</div></article>`;
+  return `<div class="simple-filters workforce-filters"><label class="search-box">${icon('search')}<input id="workforceSearch" type="search" placeholder="Buscar nome, função, contato ou empresa..." oninput="filterWorkforce()"></label><label class="filter-field"><span>Empresa</span><select id="workforceCompany" onchange="filterWorkforce()"><option value="">Todas</option>${companies.map(company=>`<option>${esc(company)}</option>`).join('')}</select></label></div><article class="panel"><div class="panel-head"><div><h2>Pessoas cadastradas</h2><p>Fonte única para responsáveis de equipamentos, rádios e checklists</p></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Nome</th><th>Empresa</th><th>Função</th><th>Vínculo</th><th>Contato</th><th></th></tr></thead><tbody>${workforce.map((person,index)=>`<tr class="workforce-row" data-person-key="${encodeURIComponent(workforcePersonKey(person)).replace(/'/g,'%27')}" data-company="${esc(person?.company||'')}" data-search="${esc(`${person?.name||''} ${person?.company||''} ${person?.role||''} ${person?.phone||''}`.toLowerCase())}"><td><strong>${esc(person?.name||'')}</strong></td><td>${esc(person?.company||'')}</td><td>${esc(person?.role||'—')}</td><td>${esc(person?.status||'—')}</td><td>${esc(person?.phone||'—')}</td><td><div class="control-row-actions"><button class="icon-button" title="Editar" onclick="openPersonModal(${index})">${icon('edit')}</button><button class="icon-button" title="Excluir" onclick="deletePerson(${index})">${icon('trash')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="no-filter-results" id="noWorkforceResults">Nenhuma pessoa encontrada.</div></article>`;
 }
 
 function renderCompanies() {
   workforce = normalizeWorkforcePeople(workforce);
   const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
   if (!workforceSummaryDate.startsWith(workforceControlMonth)) workforceSummaryDate = `${workforceControlMonth}-01`;
-  const presentToday = workforce.filter(person => workforceAttendanceValue(person, workforceSummaryDate) === '1').length;
+  const presentToday = workforce.filter(person => isPresentAttendanceValue(workforceAttendanceValue(person, workforceSummaryDate))).length;
+  const dayToday = workforce.filter(person => workforceAttendanceValue(person, workforceSummaryDate) === 'D').length;
+  const nightToday = workforce.filter(person => workforceAttendanceValue(person, workforceSummaryDate) === 'N').length;
   const view = workforceView === 'directory' ? renderWorkforceDirectory(companies) : renderWorkforceControl(companies);
-  document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Controle o cadastro e a presença diária da equipe dentro do app.', 'CADASTRO CENTRAL', `<button class="button button-outline" onclick="syncWorkforceFromSupabase().then(() => { renderCompanies(); toast('Marcações e efetivo sincronizados com a nuvem!'); })">${icon('refresh')} Sincronizar</button><button class="button button-outline" onclick="openWorkforceModal()">${icon('download')} Importar Excel</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar modelo</button><button class="button button-green" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>`)}<section class="workforce-summary"><div><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas</small></p></div><div><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div><span>${icon('check')}</span><p><strong>${presentToday}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`))}</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source||'Cadastro manual')}</strong><span>${workforceMeta.updatedAt?`${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}`:''}</span></p></div></section><div class="workforce-tabs"><button class="${workforceView === 'control' ? 'active' : ''}" onclick="setWorkforceView('control')">${icon('chart')} Controle diário</button><button class="${workforceView === 'directory' ? 'active' : ''}" onclick="setWorkforceView('directory')">${icon('user')} Cadastro de pessoas</button></div>${view}`;
+  document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Controle o cadastro e a presença diária da equipe dentro do app.', 'CADASTRO CENTRAL', `<button class="button button-outline" onclick="syncWorkforceFromSupabase().then(() => { renderCompanies(); toast('Marcações e efetivo sincronizados com a nuvem!'); })">${icon('refresh')} Sincronizar</button><button class="button button-outline" onclick="openWorkforceModal()">${icon('plus')} Cadastro em massa</button><button class="button button-outline" onclick="openWorkforceCopyModal()">${icon('clipboard')} Copiar relação</button><button class="button button-outline" onclick="openWorkforcePDF()">${icon('download')} Baixar PDF</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Baixar Excel</button><button class="button button-green" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>`)}<section class="workforce-summary"><div><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas</small></p></div><div><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div><span>${icon('check')}</span><p><strong>${presentToday}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`))} · ${dayToday} diurno · ${nightToday} noturno</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source||'Cadastro manual')}</strong><span>${workforceMeta.updatedAt?`${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}`:''}</span></p></div></section><div class="workforce-tabs"><button class="${workforceView === 'control' ? 'active' : ''}" onclick="setWorkforceView('control')">${icon('chart')} Controle diário</button><button class="${workforceView === 'directory' ? 'active' : ''}" onclick="setWorkforceView('directory')">${icon('user')} Cadastro de pessoas</button></div>${view}`;
   
   if (workforceView === 'control' && workforceControlSubView === 'table') {
+    filterWorkforceControl();
     scrollToSelectedDateColumn(workforceSummaryDate);
+  } else if (workforceView === 'control') {
+    filterWorkforceControl();
   }
 }
 
@@ -5549,23 +5640,150 @@ function filterWorkforce() {
   const empty = document.getElementById('noWorkforceResults'); if (empty) empty.style.display=visible?'none':'block';
 }
 
+function currentWorkforceFilterSelection() {
+  const directoryVisible = !!document.getElementById('workforceSearch');
+  const search = ((directoryVisible
+    ? document.getElementById('workforceSearch')?.value
+    : document.getElementById('workforceControlSearch')?.value) || '').trim().toLowerCase();
+  const company = directoryVisible
+    ? document.getElementById('workforceCompany')?.value || ''
+    : document.getElementById('workforceControlCompany')?.value || '';
+  const shift = directoryVisible ? '' : document.getElementById('workforceShiftFilter')?.value || '';
+  const shiftLabels = { PRESENT: 'Todos os turnos presentes', D: 'Diurno', N: 'Noturno', 1: 'Presente sem turno', 0: 'Ausentes', FOLGA: 'Folga', EMPTY: 'Sem marcação' };
+  const predicatePeople = workforce.filter(person => {
+    const haystack = `${person?.name || ''} ${person?.company || ''} ${person?.role || ''} ${person?.phone || ''}`.toLowerCase();
+    const attendance = workforceAttendanceValue(person, workforceSummaryDate);
+    return (!search || haystack.includes(search))
+      && (!company || person?.company === company)
+      && workforceAttendanceMatchesFilter(attendance, shift);
+  });
+  const directoryRows = [...document.querySelectorAll('.workforce-row')];
+  const controlRows = [...document.querySelectorAll('.workforce-control-row')];
+  const dailyCards = [...document.querySelectorAll('.workforce-mobile-card')];
+  const renderedItems = directoryRows.length ? directoryRows : controlRows.length ? controlRows : dailyCards;
+  const visibleKeys = new Set(renderedItems
+    .filter(element => element.style.display !== 'none')
+    .map(element => decodeURIComponent(element.dataset.personKey || ''))
+    .filter(Boolean));
+  const people = renderedItems.length
+    ? workforce.filter(person => visibleKeys.has(workforcePersonKey(person)))
+    : predicatePeople;
+  const descriptions = [];
+  if (company) descriptions.push(`Empresa: ${company}`);
+  if (search) descriptions.push(`Busca: ${search}`);
+  if (!directoryVisible) descriptions.push(`Data: ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`))}`);
+  if (shift) descriptions.push(`Situação: ${shiftLabels[shift]}`);
+  return {
+    people,
+    title: company && !search && !shift ? company : descriptions.length ? 'EFETIVO FILTRADO' : 'EFETIVO COMPLETO',
+    description: descriptions.join(' · '),
+    active: descriptions.length > 0
+  };
+}
+
+let workforceShareFilteredSnapshot = null;
+
+function workforceShareSelection(source = '__FILTERED__') {
+  if (source === '__FILTERED__') return workforceShareFilteredSnapshot || currentWorkforceFilterSelection();
+  const filteredBase = workforceShareFilteredSnapshot || currentWorkforceFilterSelection();
+  return {
+    people: filteredBase.people.filter(person => person?.company === source && person?.name),
+    title: source,
+    description: [filteredBase.description, `Empresa na relação: ${source}`].filter(Boolean).join(' · '),
+    active: true
+  };
+}
+
+function workforcePeopleShareText(people, title, description = '') {
+  const sortedPeople = [...people]
+    .filter(person => person?.name)
+    .sort((a, b) => safeSort(a.company, b.company) || safeSort(a.name, b.name));
+  if (!sortedPeople.length) return '';
+  const multipleCompanies = new Set(sortedPeople.map(person => person.company).filter(Boolean)).size > 1;
+  const lines = sortedPeople.map((person, index) => {
+    const role = person.role || person.auxRole || 'Função não informada';
+    const company = multipleCompanies && person.company ? ` · ${person.company}` : '';
+    return `${index + 1}. ${person.name} — ${role}${company}`;
+  }).join('\n');
+  return `*EFETIVO — ${title}*${description && title === 'EFETIVO FILTRADO' ? `\n_${description}_` : ''}\n\n${lines}\n\n*Total:* ${sortedPeople.length} pessoa(s)`;
+}
+
+function workforceCompanyShareText(company) {
+  const selection = workforceShareSelection(company);
+  return workforcePeopleShareText(selection.people, selection.title, selection.description);
+}
+
+function openWorkforceCopyModal() {
+  if (!workforce.length) return toast('Cadastre pessoas no efetivo antes de copiar uma lista.', true);
+  workforceShareFilteredSnapshot = currentWorkforceFilterSelection();
+  const filtered = workforceShareFilteredSnapshot;
+  const companies = [...new Set(filtered.people.map(person => person?.company).filter(Boolean))].sort(safeSort);
+  modal(`${modalHead('Copiar relação para WhatsApp','Os nomes serão copiados junto com a função de cada colaborador')}<div class="modal-body">
+    <div class="field"><label>Relação a copiar</label><select id="workforceShareCompany" onchange="updateWorkforceSharePreview()"><option value="__FILTERED__">Resultado visível dos filtros · ${filtered.people.length} pessoa(s)</option>${companies.map(company=>`<option value="${esc(company)}">Somente ${esc(company)} · ${filtered.people.filter(person=>person?.company===company).length} pessoa(s) filtrada(s)</option>`).join('')}</select></div>
+    <div class="workforce-share-preview"><div><span>${icon('clipboard')}</span><strong>Prévia da mensagem</strong></div><textarea id="workforceShareText" readonly onclick="this.select()"></textarea></div>
+    <div class="notice" id="workforceShareScopeSummary">${icon('check')} <strong>${filtered.people.length} pessoa(s) visível(is) nos filtros atuais.</strong> A relação traz nome, função e, quando houver mais de uma, a empresa.</div>
+  </div><div class="modal-foot" style="flex-wrap:wrap;"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-outline" onclick="openSelectedWorkforceCompanyPDF()">${icon('download')} PDF da relação</button><button class="button button-outline" onclick="openWorkforceWhatsApp()">Abrir WhatsApp</button><button class="button button-green" onclick="copyWorkforceCompanyNames()">${icon('clipboard')} Copiar relação</button></div>`,'modal-small');
+  updateWorkforceSharePreview();
+}
+
+function updateWorkforceSharePreview() {
+  const source = document.getElementById('workforceShareCompany')?.value || '__FILTERED__';
+  const selection = workforceShareSelection(source);
+  const textarea = document.getElementById('workforceShareText');
+  if (textarea) textarea.value = workforcePeopleShareText(selection.people, selection.title, selection.description);
+  const summary = document.getElementById('workforceShareScopeSummary');
+  if (summary) summary.innerHTML = `${icon('check')} <strong>${selection.people.length} pessoa(s) nesta relação.</strong> ${esc(selection.description || 'Efetivo completo, sem filtros aplicados.')}`;
+}
+
+function copyWorkforceCompanyNames() {
+  const source = document.getElementById('workforceShareCompany')?.value || '__FILTERED__';
+  const selection = workforceShareSelection(source);
+  const text = workforcePeopleShareText(selection.people, selection.title, selection.description);
+  if (!text) return toast('Os filtros selecionados não possuem pessoas para copiar.', true);
+  copyTextToClipboard(text, `Relação com nome e função copiada para o WhatsApp.`);
+}
+
+function openWorkforceWhatsApp() {
+  const source = document.getElementById('workforceShareCompany')?.value || '__FILTERED__';
+  const selection = workforceShareSelection(source);
+  const text = workforcePeopleShareText(selection.people, selection.title, selection.description);
+  if (!text) return toast('Os filtros selecionados não possuem pessoas para compartilhar.', true);
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+}
+
+function openWorkforcePDF() {
+  const selection = currentWorkforceFilterSelection();
+  openReportPDF('workforce', false, '', selection.people, selection.description);
+}
+
+function openSelectedWorkforceCompanyPDF() {
+  const source = document.getElementById('workforceShareCompany')?.value || '__FILTERED__';
+  const selection = workforceShareSelection(source);
+  openReportPDF('workforce', false, source === '__FILTERED__' ? '' : source, selection.people, selection.description);
+}
+
 function filterWorkforceControl() {
   const search = document.getElementById('workforceControlSearch')?.value.toLowerCase() || '';
   const company = document.getElementById('workforceControlCompany')?.value || '';
+  const shift = document.getElementById('workforceShiftFilter')?.value || '';
+  const matchesShift = element => {
+    const key = decodeURIComponent(element.dataset.personKey || '');
+    return workforceAttendanceMatchesFilter(workforceAttendance[key]?.[workforceSummaryDate], shift);
+  };
   let visible = 0;
   document.querySelectorAll('.workforce-control-row').forEach(row => {
-    const show = (!search || row.dataset.search.includes(search)) && (!company || row.dataset.company === company);
+    const show = (!search || row.dataset.search.includes(search)) && (!company || row.dataset.company === company) && matchesShift(row);
     row.style.display = show ? '' : 'none';
     if (show) visible++;
   });
   document.querySelectorAll('.workforce-mobile-card').forEach(card => {
-    const show = (!search || card.dataset.search.includes(search)) && (!company || card.dataset.company === company);
+    const show = (!search || card.dataset.search.includes(search)) && (!company || card.dataset.company === company) && matchesShift(card);
     card.style.display = show ? '' : 'none';
     if (show && workforceControlSubView === 'daily') visible++;
   });
   document.querySelectorAll('[data-total-date]').forEach(cell => {
     const date = cell.dataset.totalDate;
-    cell.textContent = [...document.querySelectorAll('.workforce-control-row')].filter(row => row.style.display !== 'none' && row.querySelector(`[data-date="${date}"]`)?.dataset.value === '1').length;
+    cell.textContent = [...document.querySelectorAll('.workforce-control-row')].filter(row => row.style.display !== 'none' && isPresentAttendanceValue(row.querySelector(`[data-date="${date}"]`)?.dataset.value)).length;
   });
   const empty = document.getElementById('noWorkforceControlResults'); if (empty) empty.style.display = visible ? 'none' : 'block';
 }
@@ -5588,6 +5806,8 @@ function shiftWorkforceMonth(delta) {
 function changeWorkforceSummaryDate(date) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return;
   workforceSummaryDate = date;
+  const dateInput = document.getElementById('workforceSummaryDate');
+  if (dateInput && dateInput.value !== date) dateInput.value = date;
   saveLocalBackup();
   updateWorkforceSummaryUI(date);
   
@@ -5606,47 +5826,27 @@ function changeWorkforceSummaryDate(date) {
     });
     scrollToSelectedDateColumn(date);
   }
+  filterWorkforceControl();
 }
 
 function cycleWorkforceAttendance(encodedKey, date, button) {
   const key = decodeURIComponent(encodedKey);
   const current = workforceAttendance[key]?.[date] || '';
-  const order = ['', '1', '0', 'FOLGA'];
-  const next = order[(order.indexOf(current) + 1) % order.length];
-  if (!workforceAttendance[key]) workforceAttendance[key] = {};
-  if (next) workforceAttendance[key][date] = next;
-  else delete workforceAttendance[key][date];
-  if (!Object.keys(workforceAttendance[key]).length) delete workforceAttendance[key];
-  workforceControlMeta = { updatedAt: new Date().toISOString() };
-  saveLocalBackup();
-  scheduleWorkforceRemoteSave();
-  if (button) {
-    button.dataset.value = next;
-    button.className = `attendance-cell ${next === '1' ? 'present' : next === '0' ? 'absent' : next === 'FOLGA' ? 'off' : 'empty'}`;
-    button.textContent = next === 'FOLGA' ? 'F' : next || '·';
-    button.title = `${next === '1' ? 'Presente' : next === '0' ? 'Ausente' : next === 'FOLGA' ? 'Folga' : 'Sem marcação'} · clique para alterar`;
-  }
-  
-  const card = document.querySelector(`.workforce-mobile-card[data-person-key="${encodedKey}"]`);
-  if (card) {
-    card.querySelectorAll('.mobile-att-btn').forEach(btn => btn.classList.remove('active'));
-    if (next === '1') card.querySelector('.att-present')?.classList.add('active');
-    else if (next === '0') card.querySelector('.att-absent')?.classList.add('active');
-    else if (next === 'FOLGA') card.querySelector('.att-off')?.classList.add('active');
-  }
-
-  updateWorkforceSummaryUI(date);
-  filterWorkforceControl();
+  const order = ['', 'D', 'N', '0', 'FOLGA'];
+  const currentForCycle = current === '1' ? '' : normalizeAttendanceValue(current);
+  const next = order[(order.indexOf(currentForCycle) + 1) % order.length];
+  setWorkforceAttendance(encodedKey, date, next);
 }
 function openPersonModal(index=null) {
   const person=index===null?null:workforce[index]; const companies=[...new Set(workforce.map(item=>item?.company).filter(Boolean))].sort(safeSort);
   modal(`<form onsubmit="savePerson(event,${index===null?'null':index})">${modalHead(person?'Editar pessoa':'Adicionar pessoa','Cadastro individual do efetivo da obra')}<div class="modal-body"><div class="form-grid"><div class="field full"><label>Empresa <em>*</em></label><input name="company" required list="companySuggestions" placeholder="Selecione ou digite uma nova empresa" value="${esc(person?.company||'')}"><datalist id="companySuggestions">${companies.map(company=>`<option value="${esc(company)}"></option>`).join('')}</datalist></div><div class="field full"><label>Nome completo <em>*</em></label><input name="name" required placeholder="Nome da pessoa" value="${esc(person?.name||'')}"></div><div class="field"><label>Função <em>*</em></label><input name="role" required placeholder="Ex.: Operador de PTA" value="${esc(person?.role||'')}"></div><div class="field"><label>Vínculo / status</label><select name="status"><option value="">Não informado</option><option value="DIRETA" ${person?.status==='DIRETA'?'selected':''}>Direta</option><option value="INDIRETA" ${person?.status==='INDIRETA'?'selected':''}>Indireta</option><option value="TERCEIRO" ${person?.status==='TERCEIRO'?'selected':''}>Terceiro</option></select></div><div class="field"><label>Perfil de Acesso</label><select name="accessRole"><option value="operator" ${person?.accessRole!=='admin'?'selected':''}>Operador / Campo (Sem acesso administrativo)</option><option value="admin" ${person?.accessRole==='admin'?'selected':''}>Gestor / Administrador (Acesso completo)</option></select></div><div class="field"><label>PIN de Acesso (Gestão)</label><input name="pin" maxlength="8" placeholder="Ex.: 1234" value="${esc(person?.pin||'')}"></div><div class="field full"><label>Telefone</label><input name="phone" placeholder="(85) 99999-9999" value="${esc(person?.phone||'')}"></div></div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Salvar pessoa</button></div></form>`,'modal-small');
 }
-function savePerson(event,index) {
+async function savePerson(event,index) {
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target)); Object.keys(data).forEach(key=>data[key]=String(data[key]).replace(/\s+/g,' ').trim());
   const duplicate=workforce.some((person,i)=>i!==index&&workforcePersonKey(person)===workforcePersonKey(data)); if(duplicate)return toast('Esta pessoa já está cadastrada nesta empresa.',true);
   const previous = index === null ? null : workforce[index];
   const previousKey = previous ? workforcePersonKey(previous) : '';
+  data.updatedAt = new Date().toISOString();
   if(index===null) { data.id=crypto.randomUUID(); workforce.push(data); } else { workforce[index]={...previous,...data}; }
   const nextPerson = index === null ? data : workforce[index];
   // Um cadastro manual explícito permite restaurar uma pessoa removida antes.
@@ -5656,7 +5856,10 @@ function savePerson(event,index) {
     workforceAttendance[nextKey] = { ...(workforceAttendance[nextKey] || {}), ...workforceAttendance[previousKey] };
     delete workforceAttendance[previousKey];
   }
-  workforce=normalizeWorkforcePeople(workforce); workforceMeta={source:'Cadastro manual',updatedAt:new Date().toISOString()}; workforceControlMeta={updatedAt:new Date().toISOString()}; saveLocalBackup(); scheduleWorkforceRemoteSave(0); closeModal(); renderCompanies(); toast(personMessage(index));
+  workforceDataRevision++;
+  workforce=normalizeWorkforcePeople(workforce); workforceMeta={source:'Cadastro manual',updatedAt:data.updatedAt}; workforceControlMeta={updatedAt:data.updatedAt}; saveLocalBackup();
+  const shared = await persistWorkforceControlRemote();
+  closeModal(); renderCompanies(); toast(shared ? personMessage(index) : `${personMessage(index)} Salvo neste aparelho e aguardando sincronização.`, !shared);
 }
 function personMessage(index) { return index===null?'Pessoa adicionada ao efetivo.':'Cadastro atualizado.'; }
 async function deletePerson(index) {
@@ -5666,29 +5869,13 @@ async function deletePerson(index) {
   markWorkforcePersonDeleted(person);
   workforce.splice(index, 1);
   delete workforceAttendance[workforcePersonKey(person)];
+  workforceDataRevision++;
   workforceMeta = { source: 'Cadastro manual', updatedAt: new Date().toISOString() };
   workforceControlMeta = { updatedAt: new Date().toISOString() };
   saveLocalBackup();
   renderCompanies();
   toast('Pessoa removida. Sincronizando a exclusão...');
 
-  const deletionRequests = [];
-  if (person.id) {
-    deletionRequests.push(supabaseRestRequest(`workforce?id=eq.${encodeURIComponent(person.id)}`, {
-      method: 'DELETE',
-      headers: { Prefer: 'return=representation' }
-    }));
-  }
-  if (person.company && person.name) {
-    deletionRequests.push(supabaseRestRequest(`workforce?company=eq.${encodeURIComponent(person.company)}&name=eq.${encodeURIComponent(person.name)}`, {
-      method: 'DELETE',
-      headers: { Prefer: 'return=representation' }
-    }));
-  }
-  const deletionResults = await Promise.allSettled(deletionRequests);
-  deletionResults.filter(result => result.status === 'rejected').forEach(result => {
-    console.warn('Exclusão da linha de efetivo aguardando sincronização:', result.reason);
-  });
   const shared = await persistWorkforceControlRemote();
   toast(shared
     ? `${person.name} foi removido do efetivo em todos os aparelhos.`
@@ -5696,7 +5883,116 @@ async function deletePerson(index) {
 }
 function openWorkforceModal() {
   const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
-  modal(`${modalHead('Atualizar empresas e efetivo','Adicione várias pessoas de uma vez por planilha')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('workforceFile').click()"><span>${icon('download')}</span><div><h3>Selecionar planilha de efetivo</h3><p>Formatos .xlsx ou .xls · uma pessoa por linha</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="workforceFile" type="file" accept=".xlsx,.xls" hidden onchange="handleWorkforceUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${workforce.length} pessoas em ${companies.length} empresas</strong><small>${esc(workforceMeta.source||'Base inicial ainda não carregada')}</small></div></div><div class="company-chips">${companies.map(company=>`<span>${esc(company)} <b>${workforce.filter(person=>person?.company===company).length}</b></span>`).join('')}</div><div class="notice">${icon('alert')} Use as colunas <strong>EMPRESA, NOME, FUNÇÃO, STATUS e TELEFONE</strong>. A importação inclui pessoas novas e atualiza cadastros existentes sem apagar os demais. Planilhas mensais também podem conter marcações 1, 0 e FOLGA.</div></div><div class="modal-foot" style="flex-wrap:wrap;"><button class="button button-outline" onclick="downloadWorkforceImportTemplate()">${icon('download')} Baixar modelo para cadastro em massa</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Exportar controle de ${esc(workforceMonthLabel())}</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-small');
+  modal(`${modalHead('Cadastro em massa do efetivo','Escolha entre importar uma planilha ou colar vários nomes')}<div class="modal-body">
+    <div class="bulk-workforce-grid">
+      <article class="bulk-workforce-card">
+        <div class="bulk-workforce-card-head"><span>${icon('download')}</span><div><small>OPÇÃO 1</small><h3>Importar planilha</h3><p>Ideal para atualizar várias empresas, funções, contatos e presenças.</p></div></div>
+        <div class="upload-zone" onclick="document.getElementById('workforceFile').click()"><span>${icon('file')}</span><div><h3>Selecionar arquivo Excel</h3><p>.xlsx ou .xls · pessoas existentes serão atualizadas</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="workforceFile" type="file" accept=".xlsx,.xls" hidden onchange="handleWorkforceUpload(event)"></div>
+        <div class="notice compact-notice">${icon('alert')} Colunas aceitas: <strong>EMPRESA, NOME, FUNÇÃO, STATUS e TELEFONE</strong>. Pessoas que não estiverem na planilha não serão apagadas.</div>
+        <button type="button" class="button button-outline bulk-template-button" onclick="downloadWorkforceImportTemplate()">${icon('download')} Baixar modelo preenchível</button>
+      </article>
+      <form class="bulk-workforce-card bulk-workforce-manual" onsubmit="saveBulkWorkforce(event)">
+        <div class="bulk-workforce-card-head"><span>${icon('clipboard')}</span><div><small>OPÇÃO 2</small><h3>Colar ou digitar nomes</h3><p>Cadastre uma empresa inteira sem preparar uma planilha.</p></div></div>
+        <div class="form-grid">
+          <div class="field full"><label>Empresa <em>*</em></label><input name="company" required list="bulkCompanySuggestions" placeholder="Ex.: HEATING COOLING"><datalist id="bulkCompanySuggestions">${companies.map(company=>`<option value="${esc(company)}"></option>`).join('')}</datalist></div>
+          <div class="field"><label>Função padrão</label><input name="defaultRole" oninput="previewBulkWorkforce()" placeholder="Ex.: Montador"></div>
+          <div class="field"><label>Vínculo padrão</label><select name="status"><option value="">Não informado</option><option value="DIRETA">Direta</option><option value="INDIRETA">Indireta</option><option value="TERCEIRO">Terceiro</option></select></div>
+          <div class="field full"><label>Lista de pessoas <em>*</em></label><textarea id="bulkWorkforceNames" name="people" required rows="9" oninput="previewBulkWorkforce()" placeholder="Um nome por linha\n\nOu use: Nome; Função; Telefone\nJoão da Silva; Montador; (85) 99999-9999\nMaria Souza; Supervisora; (85) 98888-8888"></textarea><small class="bulk-format-hint">Aceita texto simples, lista numerada ou conteúdo colado do Excel. Separe campos por ponto e vírgula ou TAB.</small></div>
+        </div>
+        <div class="bulk-workforce-preview" id="bulkWorkforcePreview"><strong>0 pessoas identificadas</strong><small>Digite ou cole os nomes acima.</small></div>
+        <button class="button button-green bulk-save-button" type="submit">${icon('check')} Cadastrar lista</button>
+      </form>
+    </div>
+    <div class="upload-info"><span>${icon('check')}</span><div><strong>${workforce.length} pessoas em ${companies.length} empresas atualmente</strong><small>${esc(workforceMeta.source||'Cadastro central')}</small></div></div>
+    <div class="company-chips">${companies.map(company=>`<span>${esc(company)} <b>${workforce.filter(person=>person?.company===company).length}</b></span>`).join('')}</div>
+  </div><div class="modal-foot" style="flex-wrap:wrap;"><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Baixar Excel atual</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-inspection');
+}
+
+function parseBulkWorkforceText(value, defaultRole = '') {
+  const parsed = new Map();
+  String(value || '').split(/\r?\n/).forEach(rawLine => {
+    const line = rawLine.replace(/^\s*(?:[-*•]\s*|\d+\s*[.)\-:]\s*)/, '').trim();
+    if (!line) return;
+    const fields = line.split(/\t|;|\|/).map(field => field.replace(/\s+/g, ' ').trim());
+    const name = fields[0] || '';
+    const normalizedName = normalizeSpreadsheetHeader(name);
+    if (name.length < 3 || ['nome', 'nome completo', 'funcionario', 'colaborador'].includes(normalizedName)) return;
+    let role = fields[1] || defaultRole || '';
+    let phone = fields[2] || '';
+    if (!phone && /\d{8,}/.test(role.replace(/\D/g, ''))) {
+      phone = role;
+      role = defaultRole || '';
+    }
+    parsed.set(name.toLocaleUpperCase('pt-BR'), { name, role, phone });
+  });
+  return [...parsed.values()];
+}
+
+function previewBulkWorkforce() {
+  const target = document.getElementById('bulkWorkforcePreview');
+  const textarea = document.getElementById('bulkWorkforceNames');
+  if (!target || !textarea) return;
+  const form = textarea.form;
+  const people = parseBulkWorkforceText(textarea.value, form?.elements?.defaultRole?.value || '');
+  const sample = people.slice(0, 4).map(person => person.name).join(' · ');
+  target.innerHTML = `<strong>${people.length} pessoa(s) identificada(s)</strong><small>${sample ? `${esc(sample)}${people.length > 4 ? '…' : ''}` : 'Digite ou cole os nomes acima.'}</small>`;
+}
+
+async function saveBulkWorkforce(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const company = String(data.get('company') || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR');
+  const defaultRole = String(data.get('defaultRole') || '').replace(/\s+/g, ' ').trim();
+  const status = String(data.get('status') || '').trim();
+  const people = parseBulkWorkforceText(data.get('people'), defaultRole);
+  if (!company) return toast('Informe a empresa para o cadastro em massa.', true);
+  if (!people.length) return toast('Cole ou digite ao menos um nome válido.', true);
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.innerHTML = `${icon('clock')} Salvando ${people.length} pessoa(s)...`;
+  }
+  await syncWorkforceFromSupabase();
+
+  const changedAt = new Date().toISOString();
+  const peopleByKey = new Map(workforce.map(person => [workforcePersonKey(person), person]));
+  let added = 0;
+  let updated = 0;
+  people.forEach(entry => {
+    const key = workforcePersonKey(company, entry.name);
+    const existing = peopleByKey.get(key);
+    const person = {
+      ...(existing || {}),
+      id: existing?.id || crypto.randomUUID(),
+      company,
+      name: entry.name,
+      role: entry.role || existing?.role || 'Não informado',
+      status: status || existing?.status || '',
+      phone: entry.phone || existing?.phone || '',
+      accessRole: existing?.accessRole || 'operator',
+      pin: existing?.pin || '',
+      updatedAt: changedAt
+    };
+    clearWorkforcePersonDeletion(person);
+    peopleByKey.set(key, person);
+    if (existing) updated++;
+    else added++;
+  });
+
+  workforce = normalizeWorkforcePeople([...peopleByKey.values()]);
+  workforceDataRevision++;
+  workforceMeta = { source: 'Cadastro em massa manual', updatedAt: changedAt };
+  workforceControlMeta = { updatedAt: changedAt };
+  saveLocalBackup();
+  const shared = await persistWorkforceControlRemote();
+  workforceView = 'directory';
+  closeModal();
+  renderCompanies();
+  toast(shared
+    ? `${added} pessoa(s) adicionada(s) e ${updated} atualizada(s) em ${company}.`
+    : `${added} pessoa(s) adicionada(s) e ${updated} atualizada(s) neste aparelho. Sincronização pendente.`, !shared);
 }
 
 function workforceSpreadsheetHeader(row) {
@@ -5836,9 +6132,12 @@ async function handleWorkforceUpload(event) {
     // Mescla pessoas da planilha com as que já existem no sistema, evitando perda de dados cadastrais
     const existingMap = new Map();
     workforce.forEach(p => existingMap.set(workforcePersonKey(p), p));
+    const importedAt = new Date().toISOString();
     imported.people.forEach(p => {
       const key = workforcePersonKey(p);
-      existingMap.set(key, { ...(existingMap.get(key) || {}), ...p });
+      const importedPerson = { ...(existingMap.get(key) || {}), ...p, updatedAt: importedAt };
+      clearWorkforcePersonDeletion(importedPerson);
+      existingMap.set(key, importedPerson);
     });
     workforce = normalizeWorkforcePeople(Array.from(existingMap.values()));
 
@@ -5856,8 +6155,9 @@ async function handleWorkforceUpload(event) {
       });
     });
 
-    workforceMeta={source:file.name,updatedAt:new Date().toISOString()};
-    workforceControlMeta={updatedAt:new Date().toISOString()};
+    workforceDataRevision++;
+    workforceMeta={source:file.name,updatedAt:importedAt};
+    workforceControlMeta={updatedAt:importedAt};
     const latestDate = imported.dates[imported.dates.length - 1];
     if (latestDate) {
       workforceControlMonth = latestDate.slice(0, 7);
@@ -5965,13 +6265,13 @@ async function exportWorkforceExcel() {
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
-          fgColor: { argb: value === '1' ? 'FFDDF3E7' : value === '0' ? 'FFFDE2E2' : value === 'FOLGA' ? 'FFFFF0C9' : 'FFFFFFFF' }
+          fgColor: { argb: value === '1' || value === 'D' ? 'FFDDF3E7' : value === 'N' ? 'FFE9E8FF' : value === '0' ? 'FFFDE2E2' : value === 'FOLGA' ? 'FFFFF0C9' : 'FFFFFFFF' }
         };
       }
     });
   });
 
-  const totalRow = worksheet.addRow(['TOTAL DE EFETIVOS DIÁRIO', '', '', '', ...dates.map(date => exportPeople.filter(person => workforceAttendanceValue(person, date) === '1').length)]);
+  const totalRow = worksheet.addRow(['TOTAL DE EFETIVOS DIÁRIO', '', '', '', ...dates.map(date => exportPeople.filter(person => isPresentAttendanceValue(workforceAttendanceValue(person, date))).length)]);
   totalRow.font = { bold: true };
   totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAF2ED' } };
   worksheet.mergeCells(totalRow.number, 1, totalRow.number, 4);
@@ -5982,7 +6282,7 @@ async function exportWorkforceExcel() {
   const quadroHeaderTitle = worksheet.addRow(['QUADRO DE EFETIVO DIÁRIO X GERAL']);
   quadroHeaderTitle.font = { bold: true, size: 12, color: { argb: 'FF173C2C' } };
   
-  const quadroHeader = worksheet.addRow(['EMPRESA', 'TOTAL DE EFETIVOS DIÁRIO', 'GERAL']);
+  const quadroHeader = worksheet.addRow(['EMPRESA', 'DIURNO', 'NOTURNO', 'TOTAL PRESENTE', 'GERAL']);
   quadroHeader.height = 24;
   quadroHeader.eachCell(cell => {
     cell.font = { bold: true, color: { argb: 'FF000000' }, size: 10 };
@@ -5992,17 +6292,23 @@ async function exportWorkforceExcel() {
   });
 
   const companiesList = [...new Set(exportPeople.map(p => p.company).filter(Boolean))].sort(safeSort);
+  let totalDaySum = 0;
+  let totalNightSum = 0;
   let totalDailySum = 0;
   let totalGeralSum = 0;
 
   companiesList.forEach(company => {
     const people = exportPeople.filter(p => p.company === company);
-    const dailyCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === '1').length;
+    const dayCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === 'D').length;
+    const nightCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === 'N').length;
+    const dailyCount = people.filter(p => isPresentAttendanceValue(workforceAttendanceValue(p, workforceSummaryDate))).length;
     const geralCount = people.length;
+    totalDaySum += dayCount;
+    totalNightSum += nightCount;
     totalDailySum += dailyCount;
     totalGeralSum += geralCount;
 
-    const qRow = worksheet.addRow([company, dailyCount, geralCount]);
+    const qRow = worksheet.addRow([company, dayCount, nightCount, dailyCount, geralCount]);
     qRow.eachCell((cell, colIndex) => {
       cell.alignment = { horizontal: colIndex === 1 ? 'left' : 'center', vertical: 'middle' };
       cell.font = { bold: colIndex > 1, size: 10 };
@@ -6010,7 +6316,7 @@ async function exportWorkforceExcel() {
     });
   });
 
-  const quadroTotalRow = worksheet.addRow(['TOTAL', totalDailySum, totalGeralSum]);
+  const quadroTotalRow = worksheet.addRow(['TOTAL', totalDaySum, totalNightSum, totalDailySum, totalGeralSum]);
   quadroTotalRow.height = 22;
   quadroTotalRow.eachCell((cell, colIndex) => {
     cell.font = { bold: true, size: 11 };
@@ -6043,9 +6349,9 @@ async function exportWorkforceExcel() {
   
   const sumTitle = summary.addRow(['QUADRO RESUMO DE EFETIVOS POR EMPRESA']);
   sumTitle.font = { bold: true, size: 14, color: { argb: 'FF173C2C' } };
-  summary.mergeCells(3, 1, 3, 3);
+  summary.mergeCells(3, 1, 3, 5);
   
-  const sumHeader = summary.addRow(['EMPRESA', 'TOTAL DE EFETIVOS DIÁRIO', 'GERAL']);
+  const sumHeader = summary.addRow(['EMPRESA', 'DIURNO', 'NOTURNO', 'TOTAL PRESENTE', 'GERAL']);
   sumHeader.height = 24;
   sumHeader.eachCell(cell => {
     cell.font = { bold: true, color: { argb: 'FF000000' }, size: 10 };
@@ -6056,8 +6362,10 @@ async function exportWorkforceExcel() {
 
   companiesList.forEach(company => {
     const people = exportPeople.filter(p => p.company === company);
-    const dailyCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === '1').length;
-    const sRow = summary.addRow([company, dailyCount, people.length]);
+    const dayCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === 'D').length;
+    const nightCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === 'N').length;
+    const dailyCount = people.filter(p => isPresentAttendanceValue(workforceAttendanceValue(p, workforceSummaryDate))).length;
+    const sRow = summary.addRow([company, dayCount, nightCount, dailyCount, people.length]);
     sRow.eachCell((cell, colIndex) => {
       cell.alignment = { horizontal: colIndex === 1 ? 'left' : 'center', vertical: 'middle' };
       cell.font = { bold: colIndex > 1, size: 10 };
@@ -6065,7 +6373,7 @@ async function exportWorkforceExcel() {
     });
   });
 
-  const sTotalRow = summary.addRow(['TOTAL', totalDailySum, totalGeralSum]);
+  const sTotalRow = summary.addRow(['TOTAL', totalDaySum, totalNightSum, totalDailySum, totalGeralSum]);
   sTotalRow.height = 22;
   sTotalRow.eachCell((cell, colIndex) => {
     cell.font = { bold: true, size: 11 };
@@ -6076,7 +6384,9 @@ async function exportWorkforceExcel() {
 
   summary.columns = [
     { key: 'company', width: 32 },
-    { key: 'daily', width: 28 },
+    { key: 'day', width: 16 },
+    { key: 'night', width: 16 },
+    { key: 'daily', width: 20 },
     { key: 'geral', width: 16 }
   ];
 
@@ -6159,7 +6469,7 @@ function reportDocument(title, subtitle, content, summary='') {
   const issued=new Intl.DateTimeFormat('pt-BR',{dateStyle:'long',timeStyle:'short'}).format(new Date());
   return `<article class="report-document"><header class="report-document-head"><div class="report-logos"><img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling"><img src="assets/afonso-franca-logo.png" alt="Afonso França Engenharia"></div><div><small>OBRAFLOW · DATA CENTER FORTALEZA</small><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div><aside><strong>Emitido em</strong><span>${esc(issued)}</span></aside></header>${summary?`<div class="report-summary">${summary}</div>`:''}${content}<footer class="report-footer">Documento gerado pelo ObraFlow · Gestão HVAC · ${esc(issued)}</footer></article>`;
 }
-function openReportPDF(type, filtered=false) {
+function openReportPDF(type, filtered=false, workforceCompany='', workforceSelection=null, workforceFilterDescription='') {
   let title='Relatório'; let subtitle=''; let content=''; let summary='';
   if(type==='usage') {
     title='Utilização e movimentações de PTAs'; subtitle='Situação atual da frota e histórico operacional';
@@ -6180,12 +6490,15 @@ function openReportPDF(type, filtered=false) {
     summary=`<span><b>${selectedEquipments.length}</b> equipamentos</span><span><b>${selectedEquipments.filter(e=>e.status==='available').length}</b> disponíveis</span><span><b>${selectedEquipments.filter(e=>e.status==='in-use').length}</b> em uso</span><span><b>${selectedEquipments.filter(e=>e.status==='maintenance').length}</b> indisponíveis</span>`;
     content=`<section class="report-section"><h2>Inventário da frota</h2>${reportTable(['Patrimônio','Tipo','Modelo / descrição','Chassi','Horímetro','Bateria','Empreiteiro','NF','Status'],rows)}</section>`;
   } else if(type==='workforce') {
-    title='Empresas e efetivo'; subtitle='Relação atualizada de colaboradores da obra';
-    const selectedWorkforce=getReportFilteredWorkforce(); const companies=[...new Set(selectedWorkforce.map(person=>person.company))]; const rows=selectedWorkforce.map(person=>[person.name||'—',person.company||'—',person.role||'—',person.status||'—',person.phone||'—']);
+    title='Empresas e efetivo'; subtitle=workforceCompany?`Relação de colaboradores · ${workforceCompany}`:workforceSelection?'Relação de colaboradores conforme os filtros da tela':'Relação atualizada de colaboradores da obra';
+    const selectedWorkforce=(Array.isArray(workforceSelection)?workforceSelection:workforceCompany?workforce.filter(person=>person.company===workforceCompany):getReportFilteredWorkforce()).sort((a,b)=>safeSort(a.company,b.company)||safeSort(a.name,b.name)); const companies=[...new Set(selectedWorkforce.map(person=>person.company))]; const rows=selectedWorkforce.map(person=>[person.name||'—',person.company||'—',person.role||'—',person.status||'—',person.phone||'—']);
     summary=`<span><b>${selectedWorkforce.length}</b> colaboradores</span><span><b>${companies.length}</b> empresas</span><span><b>${workforceMeta.source?'Planilha':'Manual'}</b> origem da base</span>`;
     content=`<section class="report-section"><h2>Efetivo cadastrado</h2>${reportTable(['Nome','Empresa','Função','Vínculo / Status','Telefone'],rows,'Nenhum colaborador cadastrado.')}</section>`;
   } else return;
-  const filterCaption=reportFilterCaption(); if(filterCaption)content=`<div class="report-filter-caption"><strong>Filtros aplicados:</strong> ${esc(filterCaption)}</div>${content}`;
+  const filterCaption = (workforceFilterDescription || workforceCompany)
+    ? workforceFilterDescription || `Empresa: ${workforceCompany}`
+    : reportFilterCaption();
+  if(filterCaption)content=`<div class="report-filter-caption"><strong>Filtros aplicados:</strong> ${esc(filterCaption)}</div>${content}`;
   modal(`${modalHead(title,'Visualize antes de imprimir ou salvar')}<div class="modal-body report-preview">${reportDocument(title,subtitle,content,summary)}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('download')} Imprimir / salvar PDF</button></div>`,'modal-paper');
   document.querySelector('.modal-backdrop').classList.add('print-area','report-print-area');
 }
