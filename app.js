@@ -318,8 +318,15 @@ let workforceControlMeta = { updatedAt: '' };
 let workforceDeletedPeople = {};
 let workforceView = 'control';
 let workforceControlSubView = 'table';
-let workforceControlMonth = new Date().toISOString().slice(0, 7);
-let workforceSummaryDate = new Date().toISOString().slice(0, 10);
+function currentLocalDateISO(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+const initialWorkforceDate = currentLocalDateISO();
+let workforceControlMonth = initialWorkforceDate.slice(0, 7);
+let workforceSummaryDate = initialWorkforceDate;
 let workforceRemoteSaveTimer = null;
 let workforceReadyPromise = Promise.resolve();
 let lastWorkforceSyncTime = 0;
@@ -2122,10 +2129,11 @@ function loadLocalStorageBackup() {
       workforce = normalizeWorkforcePeople(workforce);
       pruneDeletedWorkforceAttendance();
     }
-    const localWorkforceMonth = localStorage.getItem('obraflow_workforce_control_month');
-    if (/^\d{4}-\d{2}$/.test(localWorkforceMonth || '')) workforceControlMonth = localWorkforceMonth;
-    const localWorkforceSummaryDate = localStorage.getItem('obraflow_workforce_summary_date');
-    if (/^\d{4}-\d{2}-\d{2}$/.test(localWorkforceSummaryDate || '')) workforceSummaryDate = localWorkforceSummaryDate;
+    // O controle operacional sempre deve abrir no dia atual. Persistir a data
+    // selecionada fazia o quadro continuar mostrando o dia anterior após a virada.
+    const currentWorkforceDate = currentLocalDateISO();
+    workforceControlMonth = currentWorkforceDate.slice(0, 7);
+    workforceSummaryDate = currentWorkforceDate;
     const localPackingSlips = localStorage.getItem('obraflow_packing_slips');
     if (localPackingSlips) {
       const parsed = JSON.parse(localPackingSlips);
@@ -5496,6 +5504,7 @@ function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
   const companies = [...new Set(workforce.map(person => person?.company).filter(Boolean))].sort(safeSort);
   let totalDay = 0;
   let totalNight = 0;
+  let totalNoShift = 0;
   let totalDaily = 0;
   let totalGeral = 0;
 
@@ -5503,14 +5512,16 @@ function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
     const people = workforce.filter(person => person?.company === company);
     const dayCount = people.filter(person => workforceAttendanceValue(person, date) === 'D').length;
     const nightCount = people.filter(person => workforceAttendanceValue(person, date) === 'N').length;
-    const dailyCount = people.filter(person => isPresentAttendanceValue(workforceAttendanceValue(person, date))).length;
+    const noShiftCount = people.filter(person => workforceAttendanceValue(person, date) === '1').length;
+    const dailyCount = dayCount + nightCount + noShiftCount;
     const geralCount = people.length;
-    return { company, dayCount, nightCount, dailyCount, geralCount };
-  }).filter(row => row.dailyCount > 0);
+    return { company, dayCount, nightCount, noShiftCount, dailyCount, geralCount };
+  });
 
   rows.forEach(row => {
     totalDay += row.dayCount;
     totalNight += row.nightCount;
+    totalNoShift += row.noShiftCount;
     totalDaily += row.dailyCount;
     totalGeral += row.geralCount;
   });
@@ -5520,6 +5531,7 @@ function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
         <td class="quadro-col-company">${esc(row.company)}</td>
         <td class="quadro-col-shift quadro-col-day">${row.dayCount}</td>
         <td class="quadro-col-shift quadro-col-night">${row.nightCount}</td>
+        <td class="quadro-col-shift quadro-col-no-shift">${row.noShiftCount}</td>
         <td class="quadro-col-daily">${row.dailyCount}</td>
         <td class="quadro-col-geral">${row.geralCount}</td>
       </tr>
@@ -5534,18 +5546,20 @@ function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
               <th>EMPRESA</th>
               <th>DIURNO</th>
               <th>NOTURNO</th>
+              <th>SEM TURNO</th>
               <th>PRESENTES</th>
               <th>GERAL</th>
             </tr>
           </thead>
           <tbody>
-            ${rowsHTML || '<tr><td colspan="5" style="text-align:center;">Nenhum efetivo registrado nesta data</td></tr>'}
+            ${rowsHTML || '<tr><td colspan="6" style="text-align:center;">Nenhum efetivo registrado nesta data</td></tr>'}
           </tbody>
           <tfoot>
             <tr>
-              <td class="quadro-col-company">TOTAL</td>
+              <td class="quadro-col-company">TOTAL · TODAS AS EMPRESAS</td>
               <td class="quadro-col-shift quadro-col-day">${totalDay}</td>
               <td class="quadro-col-shift quadro-col-night">${totalNight}</td>
+              <td class="quadro-col-shift quadro-col-no-shift">${totalNoShift}</td>
               <td class="quadro-col-daily">${totalDaily}</td>
               <td class="quadro-col-geral">${totalGeral}</td>
             </tr>
@@ -5664,7 +5678,9 @@ function setWorkforceAttendance(encodedKey, date, value) {
     cellBtn.title = `${presentation.title} · clique para alterar`;
   }
 
-  updateWorkforceSummaryUI(date);
+  // A edição de outra coluna não deve trocar silenciosamente a data do resumo.
+  // O quadro superior sempre representa apenas a data selecionada/destacada.
+  if (date === workforceSummaryDate) updateWorkforceSummaryUI(date);
   filterWorkforceControl();
 }
 
@@ -5678,10 +5694,10 @@ function renderWorkforceControl(companies) {
       <td class="workforce-sticky-company">${esc(person.company)}</td>
       <td class="workforce-sticky-person"><strong>${esc(person.name)}</strong><small><span class="mobile-company-tag">${esc(person.company)} · </span>${esc(person.role || '—')}</small></td>
       <td class="workforce-col-vinculo" title="${esc(person.status || '')}">${esc(person.status === 'DIRETA' ? 'DIR' : person.status === 'INDIRETA' ? 'IND' : person.status === 'TERCEIRO' ? 'TER' : person.status || '—')}</td>
-      ${dates.map(date => `<td>${workforceAttendanceCell(person, date)}</td>`).join('')}
+      ${dates.map(date => `<td data-attendance-date="${date}" class="${date === workforceSummaryDate ? 'selected-day' : ''}">${workforceAttendanceCell(person, date)}</td>`).join('')}
     </tr>`;
   }).join('');
-  const totals = dates.map(date => `<td class="attendance-total" data-total-date="${date}">${workforce.filter(person => isPresentAttendanceValue(workforceAttendanceValue(person, date))).length}</td>`).join('');
+  const totals = dates.map(date => `<td class="attendance-total ${date === workforceSummaryDate ? 'selected-day' : ''}" data-total-date="${date}">${workforce.filter(person => isPresentAttendanceValue(workforceAttendanceValue(person, date))).length}</td>`).join('');
   
   const formattedSummaryDate = new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`));
 
@@ -5703,7 +5719,7 @@ function renderWorkforceControl(companies) {
       <small><b>D e N contam como presença.</b> O P identifica uma marcação antiga: escolha D ou N para informar o turno. O filtro usa a data selecionada no resumo ou no cabeçalho da grade.</small>
     </div>
     <div class="workforce-daily-head">
-      <div><strong>Resumo do dia</strong><small>Diurno, noturno, presentes e cadastrados por empresa</small></div>
+      <div><strong>Resumo do dia selecionado</strong><small id="workforceDailySummaryDescription">${formattedSummaryDate} · diurno, noturno, presentes e cadastrados por empresa</small></div>
       <input type="date" id="workforceSummaryDate" value="${workforceSummaryDate}" onchange="changeWorkforceSummaryDate(this.value)">
     </div>
     <div class="workforce-daily-summary" id="workforceDailySummary">${workforceDailySummaryHTML()}</div>
@@ -5736,7 +5752,7 @@ function renderWorkforceControl(companies) {
           <tfoot>
             <tr>
               <td class="workforce-sticky-company"></td>
-              <td class="workforce-sticky-person"><strong>Total presente</strong></td>
+              <td class="workforce-sticky-person"><strong id="workforceVisibleTotalLabel">Total geral presente</strong></td>
               <td class="workforce-col-vinculo"></td>
               ${totals}
             </tr>
@@ -5927,13 +5943,21 @@ function filterWorkforceControl() {
     const date = cell.dataset.totalDate;
     cell.textContent = [...document.querySelectorAll('.workforce-control-row')].filter(row => row.style.display !== 'none' && isPresentAttendanceValue(row.querySelector(`[data-date="${date}"]`)?.dataset.value)).length;
   });
+  const totalLabel = document.getElementById('workforceVisibleTotalLabel');
+  if (totalLabel) {
+    totalLabel.textContent = company && !search && !shift
+      ? `Total presente · ${company}`
+      : search || company || shift
+        ? 'Total filtrado presente'
+        : 'Total geral presente';
+  }
   const empty = document.getElementById('noWorkforceControlResults'); if (empty) empty.style.display = visible ? 'none' : 'block';
 }
 
 function changeWorkforceMonth(month) {
   if (!/^\d{4}-\d{2}$/.test(month || '')) return;
   workforceControlMonth = month;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = currentLocalDateISO();
   workforceSummaryDate = today.startsWith(month) ? today : `${month}-01`;
   saveLocalBackup();
   renderCompanies();
@@ -5950,6 +5974,10 @@ function changeWorkforceSummaryDate(date) {
   workforceSummaryDate = date;
   const dateInput = document.getElementById('workforceSummaryDate');
   if (dateInput && dateInput.value !== date) dateInput.value = date;
+  const summaryDescription = document.getElementById('workforceDailySummaryDescription');
+  if (summaryDescription) {
+    summaryDescription.textContent = `${new Intl.DateTimeFormat('pt-BR').format(new Date(`${date}T12:00:00`))} · diurno, noturno, presentes e cadastrados por empresa`;
+  }
   saveLocalBackup();
   updateWorkforceSummaryUI(date);
   
@@ -5965,6 +5993,10 @@ function changeWorkforceSummaryDate(date) {
     document.querySelectorAll('.workforce-control-table th[data-date-col]').forEach(th => {
       if (th.dataset.dateCol === date) th.classList.add('selected-day');
       else th.classList.remove('selected-day');
+    });
+    document.querySelectorAll('.workforce-control-table [data-attendance-date], .workforce-control-table [data-total-date]').forEach(cell => {
+      const cellDate = cell.dataset.attendanceDate || cell.dataset.totalDate;
+      cell.classList.toggle('selected-day', cellDate === date);
     });
     scrollToSelectedDateColumn(date);
   }
@@ -6447,7 +6479,7 @@ async function exportWorkforceExcel() {
   const quadroHeaderTitle = worksheet.addRow(['QUADRO DE EFETIVO DIÁRIO X GERAL']);
   quadroHeaderTitle.font = { bold: true, size: 12, color: { argb: 'FF173C2C' } };
   
-  const quadroHeader = worksheet.addRow(['EMPRESA', 'DIURNO', 'NOTURNO', 'TOTAL PRESENTE', 'GERAL']);
+  const quadroHeader = worksheet.addRow(['EMPRESA', 'DIURNO', 'NOTURNO', 'SEM TURNO', 'TOTAL PRESENTE', 'GERAL']);
   quadroHeader.height = 24;
   quadroHeader.eachCell(cell => {
     cell.font = { bold: true, color: { argb: 'FF000000' }, size: 10 };
@@ -6459,6 +6491,7 @@ async function exportWorkforceExcel() {
   const companiesList = [...new Set(exportPeople.map(p => p.company).filter(Boolean))].sort(safeSort);
   let totalDaySum = 0;
   let totalNightSum = 0;
+  let totalNoShiftSum = 0;
   let totalDailySum = 0;
   let totalGeralSum = 0;
 
@@ -6466,14 +6499,16 @@ async function exportWorkforceExcel() {
     const people = exportPeople.filter(p => p.company === company);
     const dayCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === 'D').length;
     const nightCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === 'N').length;
-    const dailyCount = people.filter(p => isPresentAttendanceValue(workforceAttendanceValue(p, workforceSummaryDate))).length;
+    const noShiftCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === '1').length;
+    const dailyCount = dayCount + nightCount + noShiftCount;
     const geralCount = people.length;
     totalDaySum += dayCount;
     totalNightSum += nightCount;
+    totalNoShiftSum += noShiftCount;
     totalDailySum += dailyCount;
     totalGeralSum += geralCount;
 
-    const qRow = worksheet.addRow([company, dayCount, nightCount, dailyCount, geralCount]);
+    const qRow = worksheet.addRow([company, dayCount, nightCount, noShiftCount, dailyCount, geralCount]);
     qRow.eachCell((cell, colIndex) => {
       cell.alignment = { horizontal: colIndex === 1 ? 'left' : 'center', vertical: 'middle' };
       cell.font = { bold: colIndex > 1, size: 10 };
@@ -6481,7 +6516,7 @@ async function exportWorkforceExcel() {
     });
   });
 
-  const quadroTotalRow = worksheet.addRow(['TOTAL', totalDaySum, totalNightSum, totalDailySum, totalGeralSum]);
+  const quadroTotalRow = worksheet.addRow(['TOTAL · TODAS AS EMPRESAS', totalDaySum, totalNightSum, totalNoShiftSum, totalDailySum, totalGeralSum]);
   quadroTotalRow.height = 22;
   quadroTotalRow.eachCell((cell, colIndex) => {
     cell.font = { bold: true, size: 11 };
@@ -6514,9 +6549,9 @@ async function exportWorkforceExcel() {
   
   const sumTitle = summary.addRow(['QUADRO RESUMO DE EFETIVOS POR EMPRESA']);
   sumTitle.font = { bold: true, size: 14, color: { argb: 'FF173C2C' } };
-  summary.mergeCells(3, 1, 3, 5);
+  summary.mergeCells(3, 1, 3, 6);
   
-  const sumHeader = summary.addRow(['EMPRESA', 'DIURNO', 'NOTURNO', 'TOTAL PRESENTE', 'GERAL']);
+  const sumHeader = summary.addRow(['EMPRESA', 'DIURNO', 'NOTURNO', 'SEM TURNO', 'TOTAL PRESENTE', 'GERAL']);
   sumHeader.height = 24;
   sumHeader.eachCell(cell => {
     cell.font = { bold: true, color: { argb: 'FF000000' }, size: 10 };
@@ -6529,8 +6564,9 @@ async function exportWorkforceExcel() {
     const people = exportPeople.filter(p => p.company === company);
     const dayCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === 'D').length;
     const nightCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === 'N').length;
-    const dailyCount = people.filter(p => isPresentAttendanceValue(workforceAttendanceValue(p, workforceSummaryDate))).length;
-    const sRow = summary.addRow([company, dayCount, nightCount, dailyCount, people.length]);
+    const noShiftCount = people.filter(p => workforceAttendanceValue(p, workforceSummaryDate) === '1').length;
+    const dailyCount = dayCount + nightCount + noShiftCount;
+    const sRow = summary.addRow([company, dayCount, nightCount, noShiftCount, dailyCount, people.length]);
     sRow.eachCell((cell, colIndex) => {
       cell.alignment = { horizontal: colIndex === 1 ? 'left' : 'center', vertical: 'middle' };
       cell.font = { bold: colIndex > 1, size: 10 };
@@ -6538,7 +6574,7 @@ async function exportWorkforceExcel() {
     });
   });
 
-  const sTotalRow = summary.addRow(['TOTAL', totalDaySum, totalNightSum, totalDailySum, totalGeralSum]);
+  const sTotalRow = summary.addRow(['TOTAL · TODAS AS EMPRESAS', totalDaySum, totalNightSum, totalNoShiftSum, totalDailySum, totalGeralSum]);
   sTotalRow.height = 22;
   sTotalRow.eachCell((cell, colIndex) => {
     cell.font = { bold: true, size: 11 };
@@ -6551,6 +6587,7 @@ async function exportWorkforceExcel() {
     { key: 'company', width: 32 },
     { key: 'day', width: 16 },
     { key: 'night', width: 16 },
+    { key: 'noShift', width: 16 },
     { key: 'daily', width: 20 },
     { key: 'geral', width: 16 }
   ];

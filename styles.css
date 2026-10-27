@@ -450,6 +450,8 @@ h3 { font-size: 14px; }
 
 .workforce-control-table th.selected-day { background: #d4ebd8 !important; box-shadow: inset 0 -3px 0 var(--green); }
 .workforce-control-table th.selected-day span { color: var(--green-dark) !important; font-weight: 800 !important; }
+.workforce-control-table tbody td.selected-day { background: #f1f8f3; }
+.workforce-control-table tfoot td.selected-day { background: #d4ebd8; color: var(--green-dark); box-shadow: inset 0 3px 0 var(--green); }
 .upload-zone { display: flex; align-items: center; gap: 12px; padding: 17px; border: 1.5px dashed #a8c9b8; border-radius: 11px; background: #f6faf8; cursor: pointer; }
 .upload-zone > span { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border-radius: 10px; color: var(--green); background: var(--green-soft); }
 .upload-zone div { display: grid; flex: 1; gap: 3px; }
@@ -1715,7 +1717,7 @@ body.sidebar-collapsed .mobile-menu { display: inline-grid !important; }
 
 .quadro-efetivo-table {
   width: 100%;
-  min-width: 680px;
+  min-width: 780px;
   border-collapse: collapse;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 13px;
@@ -1764,6 +1766,7 @@ body.sidebar-collapsed .mobile-menu { display: inline-grid !important; }
 
 .quadro-col-day { color: #15803D; }
 .quadro-col-night { color: #4338A0; }
+.quadro-col-no-shift { color: #52616B; }
 
 .quadro-col-daily {
   color: #15803D;
