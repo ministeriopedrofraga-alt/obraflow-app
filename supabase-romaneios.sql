@@ -418,7 +418,7 @@ create table if not exists public.workforce (
   role text,
   status text,
   phone text,
-  accessRole text,
+  "accessRole" text,
   pin text,
   updated_at timestamptz not null default now()
 );

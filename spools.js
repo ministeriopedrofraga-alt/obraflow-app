@@ -5,6 +5,12 @@
    ========================================================================== */
 
 const SPOOL_STORE_KEY = 'obraflow_spools_v5';
+const SPOOL_SUPPORT_STORE_KEY = 'obraflow_spool_supports_v1';
+const SPOOL_ISO_STORE_KEY = 'obraflow_spool_isometrics_v1';
+const SPOOL_SYNC_STATE_KEY = 'obraflow_spool_sync_state_v1';
+const SPOOL_DELETED_STORE_KEY = 'obraflow_spool_deleted_v1';
+const SPOOL_BACKUP_STORE_KEY = 'obraflow_spool_backups_v1';
+const SPOOL_MASS_DELETE_MINIMUM = 25;
 try {
   localStorage.removeItem('obraflow_spools_v4');
   localStorage.removeItem('obraflow_spools_v3');
@@ -259,6 +265,275 @@ function spoolBuildStableId(spool) {
     spoolCanonicalSubArea(spool.subArea, normalizeSector(spool.area))
   ].map(spoolTextKey).filter(Boolean);
   return parts.join('-');
+}
+
+function spoolRecordKey(item) {
+  if (!item) return '';
+  return [
+    normalizeDh(item.dh),
+    normalizeSector(item.area),
+    item.number,
+    item.part || item.seq || '',
+    item.circuit || '',
+    spoolCanonicalSubArea(item.subArea, normalizeSector(item.area))
+  ].map(spoolTextKey).join('|');
+}
+
+function spoolRecordTimestamp(item) {
+  if (!item) return 0;
+  return Math.max(
+    Date.parse(item.updatedAt || '') || 0,
+    Date.parse(item.returnedAt || '') || 0,
+    Date.parse(item.rejectedAt || '') || 0,
+    Date.parse(item.installedAt || '') || 0,
+    Date.parse(item.receivedAt || '') || 0,
+    Date.parse(item.createdAt || '') || 0
+  );
+}
+
+function spoolComparableRecord(item) {
+  if (!item) return '';
+  const copy = { ...item };
+  delete copy.updatedAt;
+  return JSON.stringify(copy);
+}
+
+function spoolReadStoredList(storeKey) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(storeKey) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function spoolStampChangedRecords(items, previous = spoolReadStoredList(SPOOL_STORE_KEY)) {
+  const previousByKey = new Map(previous.map(item => [spoolRecordKey(item), item]));
+  const now = new Date().toISOString();
+  return (Array.isArray(items) ? items : []).map(item => {
+    const oldItem = previousByKey.get(spoolRecordKey(item));
+    if (!oldItem || spoolComparableRecord(oldItem) !== spoolComparableRecord(item)) {
+      item.updatedAt = now;
+    }
+    return item;
+  });
+}
+
+function spoolLoadDeletedState() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SPOOL_DELETED_STORE_KEY) || '{}');
+    return {
+      spools: Array.isArray(parsed.spools) ? parsed.spools : [],
+      supports: Array.isArray(parsed.supports) ? parsed.supports : [],
+      isometrics: Array.isArray(parsed.isometrics) ? parsed.isometrics : []
+    };
+  } catch (error) {
+    return { spools: [], supports: [], isometrics: [] };
+  }
+}
+
+function spoolMergeTombstones(localTombstones, remoteTombstones) {
+  const map = new Map();
+  [...(Array.isArray(remoteTombstones) ? remoteTombstones : []), ...(Array.isArray(localTombstones) ? localTombstones : [])]
+    .forEach(entry => {
+      if (!entry?.key || !entry?.deletedAt) return;
+      const current = map.get(entry.key);
+      const entryTime = Date.parse(entry.deletedAt) || 0;
+      const currentTime = Date.parse(current?.deletedAt || '') || 0;
+      if (!current || entryTime > currentTime || (entryTime === currentTime && entry.record && !current.record)) {
+        map.set(entry.key, entry);
+      }
+    });
+  return Array.from(map.values());
+}
+
+function spoolTrackDeletedRecords(group, previousItems, currentItems) {
+  const currentKeys = new Set((Array.isArray(currentItems) ? currentItems : []).map(spoolRecordKey));
+  const tombstoneMap = new Map((spoolDeletedState[group] || []).map(entry => [entry.key, entry]));
+  const deletedAt = new Date().toISOString();
+  (Array.isArray(previousItems) ? previousItems : []).forEach(item => {
+    const key = spoolRecordKey(item);
+    if (key && !currentKeys.has(key)) tombstoneMap.set(key, { key, deletedAt, record: { ...item } });
+  });
+  // Um cadastro explícito com a mesma chave reativa o item.
+  currentKeys.forEach(key => tombstoneMap.delete(key));
+  spoolDeletedState[group] = Array.from(tombstoneMap.values());
+  try { localStorage.setItem(SPOOL_DELETED_STORE_KEY, JSON.stringify(spoolDeletedState)); } catch (error) {}
+}
+
+function spoolStoreRecoveryBackup(items, reason = 'alteracao-em-massa') {
+  if (!Array.isArray(items) || !items.length) return null;
+  const snapshot = {
+    id: `backup-${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    reason,
+    count: items.length,
+    spools: items.map(item => ({ ...item }))
+  };
+  try {
+    const stored = JSON.parse(localStorage.getItem(SPOOL_BACKUP_STORE_KEY) || '[]');
+    const backups = Array.isArray(stored) ? stored : [];
+    localStorage.setItem(SPOOL_BACKUP_STORE_KEY, JSON.stringify([snapshot, ...backups].slice(0, 3)));
+  } catch (error) {
+    console.warn('Não foi possível salvar o backup local dos spools:', error);
+  }
+  return snapshot;
+}
+
+function spoolMergeRecoverySnapshots(remoteSnapshots, localSnapshot) {
+  const snapshots = [
+    ...(localSnapshot ? [localSnapshot] : []),
+    ...(Array.isArray(remoteSnapshots) ? remoteSnapshots : [])
+  ];
+  const seen = new Set();
+  return snapshots.filter(snapshot => {
+    const key = String(snapshot?.id || snapshot?.createdAt || '');
+    if (!key || seen.has(key) || !Array.isArray(snapshot?.spools)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 3);
+}
+
+function spoolApplyTombstones(items, tombstones) {
+  const deletedByKey = new Map((Array.isArray(tombstones) ? tombstones : []).map(entry => [entry.key, Date.parse(entry.deletedAt) || 0]));
+  return (Array.isArray(items) ? items : []).filter(item => {
+    const deletedAt = deletedByKey.get(spoolRecordKey(item));
+    return !deletedAt || spoolRecordTimestamp(item) > deletedAt;
+  });
+}
+
+function spoolMarkSyncPending() {
+  spoolDataRevision += 1;
+  try {
+    localStorage.setItem(SPOOL_SYNC_STATE_KEY, JSON.stringify({ pending: true, updatedAt: new Date().toISOString() }));
+  } catch (error) {}
+  return spoolDataRevision;
+}
+
+function spoolHasPendingSync() {
+  try {
+    return JSON.parse(localStorage.getItem(SPOOL_SYNC_STATE_KEY) || '{}')?.pending === true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function spoolClearPendingSync() {
+  try {
+    localStorage.setItem(SPOOL_SYNC_STATE_KEY, JSON.stringify({ pending: false, syncedAt: new Date().toISOString() }));
+  } catch (error) {}
+}
+
+async function spoolForceSyncNow() {
+  const button = document.getElementById('spoolForceSyncButton');
+  if (button) {
+    button.disabled = true;
+    button.textContent = '⏳ Atualizando...';
+  }
+  const updated = await syncSpoolsFromSupabase({ force: true });
+  if (updated) {
+    renderSpools();
+    toast('✅ Spools, suportes e isométricos atualizados do servidor.');
+  } else {
+    toast('Não foi possível atualizar agora. Os dados locais foram preservados.', true);
+    if (button) {
+      button.disabled = false;
+      button.textContent = '🔄 Atualizar agora';
+    }
+  }
+}
+
+function spoolMergeRecordCollections(localItems, remoteItems, { includeLocalOnly = true, kind = '', deletedRecords = [] } = {}) {
+  const map = new Map();
+  (Array.isArray(remoteItems) ? remoteItems : []).forEach(item => {
+    if (!item?.number) return;
+    const normalized = {
+      ...item,
+      kind: kind || item.kind,
+      area: normalizeSector(item.area || item.sectorName || ''),
+      dh: normalizeDh(item.dh)
+    };
+    map.set(spoolRecordKey(normalized), normalized);
+  });
+  (Array.isArray(localItems) ? localItems : []).forEach(item => {
+    if (!item?.number) return;
+    const normalized = {
+      ...item,
+      kind: kind || item.kind,
+      area: normalizeSector(item.area || item.sectorName || ''),
+      dh: normalizeDh(item.dh)
+    };
+    const key = spoolRecordKey(normalized);
+    const remoteItem = map.get(key);
+    if (!remoteItem) {
+      if (includeLocalOnly) map.set(key, normalized);
+      return;
+    }
+    if (spoolRecordTimestamp(normalized) > spoolRecordTimestamp(remoteItem)) {
+      map.set(key, { ...remoteItem, ...normalized });
+    }
+  });
+  return spoolApplyTombstones(Array.from(map.values()), deletedRecords);
+}
+
+function spoolHasNewerLocalRecords(localItems, remoteItems) {
+  const remoteByKey = new Map((Array.isArray(remoteItems) ? remoteItems : []).filter(item => item?.number).map(item => [spoolRecordKey(item), item]));
+  return (Array.isArray(localItems) ? localItems : []).some(item => {
+    if (!item?.number) return false;
+    const remote = remoteByKey.get(spoolRecordKey(item));
+    return remote && spoolRecordTimestamp(item) > spoolRecordTimestamp(remote);
+  });
+}
+
+function spoolHasLocalOnlyRecords(localItems, remoteItems, deletedRecords = []) {
+  const remoteKeys = new Set((Array.isArray(remoteItems) ? remoteItems : []).filter(item => item?.number).map(spoolRecordKey));
+  const deletedKeys = new Set((Array.isArray(deletedRecords) ? deletedRecords : []).map(entry => entry?.key).filter(Boolean));
+  return (Array.isArray(localItems) ? localItems : []).some(item => {
+    const key = spoolRecordKey(item);
+    return key && !remoteKeys.has(key) && !deletedKeys.has(key);
+  });
+}
+
+function spoolLoadAuxiliary(kind) {
+  const storeKey = kind === 'support' ? SPOOL_SUPPORT_STORE_KEY : SPOOL_ISO_STORE_KEY;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(storeKey) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(item => item && item.number)
+      .map(item => ({
+        ...item,
+        id: item.id || `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        kind,
+        number: String(item.number || '').trim(),
+        area: normalizeSector(item.area || item.sectorName || ''),
+        dh: normalizeDh(item.dh),
+        status: ['not-started', 'received', 'installed', 'rejected', 'returned'].includes(item.status) ? item.status : 'not-started',
+        supportType: kind === 'support' && item.supportType === 'movable' ? 'movable' : (kind === 'support' ? 'fixed' : '')
+      }));
+  } catch (error) {
+    console.warn(`Falha ao carregar ${kind === 'support' ? 'suportes' : 'isométricos'}:`, error);
+    return [];
+  }
+}
+
+function spoolSaveAuxiliary() {
+  try {
+    const previousSupports = spoolReadStoredList(SPOOL_SUPPORT_STORE_KEY);
+    const previousIsometrics = spoolReadStoredList(SPOOL_ISO_STORE_KEY);
+    spoolTrackDeletedRecords('supports', previousSupports, spoolSupportDb);
+    spoolTrackDeletedRecords('isometrics', previousIsometrics, spoolIsoDb);
+    localStorage.setItem(SPOOL_SUPPORT_STORE_KEY, JSON.stringify(spoolSupportDb));
+    localStorage.setItem(SPOOL_ISO_STORE_KEY, JSON.stringify(spoolIsoDb));
+    spoolMarkSyncPending();
+    spoolSyncRemote(spoolDb).catch(() => {});
+  } catch (error) {
+    console.error('Erro ao salvar suportes/isométricos:', error);
+  }
+}
+
+function spoolGetAllControlItems() {
+  return [...spoolDb, ...spoolSupportDb, ...spoolIsoDb];
 }
 
 // 34 Spools Oficiais do SUPERCORE DH 04 (Identificados a partir do esquema do tablet)
@@ -1047,14 +1322,34 @@ function spoolLoadAll() {
 }
 
 // Salvar Spools
-function spoolSaveAll(spools) {
+function spoolSaveAll(spools, options = {}) {
   try {
-    localStorage.setItem(SPOOL_STORE_KEY, JSON.stringify(spools));
+    const previousSpools = spoolReadStoredList(SPOOL_STORE_KEY);
+    const nextSpools = Array.isArray(spools) ? spools : [];
+    const removedCount = Math.max(0, previousSpools.length - nextSpools.length);
+    const isMassReduction = removedCount >= SPOOL_MASS_DELETE_MINIMUM
+      && removedCount >= Math.ceil(previousSpools.length * 0.2);
+
+    if (isMassReduction && options.allowMassDelete !== true) {
+      spoolDb = previousSpools;
+      toast(`Operação bloqueada: ela removeria ${removedCount} spools. A lista anterior foi preservada.`, true);
+      return false;
+    }
+
+    if (isMassReduction) {
+      spoolPendingRecoverySnapshot = spoolStoreRecoveryBackup(previousSpools, options.reason || 'reducao-em-massa');
+    }
+    spoolDb = spoolStampChangedRecords(nextSpools, previousSpools);
+    spoolTrackDeletedRecords('spools', previousSpools, spoolDb);
+    localStorage.setItem(SPOOL_STORE_KEY, JSON.stringify(spoolDb));
     const navCount = document.getElementById('navSpoolCount');
-    if (navCount) navCount.textContent = spools.length;
-    spoolSyncRemote(spools).catch(() => {});
+    if (navCount) navCount.textContent = spoolDb.length;
+    spoolMarkSyncPending();
+    spoolSyncRemote(spoolDb).catch(() => {});
+    return true;
   } catch (e) {
     console.error('Erro ao salvar spools:', e);
+    return false;
   }
 }
 
@@ -1075,8 +1370,8 @@ function spoolDeduplicateList(list) {
     if (!existing) {
       map.set(key, { ...s, dh: normDh, area: normSec });
     } else {
-      const t1 = new Date(s.installedAt || s.receivedAt || s.rejectedAt || 0).getTime();
-      const t2 = new Date(existing.installedAt || existing.receivedAt || existing.rejectedAt || 0).getTime();
+      const t1 = new Date(s.installedAt || s.receivedAt || s.rejectedAt || s.returnedAt || 0).getTime();
+      const t2 = new Date(existing.installedAt || existing.receivedAt || existing.rejectedAt || existing.returnedAt || 0).getTime();
       if (t1 > t2 || (s.status === 'installed' && existing.status !== 'installed')) {
         map.set(key, { ...existing, ...s, dh: normDh, area: normSec });
       }
@@ -1087,35 +1382,89 @@ function spoolDeduplicateList(list) {
 
 // Merge inteligente: Supabase tem prioridade total e sincroniza planilhas completas
 function spoolMergeLists(localList, remoteList) {
-  if (Array.isArray(remoteList) && remoteList.length > 0) {
-    return spoolDeduplicateList(remoteList);
-  }
-  return spoolDeduplicateList(localList || []);
+  return spoolDeduplicateList(spoolMergeRecordCollections(localList, remoteList));
 }
 
 // Sync com Supabase (app_metadata - spool_registry)
-async function spoolSyncRemote(spools) {
-  try {
-    const payload = {
-      updatedAt: new Date().toISOString(),
-      updatedBy: (window.currentUser?.name) || 'Pedro Alves',
-      spools: spools,
-      version: 5
-    };
-    if (typeof supabaseRestRequest === 'function') {
+function spoolSyncRemote(spools) {
+  const revisionAtStart = spoolDataRevision;
+  const localSpools = JSON.parse(JSON.stringify(Array.isArray(spools) ? spools : []));
+  const localSupports = JSON.parse(JSON.stringify(spoolSupportDb));
+  const localIsometrics = JSON.parse(JSON.stringify(spoolIsoDb));
+  const localDeletedState = JSON.parse(JSON.stringify(spoolDeletedState));
+  const localRecoverySnapshot = spoolPendingRecoverySnapshot
+    ? JSON.parse(JSON.stringify(spoolPendingRecoverySnapshot))
+    : null;
+
+  const save = async () => {
+    try {
+      if (typeof supabaseRestRequest !== 'function') return false;
+      let remoteValue = null;
+      try {
+        const rows = await supabaseRestRequest('app_metadata?key=eq.spool_registry&select=value');
+        remoteValue = Array.isArray(rows) ? rows[0]?.value : null;
+      } catch (readError) {
+        console.warn('Não foi possível conferir a versão remota dos spools antes de salvar:', readError);
+        throw readError;
+      }
+
+      // Mescla item por item antes do envio. Assim, uma reprovação feita no
+      // tablet não é apagada por uma lista antiga ainda aberta no computador.
+      const mergedDeletedState = {
+        spools: spoolMergeTombstones(localDeletedState.spools, remoteValue?.deletedSpools),
+        supports: spoolMergeTombstones(localDeletedState.supports, remoteValue?.deletedSupports),
+        isometrics: spoolMergeTombstones(localDeletedState.isometrics, remoteValue?.deletedIsometrics)
+      };
+      const mergedSpools = remoteValue?.spools
+        ? spoolDeduplicateList(spoolMergeRecordCollections(localSpools, remoteValue.spools, { includeLocalOnly: true, deletedRecords: mergedDeletedState.spools }))
+        : spoolDeduplicateList(localSpools);
+      const mergedSupports = spoolMergeRecordCollections(localSupports, remoteValue?.supports, { includeLocalOnly: true, kind: 'support', deletedRecords: mergedDeletedState.supports });
+      const mergedIsometrics = spoolMergeRecordCollections(localIsometrics, remoteValue?.isometrics, { includeLocalOnly: true, kind: 'iso', deletedRecords: mergedDeletedState.isometrics });
+      const recoverySnapshots = spoolMergeRecoverySnapshots(remoteValue?.recoverySnapshots, localRecoverySnapshot);
+      const payload = {
+        updatedAt: new Date().toISOString(),
+        updatedBy: (window.currentUser?.name) || 'Pedro Alves',
+        spools: mergedSpools,
+        supports: mergedSupports,
+        isometrics: mergedIsometrics,
+        deletedSpools: mergedDeletedState.spools,
+        deletedSupports: mergedDeletedState.supports,
+        deletedIsometrics: mergedDeletedState.isometrics,
+        recoverySnapshots,
+        version: 8
+      };
       await supabaseRestRequest('app_metadata?on_conflict=key', {
         method: 'POST',
         headers: { Prefer: 'resolution=merge-duplicates' },
         body: JSON.stringify({ key: 'spool_registry', value: payload })
       });
+
+      // Não substitui uma edição que aconteceu enquanto o envio estava em andamento.
+      if (revisionAtStart === spoolDataRevision) {
+        spoolDb = mergedSpools;
+        spoolSupportDb = mergedSupports;
+        spoolIsoDb = mergedIsometrics;
+        spoolDeletedState = mergedDeletedState;
+        localStorage.setItem(SPOOL_STORE_KEY, JSON.stringify(spoolDb));
+        localStorage.setItem(SPOOL_SUPPORT_STORE_KEY, JSON.stringify(spoolSupportDb));
+        localStorage.setItem(SPOOL_ISO_STORE_KEY, JSON.stringify(spoolIsoDb));
+        localStorage.setItem(SPOOL_DELETED_STORE_KEY, JSON.stringify(spoolDeletedState));
+        if (!localRecoverySnapshot || spoolPendingRecoverySnapshot?.id === localRecoverySnapshot.id) {
+          spoolPendingRecoverySnapshot = null;
+        }
+        spoolClearPendingSync();
+      }
       spoolUpdateSyncIndicator(true);
       return true;
+    } catch (e) {
+      console.warn('Falha no upload de spools para Supabase:', e);
+      spoolUpdateSyncIndicator(false);
+      return false;
     }
-  } catch (e) {
-    console.warn('Falha no upload de spools para Supabase:', e);
-    spoolUpdateSyncIndicator(false);
-  }
-  return false;
+  };
+
+  spoolRemoteSaveChain = spoolRemoteSaveChain.catch(() => false).then(save);
+  return spoolRemoteSaveChain;
 }
 
 // Baixar spools do Supabase (compartilhado entre Netlify, localhost e mobile)
@@ -1123,22 +1472,44 @@ async function syncSpoolsFromSupabase(options = {}) {
   try {
     if (typeof supabaseRestRequest !== 'function') return false;
     const rows = await supabaseRestRequest('app_metadata?key=eq.spool_registry&select=value');
-    if (Array.isArray(rows) && rows[0]?.value?.spools) {
-      const remoteSpools = rows[0].value.spools;
-      if (Array.isArray(remoteSpools) && remoteSpools.length > 0) {
-        const merged = spoolMergeLists(spoolDb, remoteSpools);
-        spoolDb = merged;
-        try {
-          localStorage.setItem(SPOOL_STORE_KEY, JSON.stringify(spoolDb));
-        } catch(e) {}
-        const navCount = document.getElementById('navSpoolCount');
-        if (navCount) navCount.textContent = spoolDb.length;
-        if (window.location.hash === '#spools') {
-          renderSpools();
-        }
-        spoolUpdateSyncIndicator(true);
-        return true;
+    const remoteValue = Array.isArray(rows) ? rows[0]?.value : null;
+    if (remoteValue && Array.isArray(remoteValue.spools)) {
+      const pendingLocal = spoolHasPendingSync();
+      const localHasNewerSpool = spoolHasNewerLocalRecords(spoolDb, remoteValue.spools);
+      const localHasNewerSupport = spoolHasNewerLocalRecords(spoolSupportDb, remoteValue.supports);
+      const localHasNewerIso = spoolHasNewerLocalRecords(spoolIsoDb, remoteValue.isometrics);
+      spoolDeletedState = {
+        spools: spoolMergeTombstones(spoolDeletedState.spools, remoteValue.deletedSpools),
+        supports: spoolMergeTombstones(spoolDeletedState.supports, remoteValue.deletedSupports),
+        isometrics: spoolMergeTombstones(spoolDeletedState.isometrics, remoteValue.deletedIsometrics)
+      };
+      const localHasMissingRemoteSpool = spoolHasLocalOnlyRecords(spoolDb, remoteValue.spools, spoolDeletedState.spools);
+      const localHasMissingRemoteSupport = spoolHasLocalOnlyRecords(spoolSupportDb, remoteValue.supports, spoolDeletedState.supports);
+      const localHasMissingRemoteIso = spoolHasLocalOnlyRecords(spoolIsoDb, remoteValue.isometrics, spoolDeletedState.isometrics);
+      spoolDb = spoolDeduplicateList(spoolMergeRecordCollections(spoolDb, remoteValue.spools, { includeLocalOnly: true, deletedRecords: spoolDeletedState.spools }));
+      if (Array.isArray(remoteValue.supports)) {
+        spoolSupportDb = spoolMergeRecordCollections(spoolSupportDb, remoteValue.supports, { includeLocalOnly: true, kind: 'support', deletedRecords: spoolDeletedState.supports });
       }
+      if (Array.isArray(remoteValue.isometrics)) {
+        spoolIsoDb = spoolMergeRecordCollections(spoolIsoDb, remoteValue.isometrics, { includeLocalOnly: true, kind: 'iso', deletedRecords: spoolDeletedState.isometrics });
+      }
+      try {
+        localStorage.setItem(SPOOL_STORE_KEY, JSON.stringify(spoolDb));
+        localStorage.setItem(SPOOL_SUPPORT_STORE_KEY, JSON.stringify(spoolSupportDb));
+        localStorage.setItem(SPOOL_ISO_STORE_KEY, JSON.stringify(spoolIsoDb));
+        localStorage.setItem(SPOOL_DELETED_STORE_KEY, JSON.stringify(spoolDeletedState));
+      } catch(e) {}
+      const navCount = document.getElementById('navSpoolCount');
+      if (navCount) navCount.textContent = spoolDb.length;
+      if (window.location.hash === '#spools') {
+        renderSpools();
+      }
+      spoolUpdateSyncIndicator(true);
+      if (pendingLocal || localHasNewerSpool || localHasNewerSupport || localHasNewerIso
+        || localHasMissingRemoteSpool || localHasMissingRemoteSupport || localHasMissingRemoteIso) {
+        spoolSyncRemote(spoolDb).catch(() => {});
+      }
+      return true;
     }
   } catch (e) {
     console.warn('Falha ao baixar spools do Supabase:', e);
@@ -1152,11 +1523,13 @@ window.syncSpoolProjectsFromSupabase = syncSpoolsFromSupabase;
 function spoolUpdateSyncIndicator(synced) {
   const badge = document.getElementById('spoolSyncBadge');
   if (!badge) return;
+  const viewCount = spoolControlView === 'supports' ? spoolSupportDb.length : (spoolControlView === 'isometrics' ? spoolIsoDb.length : spoolDb.length);
+  const viewLabel = spoolControlView === 'supports' ? 'suportes' : (spoolControlView === 'isometrics' ? 'isométricos' : 'spools');
   if (synced) {
-    badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; margin-right:4px;"></span> Online (${spoolDb.length} spools) • Supabase Sincronizado`;
+    badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; margin-right:4px;"></span> Online (${viewCount} ${viewLabel}) • Supabase Sincronizado`;
     badge.style.color = '#065f46';
   } else {
-    badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#f59e0b; margin-right:4px;"></span> Local (${spoolDb.length} spools)`;
+    badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#f59e0b; margin-right:4px;"></span> Local (${viewCount} ${viewLabel})`;
   }
 }
 
@@ -1230,6 +1603,12 @@ function buildIsoFromLocalDateAndTime(dateStr, timeStr) {
 
 // Base principal de spools
 let spoolDb = spoolLoadAll();
+let spoolSupportDb = spoolLoadAuxiliary('support');
+let spoolIsoDb = spoolLoadAuxiliary('iso');
+let spoolDeletedState = spoolLoadDeletedState();
+let spoolDataRevision = 0;
+let spoolRemoteSaveChain = Promise.resolve(true);
+let spoolPendingRecoverySnapshot = null;
 
 // Auto-salvar apenas os dados sanitizados. Não reinsere setores ou spools que
 // tenham sido removidos/substituídos por uma planilha importada.
@@ -1244,7 +1623,7 @@ if (spoolDb.length > 0) {
 let spoolActiveSector = localStorage.getItem('obraflow_spool_active_sector') || 'all';
 let spoolActiveSubArea = localStorage.getItem('obraflow_spool_active_subarea') || 'all';
 let spoolActiveDh = localStorage.getItem('obraflow_spool_active_dh') || 'ALL';
-let spoolStatusFilter = 'all'; // 'all', 'not-started', 'received', 'installed', 'rejected'
+let spoolStatusFilter = 'all'; // 'all', 'not-started', 'received', 'installed', 'rejected', 'returned'
 let spoolTypeFilter = 'all'; // 'all', 'straight', 'valve', 'branch'
 let spoolDiameterFilter = 'all';
 let spoolListFilter = 'all';
@@ -1256,6 +1635,9 @@ let spoolSafeTapMode = localStorage.getItem('obraflow_spool_safe_tap') !== 'fals
 let spoolMapCollapsed = localStorage.getItem('obraflow_spool_map_collapsed') === 'true'; // Recolher mapa de spools
 let spoolMultiSelectMode = false;
 let spoolSelectedIds = new Set();
+let spoolControlView = localStorage.getItem('obraflow_spool_control_view') || 'spools';
+let spoolAuxStatusFilter = 'all';
+let spoolAuxSearchTerm = '';
 
 if (spoolActiveSector === 'all') {
   spoolActiveSubArea = 'all';
@@ -1310,11 +1692,13 @@ function spoolFilterList(sourceList) {
       const isInstOnDate = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
       const isRecOnDate = (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate));
       const isRejOnDate = s.status === 'rejected' && (s.rejectedDate === targetDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === targetDate));
+      const isReturnedOnDate = s.status === 'returned' && (s.returnedDate === targetDate || (s.returnedAt && formatSpoolLocalDate(s.returnedAt) === targetDate));
 
       if (spoolDateFilterMode === 'installed' && !isInstOnDate) return false;
       if (spoolDateFilterMode === 'received' && !isRecOnDate) return false;
       if (spoolDateFilterMode === 'rejected' && !isRejOnDate) return false;
-      if (spoolDateFilterMode === 'activity' && !isInstOnDate && !isRecOnDate && !isRejOnDate) return false;
+      if (spoolDateFilterMode === 'returned' && !isReturnedOnDate) return false;
+      if (spoolDateFilterMode === 'activity' && !isInstOnDate && !isRecOnDate && !isRejOnDate && !isReturnedOnDate) return false;
     }
 
     // 4. Filtro por Status e por Data do Apontamento
@@ -1323,6 +1707,8 @@ function spoolFilterList(sourceList) {
         if (s.status !== 'not-started') return false;
       } else if (spoolStatusFilter === 'rejected') {
         if (s.status !== 'rejected') return false;
+      } else if (spoolStatusFilter === 'returned') {
+        if (s.status !== 'returned') return false;
       } else if (spoolStatusFilter === 'installed_on_date') {
         const isInst = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
         if (!isInst) return false;
@@ -1336,7 +1722,8 @@ function spoolFilterList(sourceList) {
         const isInst = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
         const isRec = (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate));
         const isRej = s.status === 'rejected' && (s.rejectedDate === targetDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === targetDate));
-        if (!isInst && !isRec && !isRej) return false;
+        const isReturned = s.status === 'returned' && (s.returnedDate === targetDate || (s.returnedAt && formatSpoolLocalDate(s.returnedAt) === targetDate));
+        if (!isInst && !isRec && !isRej && !isReturned) return false;
       } else if (s.status !== spoolStatusFilter) {
         return false;
       }
@@ -1358,6 +1745,7 @@ function spoolFilterList(sourceList) {
     if (spoolListFilter === 'branch' && s.type !== 'branch') return false;
     if (spoolListFilter === 'pending' && s.status !== 'not-started') return false;
     if (spoolListFilter === 'rejected' && s.status !== 'rejected') return false;
+    if (spoolListFilter === 'returned' && s.status !== 'returned') return false;
     if (spoolListFilter === 'installed_today') {
       const isInst = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
       if (!isInst) return false;
@@ -1378,7 +1766,8 @@ function spoolFilterList(sourceList) {
       const matchSec = secName.includes(q);
       const matchDia = (s.diameter || '').toLowerCase().includes(q);
       const matchNotes = (s.notes || '').toLowerCase().includes(q);
-      if (!matchTag && !matchPart && !matchSub && !matchDh && !matchSec && !matchDia && !matchNotes) {
+      const matchException = `${s.rejectedReason || ''} ${s.returnedReason || ''}`.toLowerCase().includes(q);
+      if (!matchTag && !matchPart && !matchSub && !matchDh && !matchSec && !matchDia && !matchNotes && !matchException) {
         return false;
       }
     }
@@ -1405,12 +1794,340 @@ function spoolShowAllMySpools() {
   toast('Mostrando todos os spools cadastrados!');
 }
 
+function spoolRenderControlTabs() {
+  return `
+    <nav class="spool-control-tabs" aria-label="Tipo de controle">
+      <button type="button" class="spool-control-tab ${spoolControlView === 'spools' ? 'active' : ''}" onclick="spoolSelectControlView('spools')">
+        🧵 Spools <span>${spoolDb.length}</span>
+      </button>
+      <button type="button" class="spool-control-tab ${spoolControlView === 'supports' ? 'active' : ''}" onclick="spoolSelectControlView('supports')">
+        🧰 Suportes <span>${spoolSupportDb.length}</span>
+      </button>
+      <button type="button" class="spool-control-tab ${spoolControlView === 'isometrics' ? 'active' : ''}" onclick="spoolSelectControlView('isometrics')">
+        📐 Isométricos (ISO) <span>${spoolIsoDb.length}</span>
+      </button>
+    </nav>
+  `;
+}
+
+function spoolSelectControlView(view) {
+  if (!['spools', 'supports', 'isometrics'].includes(view)) return;
+  spoolControlView = view;
+  localStorage.setItem('obraflow_spool_control_view', view);
+  spoolSelectedIds.clear();
+  spoolMultiSelectMode = false;
+  renderSpools();
+}
+
+function spoolAssetStatusMeta(status, kind = 'support') {
+  const installedLabel = kind === 'iso' ? 'Liberado' : 'Instalado';
+  const map = {
+    'not-started': { label: 'Pendente', icon: '⚪', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
+    received: { label: 'Recebido', icon: '🟡', color: '#0369a1', bg: '#e0f2fe', border: '#7dd3fc' },
+    installed: { label: installedLabel, icon: '🟢', color: '#047857', bg: '#dcfce7', border: '#86efac' },
+    rejected: { label: 'Reprovado', icon: '🔴', color: '#b91c1c', bg: '#fee2e2', border: '#fca5a5' },
+    returned: { label: 'Devolvido', icon: '↩️', color: '#9a3412', bg: '#ffedd5', border: '#fdba74' }
+  };
+  return map[status] || map['not-started'];
+}
+
+function spoolRenderAuxiliaryControl(app, kind) {
+  const isSupport = kind === 'support';
+  const source = isSupport ? spoolSupportDb : spoolIsoDb;
+  const singular = isSupport ? 'Suporte' : 'Isométrico';
+  const plural = isSupport ? 'Suportes' : 'Isométricos';
+  const availableSectors = spoolGetAvailableSectors(spoolGetAllControlItems());
+  const filtered = source
+    .filter(item => spoolActiveSector === 'all' || item.area === spoolActiveSector)
+    .filter(item => spoolActiveDh === 'ALL' || normalizeDh(item.dh) === normalizeDh(spoolActiveDh))
+    .filter(item => spoolAuxStatusFilter === 'all' || item.status === spoolAuxStatusFilter)
+    .filter(item => {
+      const term = spoolAuxSearchTerm.trim().toLowerCase();
+      if (!term) return true;
+      return [item.number, item.dh, item.sectorName, item.subArea, item.notes, item.statusReason, item.supportType]
+        .some(value => String(value || '').toLowerCase().includes(term));
+    })
+    .sort((a, b) => String(a.number).localeCompare(String(b.number), 'pt-BR', { numeric: true }));
+  const totals = ['not-started', 'received', 'installed', 'rejected', 'returned']
+    .reduce((acc, status) => ({ ...acc, [status]: source.filter(item => item.status === status).length }), {});
+
+  app.innerHTML = `
+    ${pageHeader(
+      `Controle de ${plural}`,
+      isSupport
+        ? 'Cadastro de suportes por setor, com identificação do número e tipo fixo ou móvel.'
+        : 'Controle de isométricos por setor e Data Hall, com acompanhamento de recebimento e liberação.',
+      'MÓDULO DE SPOOLS & TUBULAÇÃO',
+      `<span id="spoolSyncBadge" class="spool-sync-badge">${icon('clock')} Online · ${source.length} ${plural.toLowerCase()}</span>
+       <button id="spoolForceSyncButton" class="button button-outline" onclick="spoolForceSyncNow()" title="Buscar agora as alterações feitas em outros aparelhos">🔄 Atualizar agora</button>
+       <button class="button button-green" onclick="spoolOpenAssetModal('${kind}')">${icon('plus')} Novo ${singular}</button>`
+    )}
+
+    ${spoolRenderControlTabs()}
+
+    <div class="spool-sector-bar" aria-label="Setores da Obra">
+      <button type="button" class="spool-sector-btn ${spoolActiveSector === 'all' ? 'active' : ''}" onclick="spoolSelectSector('all')">
+        <span>🌐</span><span>Todos os Setores</span><span class="spool-sector-badge">${source.length}</span>
+      </button>
+      ${availableSectors.map(sector => {
+        const count = source.filter(item => item.area === sector.id).length;
+        return `<button type="button" class="spool-sector-btn ${spoolActiveSector === sector.id ? 'active' : ''}" data-sector="${esc(sector.id)}" onclick="spoolSelectSector(this.dataset.sector)">
+          <span>${sector.icon}</span><span>${esc(sector.name)}</span><span class="spool-sector-badge">${count}</span>
+        </button>`;
+      }).join('')}
+    </div>
+
+    <div class="spool-aux-kpis">
+      ${['not-started', 'received', 'installed', 'rejected', 'returned'].map(status => {
+        const meta = spoolAssetStatusMeta(status, kind);
+        return `<button type="button" class="spool-aux-kpi ${spoolAuxStatusFilter === status ? 'active' : ''}" onclick="spoolSetAuxStatusFilter('${status}')" style="--asset-color:${meta.color}; --asset-bg:${meta.bg}; --asset-border:${meta.border};">
+          <span>${meta.icon} ${meta.label}</span><strong>${totals[status]}</strong>
+        </button>`;
+      }).join('')}
+    </div>
+
+    <section class="panel spool-aux-panel">
+      <div class="spool-aux-toolbar">
+        <div class="search-box spool-aux-search">
+          ${icon('search')}
+          <input id="spoolAuxSearchInput" type="search" value="${esc(spoolAuxSearchTerm)}" placeholder="Buscar número, setor, subárea ou observação..." onkeydown="if(event.key === 'Enter'){ event.preventDefault(); spoolSetAuxSearch(this.value); }">
+          <button type="button" class="button button-outline compact" onclick="spoolSetAuxSearch(document.getElementById('spoolAuxSearchInput').value)">Buscar</button>
+        </div>
+        <select class="spool-filter-select" onchange="spoolSelectDh(this.value)" aria-label="Filtrar por Data Hall">
+          <option value="ALL" ${spoolActiveDh === 'ALL' ? 'selected' : ''}>Todos os DHs</option>
+          ${Array.from({ length: 10 }, (_, index) => {
+            const dh = `DH ${String(index + 1).padStart(2, '0')}`;
+            return `<option value="${dh}" ${normalizeDh(spoolActiveDh) === dh && spoolActiveDh !== 'ALL' ? 'selected' : ''}>${dh}</option>`;
+          }).join('')}
+        </select>
+        <select class="spool-filter-select" onchange="spoolSetAuxStatusFilter(this.value)" aria-label="Filtrar por status">
+          <option value="all" ${spoolAuxStatusFilter === 'all' ? 'selected' : ''}>Todos os status</option>
+          ${['not-started', 'received', 'installed', 'rejected', 'returned'].map(status => {
+            const meta = spoolAssetStatusMeta(status, kind);
+            return `<option value="${status}" ${spoolAuxStatusFilter === status ? 'selected' : ''}>${meta.icon} ${meta.label}</option>`;
+          }).join('')}
+        </select>
+        <button type="button" class="button button-outline" onclick="spoolClearAuxFilters()">Limpar filtros</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table spool-aux-table">
+          <thead><tr>
+            <th>NÚMERO</th>
+            ${isSupport ? '<th>TIPO</th>' : ''}
+            <th>DATA HALL</th><th>SETOR / SUBÁREA</th><th>STATUS</th><th>OBSERVAÇÃO</th><th>AÇÕES</th>
+          </tr></thead>
+          <tbody>
+            ${filtered.length ? filtered.map(item => {
+              const meta = spoolAssetStatusMeta(item.status, kind);
+              return `<tr>
+                <td><strong class="spool-asset-number">${esc(item.number)}</strong></td>
+                ${isSupport ? `<td><span class="spool-support-type ${item.supportType === 'movable' ? 'movable' : 'fixed'}">${item.supportType === 'movable' ? '↔️ Móvel' : '🔒 Fixo'}</span></td>` : ''}
+                <td><span class="spool-dh-inline">${esc(normalizeDh(item.dh))}</span></td>
+                <td><strong>${esc(spoolSectorDisplayName(item))}</strong>${item.subArea ? `<small>${esc(item.subArea)}</small>` : ''}</td>
+                <td><span class="spool-asset-status" style="color:${meta.color};background:${meta.bg};border-color:${meta.border};">${meta.icon} ${meta.label}</span>${item.statusDate ? `<small>${formatSpoolDateDisplay(item.statusDate)} · ${esc(item.statusBy || '')}</small>` : ''}</td>
+                <td>${item.statusReason ? `<strong>${esc(item.statusReason)}</strong>` : ''}${item.notes ? `<small>${esc(item.notes)}</small>` : (!item.statusReason ? '<span style="color:#94a3b8;">—</span>' : '')}</td>
+                <td><div class="spool-asset-actions">
+                  <button type="button" title="Pendente" onclick="spoolSetAssetStatus('${kind}','${item.id}','not-started')">⚪</button>
+                  <button type="button" title="Recebido" onclick="spoolSetAssetStatus('${kind}','${item.id}','received')">🟡</button>
+                  <button type="button" title="${isSupport ? 'Instalado' : 'Liberado'}" onclick="spoolSetAssetStatus('${kind}','${item.id}','installed')">🟢</button>
+                  <button type="button" title="Reprovar com observação" onclick="spoolSetAssetStatus('${kind}','${item.id}','rejected')">🔴</button>
+                  <button type="button" title="Devolver com observação" onclick="spoolSetAssetStatus('${kind}','${item.id}','returned')">↩️</button>
+                  <button type="button" title="Editar" onclick="spoolOpenAssetModal('${kind}','${item.id}')">✏️</button>
+                  <button type="button" title="Excluir" onclick="spoolDeleteAsset('${kind}','${item.id}')">🗑️</button>
+                </div></td>
+              </tr>`;
+            }).join('') : `<tr><td colspan="${isSupport ? 7 : 6}" class="spool-aux-empty">Nenhum ${singular.toLowerCase()} encontrado. <button type="button" class="button button-green compact" onclick="spoolOpenAssetModal('${kind}')">Cadastrar agora</button></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function spoolSetAuxSearch(value) {
+  spoolAuxSearchTerm = String(value || '').trim();
+  renderSpools();
+}
+
+function spoolSetAuxStatusFilter(status) {
+  spoolAuxStatusFilter = status || 'all';
+  renderSpools();
+}
+
+function spoolClearAuxFilters() {
+  spoolAuxSearchTerm = '';
+  spoolAuxStatusFilter = 'all';
+  spoolActiveSector = 'all';
+  spoolActiveDh = 'ALL';
+  localStorage.setItem('obraflow_spool_active_sector', 'all');
+  localStorage.setItem('obraflow_spool_active_dh', 'ALL');
+  renderSpools();
+}
+
+function spoolOpenAssetModal(kind, assetId = '') {
+  const isSupport = kind === 'support';
+  const source = isSupport ? spoolSupportDb : spoolIsoDb;
+  const item = source.find(entry => entry.id === assetId) || null;
+  const singular = isSupport ? 'Suporte' : 'Isométrico';
+  const sectorSuggestions = spoolGetAvailableSectors(spoolGetAllControlItems());
+  const currentSector = item ? spoolSectorDisplayName(item) : (spoolActiveSector !== 'all' ? spoolGetSectorMeta(spoolActiveSector, spoolGetAllControlItems()).name : '');
+  const currentStatus = item?.status || 'not-started';
+
+  modal(`
+    <form onsubmit="spoolSaveAsset(event, '${kind}', '${assetId}')">
+      ${modalHead(`${item ? 'Editar' : 'Cadastrar'} ${singular}`, isSupport ? 'Informe o número e classifique o suporte como fixo ou móvel.' : 'Vincule o número do ISO ao setor e ao Data Hall correspondente.')}
+      <div class="modal-body spool-asset-form">
+        <label><span>Número do ${singular} *</span><input name="number" required value="${esc(item?.number || '')}" placeholder="Ex.: ${isSupport ? 'SUP-001' : 'ISO-DH04-001'}"></label>
+        ${isSupport ? `<label><span>Tipo do suporte *</span><select name="supportType" required><option value="fixed" ${item?.supportType !== 'movable' ? 'selected' : ''}>🔒 Fixo</option><option value="movable" ${item?.supportType === 'movable' ? 'selected' : ''}>↔️ Móvel</option></select></label>` : ''}
+        <label><span>Setor *</span><input name="sector" required list="spoolAssetSectorList" value="${esc(currentSector)}" placeholder="Digite ou selecione o setor"><datalist id="spoolAssetSectorList">${sectorSuggestions.map(sector => `<option value="${esc(sector.name)}"></option>`).join('')}</datalist></label>
+        <label><span>Data Hall *</span><select name="dh" required>${Array.from({ length: 10 }, (_, index) => {
+          const dh = `DH ${String(index + 1).padStart(2, '0')}`;
+          const selectedDh = item?.dh || (spoolActiveDh !== 'ALL' ? spoolActiveDh : 'DH 04');
+          return `<option value="${dh}" ${normalizeDh(selectedDh) === dh ? 'selected' : ''}>${dh}</option>`;
+        }).join('')}</select></label>
+        <label><span>Subárea / local específico</span><input name="subArea" value="${esc(item?.subArea || '')}" placeholder="Ex.: Chillers, corredor técnico..."></label>
+        <label><span>Status</span><select name="status">${['not-started', 'received', 'installed', 'rejected', 'returned'].map(status => {
+          const meta = spoolAssetStatusMeta(status, kind);
+          return `<option value="${status}" ${currentStatus === status ? 'selected' : ''}>${meta.icon} ${meta.label}</option>`;
+        }).join('')}</select></label>
+        <label class="spool-asset-form-wide"><span>Motivo / observação do status</span><input name="statusReason" value="${esc(item?.statusReason || '')}" placeholder="Digite o motivo real quando houver reprovação ou devolução"></label>
+        <label class="spool-asset-form-wide"><span>Observações gerais</span><textarea name="notes" rows="3" placeholder="Referências, pendências, localização...">${esc(item?.notes || '')}</textarea></label>
+      </div>
+      <div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button type="submit" class="button button-green">💾 Salvar ${singular}</button></div>
+    </form>
+  `, 'modal-medium');
+}
+
+function spoolSaveAsset(event, kind, assetId = '') {
+  event.preventDefault();
+  const form = event.target;
+  const source = kind === 'support' ? spoolSupportDb : spoolIsoDb;
+  const number = form.elements.number.value.trim();
+  const sectorName = form.elements.sector.value.trim();
+  const area = normalizeSector(sectorName);
+  const dh = normalizeDh(form.elements.dh.value);
+  const duplicate = source.some(item => item.id !== assetId && spoolTextKey(item.number) === spoolTextKey(number) && item.area === area && normalizeDh(item.dh) === dh);
+  if (duplicate) return toast(`${kind === 'support' ? 'Suporte' : 'Isométrico'} já cadastrado neste setor e Data Hall.`, true);
+
+  const previous = source.find(item => item.id === assetId) || {};
+  const status = form.elements.status.value;
+  const statusReason = form.elements.statusReason.value.trim();
+  if (['rejected', 'returned'].includes(status) && !statusReason) {
+    return toast(`Informe o motivo / observação para o status ${spoolAssetStatusMeta(status, kind).label}.`, true);
+  }
+  const statusChanged = status !== previous.status;
+  const now = new Date().toISOString();
+  const record = {
+    ...previous,
+    id: previous.id || `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    kind,
+    number,
+    area,
+    sectorName,
+    dh,
+    subArea: form.elements.subArea.value.trim(),
+    supportType: kind === 'support' ? form.elements.supportType.value : '',
+    status,
+    statusReason,
+    notes: form.elements.notes.value.trim(),
+    statusDate: status === 'not-started' ? '' : (statusChanged ? getLocalDateStr() : (previous.statusDate || getLocalDateStr())),
+    statusAt: status === 'not-started' ? '' : (statusChanged ? now : (previous.statusAt || now)),
+    statusBy: status === 'not-started' ? '' : (statusChanged ? (window.currentUser?.name || 'Operador') : (previous.statusBy || window.currentUser?.name || 'Operador')),
+    createdAt: previous.createdAt || now,
+    updatedAt: now
+  };
+  if (!['rejected', 'returned'].includes(status)) record.statusReason = '';
+  const index = source.findIndex(item => item.id === assetId);
+  if (index >= 0) source[index] = record;
+  else source.push(record);
+  spoolSaveAuxiliary();
+  closeModal();
+  renderSpools();
+  toast(`${kind === 'support' ? 'Suporte' : 'Isométrico'} ${number} salvo com sucesso!`);
+}
+
+function spoolSetAssetStatus(kind, assetId, status) {
+  if (status === 'rejected' || status === 'returned') {
+    spoolPromptAssetException(kind, assetId, status);
+    return;
+  }
+  const source = kind === 'support' ? spoolSupportDb : spoolIsoDb;
+  const item = source.find(entry => entry.id === assetId);
+  if (!item) return;
+  item.status = status;
+  item.statusReason = '';
+  item.statusDate = status === 'not-started' ? '' : getLocalDateStr();
+  item.statusAt = status === 'not-started' ? '' : new Date().toISOString();
+  item.statusBy = status === 'not-started' ? '' : (window.currentUser?.name || 'Operador');
+  item.updatedAt = new Date().toISOString();
+  spoolSaveAuxiliary();
+  renderSpools();
+  toast(`${item.number}: ${spoolAssetStatusMeta(status, kind).label}.`);
+}
+
+function spoolPromptAssetException(kind, assetId, status) {
+  const source = kind === 'support' ? spoolSupportDb : spoolIsoDb;
+  const item = source.find(entry => entry.id === assetId);
+  if (!item) return;
+  const isReturn = status === 'returned';
+  const title = isReturn ? 'Registrar Devolução' : 'Registrar Reprovação';
+  modal(`
+    <form onsubmit="spoolConfirmAssetException(event, '${kind}', '${assetId}', '${status}')">
+      ${modalHead(title, `${kind === 'support' ? 'Suporte' : 'Isométrico'} ${esc(item.number)} · ${esc(spoolSectorDisplayName(item))}`)}
+      <div class="modal-body spool-exception-form">
+        <label><span>${isReturn ? 'Motivo / observação da devolução' : 'Motivo da reprovação'} *</span><textarea name="reason" required rows="4" placeholder="Digite o motivo real, sem preenchimento automático">${item.status === status ? esc(item.statusReason || '') : ''}</textarea></label>
+        <label><span>Data</span><input type="date" name="date" value="${item.status === status && item.statusDate ? item.statusDate : getLocalDateStr()}"></label>
+        <label><span>Responsável</span><input name="responsible" value="${esc(item.status === status ? (item.statusBy || '') : (window.currentUser?.name || ''))}"></label>
+      </div>
+      <div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button type="submit" class="button ${isReturn ? 'button-dark' : ''}" style="${isReturn ? 'background:#ea580c;color:#fff;' : 'background:#dc2626;color:#fff;'}">${isReturn ? '↩️ Confirmar Devolução' : '🔴 Confirmar Reprovação'}</button></div>
+    </form>
+  `, 'modal-medium');
+}
+
+function spoolConfirmAssetException(event, kind, assetId, status) {
+  event.preventDefault();
+  const source = kind === 'support' ? spoolSupportDb : spoolIsoDb;
+  const item = source.find(entry => entry.id === assetId);
+  if (!item) return;
+  item.status = status;
+  item.statusReason = event.target.elements.reason.value.trim();
+  item.statusDate = event.target.elements.date.value || getLocalDateStr();
+  item.statusAt = buildIsoFromLocalDateAndTime(item.statusDate, getLocalTimeStr());
+  item.statusBy = event.target.elements.responsible.value.trim() || (window.currentUser?.name || 'Operador');
+  item.updatedAt = new Date().toISOString();
+  spoolSaveAuxiliary();
+  closeModal();
+  renderSpools();
+  toast(`${item.number} marcado como ${spoolAssetStatusMeta(status, kind).label}.`);
+}
+
+function spoolDeleteAsset(kind, assetId) {
+  const source = kind === 'support' ? spoolSupportDb : spoolIsoDb;
+  const item = source.find(entry => entry.id === assetId);
+  if (!item || !confirm(`Excluir ${kind === 'support' ? 'o suporte' : 'o isométrico'} ${item.number}?`)) return;
+  if (kind === 'support') spoolSupportDb = spoolSupportDb.filter(entry => entry.id !== assetId);
+  else spoolIsoDb = spoolIsoDb.filter(entry => entry.id !== assetId);
+  spoolSaveAuxiliary();
+  renderSpools();
+  toast(`${item.number} excluído.`);
+}
+
 /* ==========================================================================
    RENDERIZAÇÃO DA TELA PRINCIPAL (renderSpools)
    ========================================================================== */
 function renderSpools() {
   const app = document.getElementById('app');
   if (!app) return;
+
+  if (spoolControlView === 'supports') {
+    spoolRenderAuxiliaryControl(app, 'support');
+    return;
+  }
+  if (spoolControlView === 'isometrics') {
+    spoolRenderAuxiliaryControl(app, 'iso');
+    return;
+  }
 
   const todayStr = getLocalDateStr();
   const filterDate = spoolSelectedDate || todayStr;
@@ -1438,6 +2155,10 @@ function renderSpools() {
 
   // Lista com todos os filtros aplicados
   const filteredSpools = spoolFilterList(spoolDb);
+  if (spoolMultiSelectMode && spoolSelectedIds.size) {
+    const visibleIds = new Set(filteredSpools.map(item => item.id));
+    spoolSelectedIds = new Set(Array.from(spoolSelectedIds).filter(id => visibleIds.has(id)));
+  }
 
   // Spools para cálculo dos KPIs superiores
   const baseSectorSpools = spoolDb.filter(s => {
@@ -1461,6 +2182,8 @@ function renderSpools() {
   const receivedToday = baseSectorSpools.filter(s => (s.status === 'received' || s.status === 'installed') && (s.receivedDate === filterDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === filterDate)));
   const rejectedCount = baseSectorSpools.filter(s => s.status === 'rejected').length;
   const rejectedToday = baseSectorSpools.filter(s => s.status === 'rejected' && (s.rejectedDate === filterDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === filterDate)));
+  const returnedCount = baseSectorSpools.filter(s => s.status === 'returned').length;
+  const returnedToday = baseSectorSpools.filter(s => s.status === 'returned' && (s.returnedDate === filterDate || (s.returnedAt && formatSpoolLocalDate(s.returnedAt) === filterDate)));
   const totalPending = baseSectorSpools.filter(s => s.status === 'not-started').length;
   const totalInstalled = baseSectorSpools.filter(s => s.status === 'installed').length;
 
@@ -1475,6 +2198,7 @@ function renderSpools() {
       'Acompanhamento diário de montagem por DH, trechos retos e derivações com apontamento em 1 clique.',
       'MÓDULO DE REFRIGERAÇÃO & TUBULAÇÃO',
       `<span id="spoolSyncBadge" class="spool-sync-badge">${icon('clock')} Online (${spoolDb.length} spools)</span>
+       <button id="spoolForceSyncButton" class="button button-outline" onclick="spoolForceSyncNow()" title="Buscar agora as alterações feitas no tablet ou em outro computador">🔄 Atualizar agora</button>
        <button class="button ${spoolSafeTapMode ? 'button-green' : 'button-outline'}" onclick="spoolToggleSafeTapMode()" title="${spoolSafeTapMode ? 'Modo Seguro ATIVO: toque abre menu de ações deliberadas' : 'Modo Rápido: toque alterna status diretamente'}" style="font-size:12px;">${spoolSafeTapMode ? '🛡️ Modo Seguro' : '⚡ Modo Rápido'}</button>
        <button class="button ${spoolMultiSelectMode ? 'button-green' : 'button-outline'}" onclick="spoolToggleMultiSelectMode()" title="Selecionar vários spools e alterar status em lote" style="font-size:12px;">${spoolMultiSelectMode ? '☑️ Seleção Ativa' : '☑️ Selecionar Vários'}</button>
        ${spoolMultiSelectMode ? `<button class="button button-outline" onclick="spoolSelectAllVisible()" title="Selecionar os spools exibidos pelos filtros atuais" style="font-size:12px;">✓ Marcar Visíveis (${filteredSpools.length})</button>
@@ -1487,6 +2211,8 @@ function renderSpools() {
        <button class="button button-outline" onclick="spoolOpenCopyModal()" title="Mais opções de cópia e compartilhamento">${icon('share')} Opções Copiar</button>
        <button class="button button-outline" onclick="spoolOpenManualEntryModal()" title="Escrever / colar tags manualmente">${icon('plus')} Escrever Spools</button>`
     )}
+
+    ${spoolRenderControlTabs()}
 
     <!-- BANNER DE AJUDA SE O FILTRO ATUAL ESTIVER VAZIO MAS EXISTIREM SPOOLS CADASTRADOS -->
     ${(filteredSpools.length === 0 && spoolDb.length > 0) ? `
@@ -1621,6 +2347,12 @@ function renderSpools() {
         <div class="spool-kpi-val" style="color:#dc2626;">${rejectedCount} ${rejectedToday.length ? `<small style="font-size:14px; font-weight:800; color:#b91c1c;">(+${rejectedToday.length} hoje)</small>` : ''}</div>
         <div class="spool-kpi-sub" style="color:#991b1b;">Tubulações bloqueadas / retrabalho · Clique p/ listar</div>
       </div>
+
+      <div class="spool-kpi-card ${spoolListFilter === 'returned' ? 'is-active-tab' : ''}" onclick="spoolSetFilter('returned')" title="Clique para ver os tubos devolvidos" style="border-left:4px solid #f97316; background:${spoolListFilter === 'returned' ? '#ffedd5' : '#fff7ed'};">
+        <span class="spool-kpi-label" style="color:#9a3412;">↩️ DEVOLVIDOS <span class="spool-kpi-badge" style="background:#ffedd5;color:#9a3412;border:1px solid #fdba74;">VER LISTA</span></span>
+        <div class="spool-kpi-val" style="color:#ea580c;">${returnedCount} ${returnedToday.length ? `<small style="font-size:14px;font-weight:800;color:#9a3412;">(+${returnedToday.length} hoje)</small>` : ''}</div>
+        <div class="spool-kpi-sub" style="color:#9a3412;">Tubos que saíram da obra para devolução</div>
+      </div>
     </section>
 
     <!-- 4. BARRAMENTO PRINCIPAL DA LINHA: TRECHOS RETOS + VÁLVULAS (SE HOUVER) -->
@@ -1673,6 +2405,7 @@ function renderSpools() {
           <option value="received" ${spoolStatusFilter === 'received' ? 'selected' : ''}>🟡 Recebido (Geral)</option>
           <option value="installed" ${spoolStatusFilter === 'installed' ? 'selected' : ''}>🟢 Instalado (Geral)</option>
           <option value="rejected" ${spoolStatusFilter === 'rejected' ? 'selected' : ''}>🔴 Reprovado (Quarentena)</option>
+          <option value="returned" ${spoolStatusFilter === 'returned' ? 'selected' : ''}>↩️ Devolvido</option>
           <option value="installed_on_date" ${spoolStatusFilter === 'installed_on_date' ? 'selected' : ''}>🟢 Instalados no Dia (${formatSpoolDateShort(filterDate)})</option>
           <option value="received_on_date" ${spoolStatusFilter === 'received_on_date' ? 'selected' : ''}>🟡 Recebidos no Dia (${formatSpoolDateShort(filterDate)})</option>
           <option value="rejected_on_date" ${spoolStatusFilter === 'rejected_on_date' ? 'selected' : ''}>🔴 Reprovados no Dia (${formatSpoolDateShort(filterDate)})</option>
@@ -1720,6 +2453,7 @@ function renderSpools() {
             <option value="installed" ${spoolDateFilterMode === 'installed' ? 'selected' : ''}>🟢 Instalados</option>
             <option value="received" ${spoolDateFilterMode === 'received' ? 'selected' : ''}>🟡 Recebidos</option>
             <option value="rejected" ${spoolDateFilterMode === 'rejected' ? 'selected' : ''}>🔴 Reprovados</option>
+            <option value="returned" ${spoolDateFilterMode === 'returned' ? 'selected' : ''}>↩️ Devolvidos</option>
           </select>
           <input type="date" id="spoolMainDateFilter" class="spool-filter-input" value="${filterDate}" onchange="spoolSetSelectedDate(this.value, true)" style="height:36px; padding:0 6px; font-weight:700; background:#ffffff; border:1.5px solid #cbd5e1; border-radius:6px; cursor:pointer; width:125px; font-size:12px;" title="Clique para escolher a data">
           <button type="button" class="button compact ${spoolDateFilterMode !== 'all' && filterDate === todayStr ? 'button-green' : 'button-outline'}" onclick="spoolQuickFilterDay('${todayStr}')" style="height:36px; padding:0 8px; font-size:11px; font-weight:800;" title="Ver movimentações de hoje">
@@ -1970,15 +2704,17 @@ function spoolRenderPipelineBar(sectorSpools, sectorMeta) {
           const isInst = s.status === 'installed';
           const isRec = s.status === 'received';
           const isRej = s.status === 'rejected';
-          const statusClass = isInst ? 'status-installed' : (isRec ? 'status-received' : (isRej ? 'status-rejected' : 'status-pending'));
+          const isReturned = s.status === 'returned';
+          const statusClass = isInst ? 'status-installed' : (isRec ? 'status-received' : (isRej ? 'status-rejected' : (isReturned ? 'status-returned' : 'status-pending')));
           const valveClass = isValve ? 'is-valve' : '';
           const selectedClass = spoolSelectedIds.has(s.id) ? 'is-selected' : '';
           const segRecInfo = s.receivedDate ? `\n• Recebido: ${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` às ${formatSpoolTime(s.receivedAt)}` : ''}` : '';
           const segInstInfo = s.installedDate ? `\n• Instalado: ${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '';
           const segRejInfo = s.rejectedDate ? `\n• Reprovado: ${formatSpoolDateDisplay(s.rejectedDate)}${s.rejectedReason ? ` (${s.rejectedReason})` : ''}` : '';
+          const segReturnInfo = s.returnedDate ? `\n• Devolvido: ${formatSpoolDateDisplay(s.returnedDate)}${s.returnedReason ? ` (${s.returnedReason})` : ''}` : '';
 
           return `
-            <div class="spool-pipe-seg ${valveClass} ${statusClass} ${selectedClass}" data-spool-id="${esc(s.id)}" onclick="spoolHandleTubeTap('${s.id}', event)" title="${isValve ? 'Válvula de Linha' : 'Tubo Reto'} ${esc(spoolDisplayNumber(s))} (${node.label})${segRecInfo}${segInstInfo}${segRejInfo}\nClique para ${spoolMultiSelectMode ? 'marcar/desmarcar' : (spoolSafeTapMode ? 'abrir menu de ações' : 'alternar status')}">
+            <div class="spool-pipe-seg ${valveClass} ${statusClass} ${selectedClass}" data-spool-id="${esc(s.id)}" onclick="spoolHandleTubeTap('${s.id}', event)" title="${isValve ? 'Válvula de Linha' : 'Tubo Reto'} ${esc(spoolDisplayNumber(s))} (${node.label})${segRecInfo}${segInstInfo}${segRejInfo}${segReturnInfo}\nClique para ${spoolMultiSelectMode ? 'marcar/desmarcar' : (spoolSafeTapMode ? 'abrir menu de ações' : 'alternar status')}">
               <span class="seg-tag">${esc(spoolDisplayNumber(s))}</span>
               <span class="seg-idx">${node.label}</span>
             </div>
@@ -2012,6 +2748,7 @@ function spoolRenderSearchResults(list, filterDate) {
           <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#f0f9ff; border:2px solid #0284c7; display:inline-block;"></i> Recebido</span>
           <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#ecfdf5; border:2px solid #10b981; display:inline-block;"></i> Instalado</span>
           <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px; height:12px; border-radius:3px; background:#fef2f2; border:2px solid #ef4444; display:inline-block;"></i> Reprovado</span>
+          <span style="display:flex; align-items:center; gap:4px;"><i style="width:12px;height:12px;border-radius:3px;background:#fff7ed;border:2px solid #f97316;display:inline-block;"></i> Devolvido</span>
         </div>
       </div>
 
@@ -2050,16 +2787,18 @@ function spoolRenderTubeSquares(list, filterDate) {
         const isInst = spool.status === 'installed';
         const isRec = spool.status === 'received';
         const isRej = spool.status === 'rejected';
-        const statusClass = isInst ? 'status-installed' : (isRec ? 'status-received' : (isRej ? 'status-rejected' : 'status-pending'));
+        const isReturned = spool.status === 'returned';
+        const statusClass = isInst ? 'status-installed' : (isRec ? 'status-received' : (isRej ? 'status-rejected' : (isReturned ? 'status-returned' : 'status-pending')));
         const typeClass = isValve ? 'is-valve' : (isStraight ? 'is-straight' : 'is-branch');
 
         const cardRecInfo = spool.receivedDate ? `\n• Recebido em: ${formatSpoolDateDisplay(spool.receivedDate)}${spool.receivedAt ? ` às ${formatSpoolTime(spool.receivedAt)}` : ''}${spool.receivedBy ? ` (${spool.receivedBy})` : ''}` : '';
         const cardInstInfo = spool.installedDate ? `\n• Instalado em: ${formatSpoolDateDisplay(spool.installedDate)}${spool.installedAt ? ` às ${formatSpoolTime(spool.installedAt)}` : ''}${spool.installedBy ? ` (${spool.installedBy})` : ''}` : '';
         const cardRejInfo = spool.rejectedDate ? `\n• Reprovado em: ${formatSpoolDateDisplay(spool.rejectedDate)}${spool.rejectedReason ? ` (Motivo: ${spool.rejectedReason})` : ''}${spool.rejectedBy ? ` por ${spool.rejectedBy}` : ''}` : '';
+        const cardReturnInfo = spool.returnedDate ? `\n• Devolvido em: ${formatSpoolDateDisplay(spool.returnedDate)}${spool.returnedReason ? ` (Motivo: ${spool.returnedReason})` : ''}${spool.returnedBy ? ` por ${spool.returnedBy}` : ''}` : '';
 
         const isSelected = spoolSelectedIds.has(spool.id);
         return `
-          <div class="spool-tube-card ${typeClass} ${statusClass}${isSelected ? ' is-selected' : ''}" data-spool-id="${esc(spool.id)}" onclick="spoolHandleTubeTap('${spool.id}', event)" title="Spool ${esc(spoolDisplayNumber(spool))} (${esc(spool.dh || '')})${cardRecInfo}${cardInstInfo}${cardRejInfo}\nClique para ${spoolMultiSelectMode ? 'marcar/desmarcar' : (spoolSafeTapMode ? 'abrir menu de ações' : 'alternar status')} ou no 📅 para ver/editar datas">
+          <div class="spool-tube-card ${typeClass} ${statusClass}${isSelected ? ' is-selected' : ''}" data-spool-id="${esc(spool.id)}" onclick="spoolHandleTubeTap('${spool.id}', event)" title="Spool ${esc(spoolDisplayNumber(spool))} (${esc(spool.dh || '')})${cardRecInfo}${cardInstInfo}${cardRejInfo}${cardReturnInfo}\nClique para ${spoolMultiSelectMode ? 'marcar/desmarcar' : (spoolSafeTapMode ? 'abrir menu de ações' : 'alternar status')} ou no 📅 para ver/editar datas">
             ${spoolMultiSelectMode ? `<input type="checkbox" class="spool-card-select-check" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); spoolToggleCardSelection('${spool.id}')" aria-label="Selecionar spool ${esc(spoolDisplayNumber(spool))}">` : ''}
             <div class="tube-header">
               <span style="font-size:10px; font-weight:800; padding:2px 6px; border-radius:4px; ${isValve ? 'background:#fef3c7; color:#b45309;' : (isStraight ? 'background:#f3e8ff; color:#7e22ce;' : 'background:#e0f2fe; color:#0369a1;')}">
@@ -2097,9 +2836,12 @@ function spoolRenderTubeSquares(list, filterDate) {
                   <span>🔴 Reprov:</span> <span>${formatSpoolDateShort(spool.rejectedDate || spool.installedDate || spool.receivedDate)}</span>
                 </div>
                 ${spool.rejectedReason ? `<small style="font-size:9px; color:#ef4444; font-weight:700; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${esc(spool.rejectedReason)}">${esc(spool.rejectedReason)}</small>` : ''}
+              ` : (isReturned ? `
+                <div style="color:#9a3412;font-weight:900;display:flex;align-items:center;justify-content:center;gap:3px;"><span>↩️ Devolvido:</span><span>${formatSpoolDateShort(spool.returnedDate)}</span></div>
+                ${spool.returnedReason ? `<small style="font-size:9px;color:#c2410c;font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(spool.returnedReason)}">${esc(spool.returnedReason)}</small>` : ''}
               ` : `
                 <div style="color:#64748b; font-weight:700;">⚪ Pendente</div>
-              `))}
+              `)))}
             </div>
           </div>
         `;
@@ -2170,6 +2912,9 @@ function spoolRenderTubeTable(list, filterDate) {
           <button type="button" class="button compact" onclick="spoolBulkReject()" style="background:#dc2626; color:#ffffff; font-weight:800; border:none; height:30px; padding:4px 12px; border-radius:6px; cursor:pointer; font-size:12px;">
             🔴 Marcar Reprovado
           </button>
+          <button type="button" class="button compact" onclick="spoolBulkReturn()" style="background:#ea580c; color:#ffffff; font-weight:800; border:none; height:30px; padding:4px 12px; border-radius:6px; cursor:pointer; font-size:12px;">
+            ↩️ Marcar Devolvido
+          </button>
           <button type="button" class="button compact" onclick="spoolBulkSetStatus('received')" style="background:#0284c7; color:#ffffff; font-weight:700; border:none; height:30px; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:12px;">
             🟡 Marcar Recebido
           </button>
@@ -2202,14 +2947,15 @@ function spoolRenderTubeTable(list, filterDate) {
               const isReceived = s.status === 'received';
               const isInstalled = s.status === 'installed';
               const isRejected = s.status === 'rejected';
+              const isReturned = s.status === 'returned';
               const sector = SPOOL_SECTORS[s.area] || { name: s.area || 'Geral' };
 
               // Estilização robusta inline para garantir 100% de visibilidade e contraste
-              const pillBg = isInstalled ? '#059669' : (isReceived ? '#0284c7' : (isRejected ? '#dc2626' : '#0f172a'));
-              const pillBorder = isInstalled ? '#047857' : (isReceived ? '#0369a1' : (isRejected ? '#b91c1c' : '#334155'));
+              const pillBg = isInstalled ? '#059669' : (isReceived ? '#0284c7' : (isRejected ? '#dc2626' : (isReturned ? '#ea580c' : '#0f172a')));
+              const pillBorder = isInstalled ? '#047857' : (isReceived ? '#0369a1' : (isRejected ? '#b91c1c' : (isReturned ? '#c2410c' : '#334155')));
 
               return `
-                <tr style="border-bottom:1px solid #e2e8f0; ${isRejected ? 'background:#fff8f8;' : ''}">
+                <tr style="border-bottom:1px solid #e2e8f0; ${isRejected ? 'background:#fff8f8;' : (isReturned ? 'background:#fff7ed;' : '')}">
                   <td style="text-align:center; padding:10px 6px;">
                     <input type="checkbox" class="spool-select-check" value="${esc(s.id)}" ${spoolSelectedIds.has(s.id) ? 'checked' : ''} onchange="spoolSetSelectionFromCheckbox(this)" style="cursor:pointer; width:16px; height:16px;" title="Selecionar este spool">
                   </td>
@@ -2248,7 +2994,9 @@ function spoolRenderTubeTable(list, filterDate) {
                         ? '<span class="spool-status in-progress"><i></i>Recebido</span>'
                         : (isRejected
                           ? '<span class="spool-status rejected" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5;"><i></i>🔴 Reprovado</span>'
-                          : '<span class="spool-status"><i></i>Pendente</span>'))}
+                          : (isReturned
+                            ? '<span class="spool-status" style="background:#ffedd5; color:#9a3412; border:1px solid #fdba74;"><i></i>↩️ Devolvido</span>'
+                            : '<span class="spool-status"><i></i>Pendente</span>')))}
                   </td>
                   <td style="text-align:center; padding:10px 14px;">
                     <div class="spool-action-group">
@@ -2260,6 +3008,9 @@ function spoolRenderTubeTable(list, filterDate) {
                       </button>
                       <button type="button" class="btn-spool-action btn-rejected ${isRejected ? 'is-active' : ''}" onclick="spoolPromptRejectItem('${s.id}')" title="Marcar como Reprovado / Quarentena / Devolução" style="background:${isRejected ? '#dc2626' : '#fee2e2'}; color:${isRejected ? '#ffffff' : '#b91c1c'}; border:1px solid ${isRejected ? '#b91c1c' : '#fca5a5'}; font-weight:800;">
                         🔴 Reprovado
+                      </button>
+                      <button type="button" class="btn-spool-action ${isReturned ? 'is-active' : ''}" onclick="spoolPromptReturnItem('${s.id}')" title="Registrar devolução do tubo" style="background:${isReturned ? '#ea580c' : '#fff7ed'}; color:${isReturned ? '#ffffff' : '#9a3412'}; border:1px solid ${isReturned ? '#c2410c' : '#fdba74'}; font-weight:800;">
+                        ↩️ Devolvido
                       </button>
                       <button type="button" class="btn-spool-action btn-pending" onclick="spoolSetItemStatus('${s.id}', 'not-started')" title="Voltar para Pendente (Desfazer)">
                         ↩️
@@ -2279,6 +3030,12 @@ function spoolRenderTubeTable(list, filterDate) {
                       </span>
                       ${s.rejectedReason ? `<small style="font-size:10px; color:#b91c1c; font-weight:800; display:block; margin-top:2px;" title="${esc(s.rejectedReason)}">Motivo: ${esc(s.rejectedReason)}</small>` : ''}
                       ${s.rejectedBy ? `<small style="font-size:9.5px; color:#64748b; display:block; margin-top:1px;">Por: ${esc(s.rejectedBy)}</small>` : ''}
+                    ` : (isReturned ? `
+                      <span style="display:inline-block;font-size:12px;font-weight:900;color:#9a3412;background:#ffedd5;padding:3px 8px;border-radius:6px;border:1.5px solid #fdba74;">
+                        ↩️ ${formatSpoolDateDisplay(s.returnedDate)}${s.returnedAt ? ` <small>${formatSpoolTime(s.returnedAt)}</small>` : ''}
+                      </span>
+                      ${s.returnedReason ? `<small style="font-size:10px;color:#9a3412;font-weight:800;display:block;margin-top:2px;" title="${esc(s.returnedReason)}">Motivo: ${esc(s.returnedReason)}</small>` : ''}
+                      ${s.returnedBy ? `<small style="font-size:9.5px;color:#64748b;display:block;margin-top:1px;">Por: ${esc(s.returnedBy)}</small>` : ''}
                     ` : (s.receivedDate ? `
                       <span style="display:inline-block; font-size:12px; font-weight:800; color:#0369a1; background:#f0f9ff; padding:3px 8px; border-radius:6px; border:1px solid #bae6fd;">
                         🟡 ${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` <small style="font-weight:600; color:#0284c7;">${formatSpoolTime(s.receivedAt)}</small>` : ''}
@@ -2286,12 +3043,12 @@ function spoolRenderTubeTable(list, filterDate) {
                       ${s.receivedBy ? `<small style="font-size:10px; color:#64748b; display:block; margin-top:2px;">Por: ${esc(s.receivedBy)}</small>` : ''}
                     ` : `
                       <span style="font-size:11px; color:#94a3b8; font-weight:600;">—</span>
-                    `)}
+                    `))}
                   </td>
                   <td style="padding:10px 14px;">
-                    ${isRejected ? `
+                    ${isRejected || isReturned ? `
                       <span style="display:inline-block; font-size:11px; font-weight:800; color:#b91c1c; background:#fef2f2; padding:3px 8px; border-radius:6px; border:1px dashed #f87171;">
-                        ⛔ BLOQUEADO P/ MONTAGEM
+                        ⛔ ${isReturned ? 'DEVOLVIDO / FORA DA OBRA' : 'BLOQUEADO P/ MONTAGEM'}
                       </span>
                     ` : (s.installedDate ? `
                       <span style="display:inline-block; font-size:12px; font-weight:900; color:#047857; background:#f0fdf4; padding:3px 8px; border-radius:6px; border:1px solid #86efac;">
@@ -2327,17 +3084,20 @@ function spoolSelectSector(sectorId) {
   spoolActiveSubArea = 'all';
   localStorage.setItem('obraflow_spool_active_sector', sectorId);
   localStorage.setItem('obraflow_spool_active_subarea', 'all');
+  spoolKeepOnlyVisibleSelection();
   renderSpools();
 }
 
 function spoolSelectDh(dhName) {
   spoolActiveDh = dhName;
   localStorage.setItem('obraflow_spool_active_dh', dhName);
+  spoolKeepOnlyVisibleSelection();
   renderSpools();
 }
 
 function spoolHandleSearchInput(input) {
   spoolSearchTerm = input?.value || '';
+  spoolKeepOnlyVisibleSelection();
 
   window.clearTimeout(spoolSearchRenderTimer);
   spoolSearchRenderTimer = window.setTimeout(() => {
@@ -2363,30 +3123,38 @@ function spoolSetFilter(filterKey) {
   } else if (filterKey === 'rejected') {
     spoolStatusFilter = 'rejected';
     spoolDateFilterMode = 'all';
+  } else if (filterKey === 'returned') {
+    spoolStatusFilter = 'returned';
+    spoolDateFilterMode = 'all';
   } else if (filterKey === 'all') {
     spoolDateFilterMode = 'all';
     spoolStatusFilter = 'all';
   }
+  spoolKeepOnlyVisibleSelection();
   renderSpools();
 }
 
 function spoolSetStatusFilter(statusVal) {
   spoolStatusFilter = statusVal;
+  spoolKeepOnlyVisibleSelection();
   renderSpools();
 }
 
 function spoolSetTypeFilter(typeVal) {
   spoolTypeFilter = typeVal;
+  spoolKeepOnlyVisibleSelection();
   renderSpools();
 }
 
 function spoolSetDiameterFilter(diaVal) {
   spoolDiameterFilter = diaVal;
+  spoolKeepOnlyVisibleSelection();
   renderSpools();
 }
 
 function spoolSetDateFilterMode(mode) {
   spoolDateFilterMode = mode;
+  spoolKeepOnlyVisibleSelection();
   renderSpools();
   if (mode === 'all') {
     toast('🌐 Exibindo todas as datas');
@@ -2398,21 +3166,25 @@ function spoolSetDateFilterMode(mode) {
     toast(`🟡 Filtrando recebidos de ${formatSpoolDateDisplay(spoolSelectedDate || getLocalDateStr())}`);
   } else if (mode === 'rejected') {
     toast(`🔴 Filtrando reprovados de ${formatSpoolDateDisplay(spoolSelectedDate || getLocalDateStr())}`);
+  } else if (mode === 'returned') {
+    toast(`↩️ Filtrando devolvidos de ${formatSpoolDateDisplay(spoolSelectedDate || getLocalDateStr())}`);
   }
 }
 
 function spoolQuickFilterDay(dateStr, mode = 'activity') {
   spoolSelectedDate = dateStr;
   spoolDateFilterMode = mode;
+  spoolKeepOnlyVisibleSelection();
   renderSpools();
   toast(`📅 Filtrando por ${formatSpoolDateDisplay(dateStr)}`);
 }
 
 function spoolClearDateFilter() {
   spoolDateFilterMode = 'all';
-  if (spoolListFilter === 'installed_today' || spoolListFilter === 'received_today' || spoolListFilter === 'rejected') {
+  if (spoolListFilter === 'installed_today' || spoolListFilter === 'received_today' || spoolListFilter === 'rejected' || spoolListFilter === 'returned') {
     spoolListFilter = 'all';
   }
+  spoolKeepOnlyVisibleSelection();
   renderSpools();
   toast('Filtro de data desativado (mostrando todas as datas)');
 }
@@ -2431,6 +3203,7 @@ function spoolClearAllFilters() {
   localStorage.setItem('obraflow_spool_active_sector', 'all');
   localStorage.setItem('obraflow_spool_active_subarea', 'all');
   localStorage.setItem('obraflow_spool_active_dh', 'ALL');
+  spoolKeepOnlyVisibleSelection();
   renderSpools();
   toast('Filtros redefinidos!');
 }
@@ -2438,6 +3211,7 @@ function spoolClearAllFilters() {
 function spoolSelectSubArea(subAreaId) {
   spoolActiveSubArea = subAreaId || 'all';
   localStorage.setItem('obraflow_spool_active_subarea', spoolActiveSubArea);
+  spoolKeepOnlyVisibleSelection();
   renderSpools();
 }
 
@@ -2490,6 +3264,9 @@ function spoolSyncCardSelectionUI() {
 
 function spoolSelectAllVisible() {
   const visible = spoolFilterList(spoolDb);
+  // Substitui a seleção anterior em vez de somar itens que ficaram escondidos
+  // depois da troca de filtro (ex.: reprovados ocultos atrás de "Pendentes").
+  spoolSelectedIds.clear();
   visible.forEach(s => spoolSelectedIds.add(s.id));
   spoolUpdateSelection();
   toast(`✓ ${visible.length} spool(s) selecionado(s)!`);
@@ -2526,6 +3303,13 @@ function spoolToggleStatus(spoolId) {
     return;
   }
 
+  if (item.status === 'returned') {
+    if (confirm(`O Spool ${item.number} está marcado como DEVOLVIDO (${item.returnedReason || 'sem observação'}).\nDeseja reverter para Pendente?`)) {
+      spoolSetItemStatus(spoolId, 'not-started');
+    }
+    return;
+  }
+
   if (item.status === 'not-started') {
     spoolSetItemStatus(spoolId, 'received');
   } else if (item.status === 'received') {
@@ -2546,6 +3330,7 @@ function spoolOpenQuickActionModal(spoolId) {
 
   const isInst = spool.status === 'installed';
   const isRec = spool.status === 'received';
+  const isReturned = spool.status === 'returned';
   const isRej = spool.status === 'rejected';
   const sector = spoolGetSectorMeta(spool.area, [spool]);
 
@@ -2583,6 +3368,9 @@ function spoolOpenQuickActionModal(spoolId) {
           </button>
           <button type="button" class="button compact" style="background:${isRej ? '#dc2626' : '#fef2f2'}; color:${isRej ? '#ffffff' : '#991b1b'}; border:1.5px solid #ef4444; font-weight:800; height:42px; justify-content:center;" onclick="closeModal(); spoolPromptRejectItem('${spool.id}');">
             🔴 ${isRej ? '✓ Reprovado' : 'Reprovar / Quarentena'}
+          </button>
+          <button type="button" class="button compact" style="background:${isReturned ? '#ea580c' : '#fff7ed'}; color:${isReturned ? '#ffffff' : '#9a3412'}; border:1.5px solid #f97316; font-weight:800; height:42px; justify-content:center;" onclick="closeModal(); spoolPromptReturnItem('${spool.id}');">
+            ↩️ ${isReturned ? '✓ Devolvido' : 'Registrar Devolução'}
           </button>
           <button type="button" class="button button-outline compact" style="color:#64748b; border-color:#cbd5e1; font-weight:800; height:42px; justify-content:center;" onclick="spoolSetItemStatus('${spool.id}', 'not-started'); closeModal();">
             ⚪ ${spool.status === 'not-started' ? '✓ Pendente' : 'Desmarcar (Pendente)'}
@@ -2632,6 +3420,7 @@ function spoolSetSelectedDate(dateStr, autoActivate = false) {
   if (autoActivate && spoolDateFilterMode === 'all') {
     spoolDateFilterMode = 'activity';
   }
+  spoolKeepOnlyVisibleSelection();
   renderSpools();
 }
 
@@ -2652,7 +3441,7 @@ function spoolPromptRejectItem(spoolId) {
           <span style="font-size:24px; line-height:1;">⛔</span>
           <div>
             <strong style="color:#991b1b; font-size:13px; display:block;">Bloqueio de Tubulação para Montagem</strong>
-            <small style="color:#b91c1c; font-size:11.5px; font-weight:600;">Ao reprovar, o spool é sinalizado em vermelho como não liberado/quarentena, prevenindo que a equipe instale uma peça duplicada ou defeituosa na linha.</small>
+            <small style="color:#b91c1c; font-size:11.5px; font-weight:600;">Ao reprovar, o spool é sinalizado em vermelho como não liberado/quarentena. Informe abaixo o motivo real encontrado na inspeção.</small>
           </div>
         </div>
 
@@ -2683,7 +3472,7 @@ function spoolPromptRejectItem(spoolId) {
           <label style="font-size:12px; font-weight:800; color:#0f172a; display:block; margin-bottom:4px;">
             MOTIVO DA REPROVAÇÃO / RNC *
           </label>
-          <input type="text" id="spoolRejectReasonInput" name="reason" required placeholder="Ex.: Duplicidade enviada pela fábrica, solda trincada..." value="${esc(currentReason || 'Duplicidade enviada pela fábrica')}" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700; font-size:13px; color:#0f172a;">
+          <input type="text" id="spoolRejectReasonInput" name="reason" required placeholder="Digite o motivo: tamanho errado, furação, solda, dimensional..." value="${esc(currentReason)}" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700; font-size:13px; color:#0f172a;">
         </div>
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
@@ -2723,12 +3512,59 @@ function spoolConfirmRejectItem(event, spoolId) {
   item.rejectedAt = now;
   item.rejectedBy = resp;
   item.rejectedReason = reason;
+  item.returnedDate = '';
+  item.returnedAt = '';
+  item.returnedBy = '';
+  item.returnedReason = '';
 
   spoolLogDailyAction(item.number, item.area, 'rejected', date);
   spoolSaveAll(spoolDb);
   closeModal();
   renderSpools();
   toast(`🔴 Spool ${item.number} marcado como REPROVADO (${reason})!`);
+}
+
+function spoolPromptReturnItem(spoolId) {
+  const item = spoolDb.find(s => s.id === spoolId);
+  if (!item) return;
+  modal(`
+    <form onsubmit="spoolConfirmReturnItem(event, '${item.id}')">
+      ${modalHead('Registrar Devolução de Tubo', `Spool ${esc(item.number)} · ${esc(item.dh || 'DH 04')} · ${esc(spoolSectorDisplayName(item))}`)}
+      <div class="modal-body" style="display:grid; gap:14px; background:#ffffff; color:#0f172a;">
+        <div style="background:#fff7ed; border:1.5px solid #fb923c; border-radius:10px; padding:12px 14px;">
+          <strong style="color:#9a3412; font-size:13px; display:block;">↩️ Tubulação devolvida</strong>
+          <small style="color:#c2410c; font-size:11.5px; font-weight:600;">Use este status quando o tubo saiu da obra para devolução. A observação é livre e não recebe motivo automático.</small>
+        </div>
+        <label style="display:grid; gap:5px;"><span style="font-size:12px; font-weight:800;">MOTIVO / OBSERVAÇÃO DA DEVOLUÇÃO *</span><textarea name="reason" required rows="3" placeholder="Ex.: devolvido para correção de comprimento, refazer furação..." style="padding:10px 12px; border-radius:8px; border:1.5px solid #fdba74; font-weight:700; resize:vertical;">${esc(item.returnedReason || '')}</textarea></label>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <label style="display:grid; gap:5px;"><span style="font-size:11px; font-weight:700;">Data da devolução</span><input type="date" name="date" value="${item.returnedDate || getLocalDateStr()}" style="padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;"></label>
+          <label style="display:grid; gap:5px;"><span style="font-size:11px; font-weight:700;">Responsável</span><input name="responsible" value="${esc(item.returnedBy || window.currentUser?.name || '')}" style="padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;"></label>
+        </div>
+      </div>
+      <div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button type="submit" class="button" style="background:#ea580c;color:#fff;font-weight:800;">↩️ Confirmar Devolução</button></div>
+    </form>
+  `, 'modal-medium');
+}
+
+function spoolConfirmReturnItem(event, spoolId) {
+  event.preventDefault();
+  const item = spoolDb.find(s => s.id === spoolId);
+  if (!item) return;
+  const form = event.target;
+  const date = form.elements.date.value || getLocalDateStr();
+  item.status = 'returned';
+  item.returnedDate = date;
+  item.returnedAt = buildIsoFromLocalDateAndTime(date, getLocalTimeStr());
+  item.returnedBy = form.elements.responsible.value.trim() || (window.currentUser?.name || 'Operador');
+  item.returnedReason = form.elements.reason.value.trim();
+  item.installedDate = '';
+  item.installedAt = '';
+  item.installedBy = '';
+  spoolLogDailyAction(item.number, item.area, 'returned', date);
+  spoolSaveAll(spoolDb);
+  closeModal();
+  renderSpools();
+  toast(`↩️ Spool ${item.number} marcado como DEVOLVIDO.`);
 }
 
 // Atualizar status diretamente
@@ -2741,6 +3577,12 @@ function spoolSetItemStatus(spoolId, newStatus) {
 
   item.status = newStatus;
   const user = (window.currentUser?.name) || 'Pedro Alves';
+  if (newStatus !== 'returned') {
+    item.returnedDate = '';
+    item.returnedAt = '';
+    item.returnedBy = '';
+    item.returnedReason = '';
+  }
   if (newStatus === 'installed') {
     // Se não tinha data de recebimento, ou se foi recebido hoje, garante horário idêntico
     if (!item.receivedDate || item.receivedDate === today) {
@@ -3011,7 +3853,7 @@ function spoolOpenExportModal() {
 
 const SPOOL_DROPDOWN_DHS = Array.from({ length: 10 }, (_, i) => `DH ${String(i + 1).padStart(2, '0')}`);
 const SPOOL_DROPDOWN_TYPES = ['Trecho Reto', 'Válvula de Ponta', 'Derivação (Ramal)'];
-const SPOOL_DROPDOWN_STATUS = ['Pendente', 'Recebido', 'Instalado', 'Reprovado'];
+const SPOOL_DROPDOWN_STATUS = ['Pendente', 'Recebido', 'Instalado', 'Reprovado', 'Devolvido'];
 
 async function ensureSpoolExcelLibrary() {
   if (window.ExcelJS) return true;
@@ -3088,10 +3930,10 @@ function applySpoolExcelDataValidations(sheet, maxRow = 2500, sectorCount = 0, s
   sheet.dataValidations.add(`H2:H${maxRow}`, {
     type: 'list',
     allowBlank: true,
-    formulae: ['Listas_Auxiliares!$D$1:$D$4'],
+    formulae: ['Listas_Auxiliares!$D$1:$D$5'],
     showErrorMessage: true,
     errorTitle: 'Status Inválido',
-    error: 'Selecione Pendente, Recebido, Instalado ou Reprovado na lista suspensa.'
+    error: 'Selecione Pendente, Recebido, Instalado, Reprovado ou Devolvido na lista suspensa.'
   });
 }
 
@@ -3131,8 +3973,11 @@ function populateSpoolExcelSheet(sheet, items, validationItems = items) {
     if (s.status === 'installed') statusName = 'Instalado';
     else if (s.status === 'received') statusName = 'Recebido';
     else if (s.status === 'rejected') statusName = 'Reprovado';
+    else if (s.status === 'returned') statusName = 'Devolvido';
 
-    const obsContent = s.status === 'rejected' && s.rejectedReason ? `[REPROVADO: ${s.rejectedReason}] ${s.notes || ''}` : (s.notes || '');
+    const obsContent = s.status === 'rejected' && s.rejectedReason
+      ? `[REPROVADO: ${s.rejectedReason}] ${s.notes || ''}`
+      : (s.status === 'returned' && s.returnedReason ? `[DEVOLVIDO: ${s.returnedReason}] ${s.notes || ''}` : (s.notes || ''));
 
     const row = sheet.addRow({
       tag: s.number,
@@ -3145,7 +3990,7 @@ function populateSpoolExcelSheet(sheet, items, validationItems = items) {
       status: statusName,
       recData: s.receivedDate || '',
       instData: s.installedDate || '',
-      resp: s.installedBy || s.rejectedBy || '',
+      resp: s.installedBy || s.rejectedBy || s.returnedBy || '',
       obs: obsContent
     });
 
@@ -3162,6 +4007,9 @@ function populateSpoolExcelSheet(sheet, items, validationItems = items) {
     if (s.status === 'rejected') {
       row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
       row.getCell(8).font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFB91C1C' } };
+    } else if (s.status === 'returned') {
+      row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+      row.getCell(8).font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF9A3412' } };
     }
   });
 
@@ -3259,9 +4107,11 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
     let typeName = 'Trecho Reto';
     if (s.type === 'valve') typeName = 'Válvula de Ponta';
     else if (s.type === 'branch') typeName = 'Derivação (Ramal)';
-    let statusName = s.status === 'installed' ? 'Instalado' : (s.status === 'received' ? 'Recebido' : (s.status === 'rejected' ? 'Reprovado' : 'Pendente'));
-    const obsVal = s.status === 'rejected' && s.rejectedReason ? `[REPROVADO: ${s.rejectedReason}] ${s.notes || ''}` : (s.notes || '');
-    rows.push([s.number, s.part || s.seq || '', normalizeDh(s.dh), secName, s.subArea || '', typeName, s.diameter || '', statusName, s.receivedDate || '', s.installedDate || '', s.installedBy || s.rejectedBy || '', obsVal]);
+    let statusName = s.status === 'installed' ? 'Instalado' : (s.status === 'received' ? 'Recebido' : (s.status === 'rejected' ? 'Reprovado' : (s.status === 'returned' ? 'Devolvido' : 'Pendente')));
+    const obsVal = s.status === 'rejected' && s.rejectedReason
+      ? `[REPROVADO: ${s.rejectedReason}] ${s.notes || ''}`
+      : (s.status === 'returned' && s.returnedReason ? `[DEVOLVIDO: ${s.returnedReason}] ${s.notes || ''}` : (s.notes || ''));
+    rows.push([s.number, s.part || s.seq || '', normalizeDh(s.dh), secName, s.subArea || '', typeName, s.diameter || '', statusName, s.receivedDate || '', s.installedDate || '', s.installedBy || s.rejectedBy || s.returnedBy || '', obsVal]);
   });
 
   const wb = XLSX.utils.book_new();
@@ -3393,9 +4243,9 @@ function spoolOpenImportModal() {
           </span>
           
           <label style="display:flex; align-items:flex-start; gap:10px; font-size:13px; font-weight:700; color:#0f172a; cursor:pointer; margin-bottom:10px;">
-            <input type="radio" name="spoolImportMode" value="replace_dhs_in_sheet" checked style="margin-top:2px;">
+            <input type="radio" name="spoolImportMode" value="replace_dhs_in_sheet" style="margin-top:2px;">
             <div>
-              <strong style="color:#047857;">Substituir apenas os Data Halls que constarem na planilha</strong> (Recomendado)
+              <strong style="color:#047857;">Substituir apenas os Data Halls que constarem na planilha</strong>
               <small style="display:block; color:#64748b; font-weight:500; margin-top:2px;">
                 Exemplo: se a planilha contém spools de DH 04 e DH 06, apaga os spools anteriores desses DHs e cadastra os da planilha. Os demais DHs (DH 01, etc.) permanecem 100% intactos!
               </small>
@@ -3413,9 +4263,9 @@ function spoolOpenImportModal() {
           </label>
 
           <label style="display:flex; align-items:flex-start; gap:10px; font-size:13px; font-weight:700; color:#0f172a; cursor:pointer; margin-bottom:10px;">
-            <input type="radio" name="spoolImportMode" value="merge" style="margin-top:2px;">
+            <input type="radio" name="spoolImportMode" value="merge" checked style="margin-top:2px;">
             <div>
-              <strong style="color:#d97706;">Mesclar / Incrementar</strong>
+              <strong style="color:#d97706;">Mesclar / Incrementar</strong> (Recomendado)
               <small style="display:block; color:#64748b; font-weight:500; margin-top:2px;">
                 Não apaga nada: apenas atualiza status dos spools existentes e insere novas tags.
               </small>
@@ -3655,7 +4505,9 @@ async function spoolHandleExcelUpload(event) {
             statusVal = 'installed';
           } else if (/receb|obra|cheg/i.test(sStr)) {
             statusVal = 'received';
-          } else if (/reprov|rejeit|quarent|devol|rnc|defeit/i.test(sStr)) {
+          } else if (/devol|retornad.*f[aá]bric/i.test(sStr)) {
+            statusVal = 'returned';
+          } else if (/reprov|rejeit|quarent|rnc|defeit/i.test(sStr)) {
             statusVal = 'rejected';
           } else if (/pend|aguard|fabr|n[aã]o/i.test(sStr)) {
             statusVal = 'not-started';
@@ -3720,6 +4572,17 @@ async function spoolHandleExcelUpload(event) {
             rejReason = notesVal || 'Reprovado na importação';
           }
 
+          let returnedDate = '';
+          let returnedAt = '';
+          let returnedBy = '';
+          let returnedReason = '';
+          if (statusVal === 'returned') {
+            returnedDate = new Date().toISOString().slice(0, 10);
+            returnedAt = new Date().toISOString();
+            returnedBy = (respIdx !== -1 && row[respIdx]) ? String(row[respIdx]).trim() : (currentUser?.name || 'Pedro Alves');
+            returnedReason = notesVal || 'Devolvido na importação';
+          }
+
           const safePartId = partSuffix ? `-${partSuffix.replace(/[^a-zA-Z0-9]/g, '_')}` : (currentCount > 0 ? `-${currentCount + 1}` : '');
           parsedSpools.push({
             id: `spool-${targetDh.replace(/\s+/g, '')}-${sectorVal}-${tagVal}${safePartId}`,
@@ -3741,6 +4604,10 @@ async function spoolHandleExcelUpload(event) {
             rejectedAt: rejAt,
             rejectedBy: rejBy,
             rejectedReason: rejReason,
+            returnedDate,
+            returnedAt,
+            returnedBy,
+            returnedReason,
             notes: notesVal
           });
         });
@@ -3874,8 +4741,8 @@ async function spoolHandleExcelUpload(event) {
                     </td>
                     <td><strong style="color:#0f172a; font-size:13px;">${esc(s.diameter)}</strong></td>
                     <td>
-                      <span style="font-weight:800; font-size:12px; color:${s.status === 'installed' ? '#059669' : (s.status === 'received' ? '#0284c7' : (s.status === 'rejected' ? '#dc2626' : '#64748b'))};">
-                        ${s.status === 'installed' ? '🟢 Instalado' : (s.status === 'received' ? '🟡 Recebido' : (s.status === 'rejected' ? '🔴 Reprovado' : '⚪ Pendente'))}
+                      <span style="font-weight:800; font-size:12px; color:${s.status === 'installed' ? '#059669' : (s.status === 'received' ? '#0284c7' : (s.status === 'rejected' ? '#dc2626' : (s.status === 'returned' ? '#ea580c' : '#64748b')))};">
+                        ${s.status === 'installed' ? '🟢 Instalado' : (s.status === 'received' ? '🟡 Recebido' : (s.status === 'rejected' ? '🔴 Reprovado' : (s.status === 'returned' ? '↩️ Devolvido' : '⚪ Pendente')))}
                       </span>
                     </td>
                   </tr>
@@ -3900,8 +4767,9 @@ function spoolConfirmImport(importedSpools) {
     return toast('Nenhum spool para importar.', true);
   }
 
-  const mode = document.querySelector('input[name="spoolImportMode"]:checked')?.value || 'replace_dhs_in_sheet';
+  const mode = document.querySelector('input[name="spoolImportMode"]:checked')?.value || 'merge';
   const defaultDh = normalizeDh(document.getElementById('spoolImportDefaultDh')?.value || 'DH 04');
+  const previousSpools = spoolDb.map(item => ({ ...item }));
 
   if (mode === 'replace_all') {
     spoolDb = list;
@@ -3940,6 +4808,14 @@ function spoolConfirmImport(importedSpools) {
           existing.receivedDate = imp.receivedDate || existing.receivedDate || existing.installedDate;
           existing.receivedAt = imp.receivedAt || existing.receivedAt || existing.installedAt;
           existing.receivedBy = imp.receivedBy || existing.receivedBy || existing.installedBy;
+          existing.rejectedDate = '';
+          existing.rejectedAt = '';
+          existing.rejectedBy = '';
+          existing.rejectedReason = '';
+          existing.returnedDate = '';
+          existing.returnedAt = '';
+          existing.returnedBy = '';
+          existing.returnedReason = '';
         } else if (imp.status === 'received') {
           existing.receivedDate = imp.receivedDate || existing.receivedDate || new Date().toISOString().slice(0, 10);
           existing.receivedAt = imp.receivedAt || existing.receivedAt || new Date().toISOString();
@@ -3951,11 +4827,27 @@ function spoolConfirmImport(importedSpools) {
           existing.rejectedAt = '';
           existing.rejectedBy = '';
           existing.rejectedReason = '';
+          existing.returnedDate = '';
+          existing.returnedAt = '';
+          existing.returnedBy = '';
+          existing.returnedReason = '';
         } else if (imp.status === 'rejected') {
           existing.rejectedDate = imp.rejectedDate || existing.rejectedDate || new Date().toISOString().slice(0, 10);
           existing.rejectedAt = imp.rejectedAt || existing.rejectedAt || new Date().toISOString();
           existing.rejectedBy = imp.rejectedBy || existing.rejectedBy || (currentUser?.name || 'Pedro Alves');
           existing.rejectedReason = imp.rejectedReason || existing.rejectedReason || 'Reprovado na importação';
+          existing.installedDate = '';
+          existing.installedAt = '';
+          existing.installedBy = '';
+          existing.returnedDate = '';
+          existing.returnedAt = '';
+          existing.returnedBy = '';
+          existing.returnedReason = '';
+        } else if (imp.status === 'returned') {
+          existing.returnedDate = imp.returnedDate || existing.returnedDate || new Date().toISOString().slice(0, 10);
+          existing.returnedAt = imp.returnedAt || existing.returnedAt || new Date().toISOString();
+          existing.returnedBy = imp.returnedBy || existing.returnedBy || (currentUser?.name || 'Pedro Alves');
+          existing.returnedReason = imp.returnedReason || existing.returnedReason || 'Devolvido na importação';
           existing.installedDate = '';
           existing.installedAt = '';
           existing.installedBy = '';
@@ -3970,12 +4862,28 @@ function spoolConfirmImport(importedSpools) {
           existing.rejectedAt = '';
           existing.rejectedBy = '';
           existing.rejectedReason = '';
+          existing.returnedDate = '';
+          existing.returnedAt = '';
+          existing.returnedBy = '';
+          existing.returnedReason = '';
         }
         if (imp.notes) existing.notes = imp.notes;
       } else {
         spoolDb.push(imp);
       }
     });
+  }
+
+  const previousKeys = new Set(previousSpools.map(spoolRecordKey));
+  const nextKeys = new Set(spoolDb.map(spoolRecordKey));
+  const removedCount = Array.from(previousKeys).filter(key => !nextKeys.has(key)).length;
+  const destructiveMode = mode !== 'merge' && removedCount > 0;
+  if (destructiveMode && !confirm(
+    `ATENÇÃO: esta importação removerá ${removedCount} spool(s) que já estão cadastrados.\n\n` +
+    'Um backup de recuperação será criado. Deseja realmente substituir esses registros?'
+  )) {
+    spoolDb = previousSpools;
+    return toast('Importação cancelada. Nenhum spool foi removido.', true);
   }
 
   // Visualização padrão: Todos os DHs e todos os setores para conferência total
@@ -3989,7 +4897,15 @@ function spoolConfirmImport(importedSpools) {
   spoolSelectedIds.clear();
   spoolMultiSelectMode = false;
 
-  spoolSaveAll(spoolDb);
+  const saved = spoolSaveAll(spoolDb, {
+    allowMassDelete: destructiveMode,
+    reason: `importacao-${mode}`
+  });
+  if (!saved) {
+    spoolDb = previousSpools;
+    renderSpools();
+    return;
+  }
   closeModal();
   renderSpools();
 
@@ -4021,7 +4937,7 @@ function spoolClearDh(dhName) {
   }
 
   spoolDb = spoolDb.filter(s => normalizeDh(s.dh) !== norm);
-  spoolSaveAll(spoolDb);
+  spoolSaveAll(spoolDb, { allowMassDelete: true, reason: `exclusao-${norm}` });
   renderSpools();
   toast(`🗑️ ${items.length} spool(s) do ${norm} apagado(s) com sucesso.`);
 }
@@ -4030,10 +4946,22 @@ function spoolClearDh(dhName) {
    SELEÇÃO EM MASSA & AÇÕES EM LOTE (EXCLUSÃO / STATUS)
    ========================================================================== */
 
-function spoolGetSelectedIds() {
+function spoolVisibleIdSet() {
+  return new Set(spoolFilterList(spoolDb).map(item => item.id));
+}
+
+function spoolGetSelectedIds({ visibleOnly = false } = {}) {
   const validIds = new Set(spoolDb.map(s => s.id));
   spoolSelectedIds = new Set(Array.from(spoolSelectedIds).filter(id => validIds.has(id)));
-  return Array.from(spoolSelectedIds);
+  if (!visibleOnly) return Array.from(spoolSelectedIds);
+  const visibleIds = spoolVisibleIdSet();
+  return Array.from(spoolSelectedIds).filter(id => visibleIds.has(id));
+}
+
+function spoolKeepOnlyVisibleSelection() {
+  const visibleIds = spoolVisibleIdSet();
+  spoolSelectedIds = new Set(Array.from(spoolSelectedIds).filter(id => visibleIds.has(id)));
+  return spoolSelectedIds.size;
 }
 
 function spoolSetSelectionFromCheckbox(checkbox) {
@@ -4101,6 +5029,9 @@ function spoolUpdateSelection() {
 function spoolToggleSelectAll(headerCheckbox) {
   const isChecked = typeof headerCheckbox === 'boolean' ? headerCheckbox : headerCheckbox.checked;
   const checks = document.querySelectorAll('.spool-select-check');
+  // A seleção em lote pertence ao resultado visível. Itens ocultos por um
+  // filtro anterior nunca podem continuar marcados silenciosamente.
+  if (isChecked) spoolSelectedIds.clear();
   checks.forEach(cb => {
     if (isChecked) spoolSelectedIds.add(cb.value);
     else spoolSelectedIds.delete(cb.value);
@@ -4119,7 +5050,7 @@ function spoolClearSelection() {
 }
 
 function spoolOpenBulkEdit() {
-  const ids = spoolGetSelectedIds();
+  const ids = spoolGetSelectedIds({ visibleOnly: true });
   if (!ids.length) return toast('Selecione ao menos um spool para editar.', true);
 
   const idSet = new Set(ids);
@@ -4211,7 +5142,7 @@ function spoolOpenBulkEdit() {
 
 function spoolConfirmBulkEdit(event) {
   event.preventDefault();
-  const ids = spoolGetSelectedIds();
+  const ids = spoolGetSelectedIds({ visibleOnly: true });
   if (!ids.length) {
     closeModal();
     return toast('A seleção não está mais disponível.', true);
@@ -4263,7 +5194,7 @@ function spoolConfirmBulkEdit(event) {
 }
 
 function spoolBulkDelete() {
-  const ids = spoolGetSelectedIds();
+  const ids = spoolGetSelectedIds({ visibleOnly: true });
   if (!ids.length) return toast('Selecione ao menos um spool para excluir.', true);
 
   if (!confirm(`⚠️ Deseja realmente excluir permanentemente os ${ids.length} spool(s) selecionado(s)? Esta ação não poderá ser desfeita.`)) {
@@ -4274,13 +5205,13 @@ function spoolBulkDelete() {
   spoolDb = spoolDb.filter(s => !idSet.has(s.id));
   spoolSelectedIds.clear();
   spoolMultiSelectMode = false;
-  spoolSaveAll(spoolDb);
+  spoolSaveAll(spoolDb, { allowMassDelete: true, reason: 'exclusao-em-lote' });
   renderSpools();
   toast(`🗑️ ${ids.length} spool(s) excluído(s) com sucesso!`);
 }
 
 function spoolBulkReject() {
-  const ids = spoolGetSelectedIds();
+  const ids = spoolGetSelectedIds({ visibleOnly: true });
   if (!ids.length) return toast('Selecione ao menos um spool para reprovar.', true);
 
   modal(`
@@ -4295,7 +5226,7 @@ function spoolBulkReject() {
           <label style="font-size:12px; font-weight:800; color:#0f172a; display:block; margin-bottom:4px;">
             MOTIVO DA REPROVAÇÃO DO LOTE *
           </label>
-          <input type="text" id="spoolBulkRejectReason" required placeholder="Ex.: Duplicidade enviada pela fábrica, lote avariado..." value="Duplicidade enviada pela fábrica" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700; font-size:13px; color:#0f172a;">
+          <input type="text" id="spoolBulkRejectReason" required placeholder="Digite o motivo real da reprovação do lote..." value="" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700; font-size:13px; color:#0f172a;">
         </div>
       </div>
       <div class="modal-foot" style="background:#ffffff; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between;">
@@ -4310,7 +5241,7 @@ function spoolBulkReject() {
 
 function spoolConfirmBulkReject(event) {
   event.preventDefault();
-  const ids = spoolGetSelectedIds();
+  const ids = spoolGetSelectedIds({ visibleOnly: true });
   if (!ids.length) return;
 
   const reason = document.getElementById('spoolBulkRejectReason')?.value.trim() || 'Reprovação em lote';
@@ -4328,6 +5259,10 @@ function spoolConfirmBulkReject(event) {
       rejectedAt: now,
       rejectedBy: user,
       rejectedReason: reason,
+      returnedDate: '',
+      returnedAt: '',
+      returnedBy: '',
+      returnedReason: '',
       installedDate: '',
       installedAt: '',
       installedBy: ''
@@ -4342,8 +5277,51 @@ function spoolConfirmBulkReject(event) {
   toast(`🔴 ${ids.length} spool(s) marcados como REPROVADOS (${reason})!`);
 }
 
+function spoolBulkReturn() {
+  const ids = spoolGetSelectedIds({ visibleOnly: true });
+  if (!ids.length) return toast('Selecione ao menos um spool para devolver.', true);
+  modal(`
+    <form onsubmit="spoolConfirmBulkReturn(event)">
+      ${modalHead('Devolver Spools Selecionados', `${ids.length} spool(s) selecionado(s)`)}
+      <div class="modal-body" style="display:grid;gap:14px;background:#fff;color:#0f172a;">
+        <div style="background:#fff7ed;border:1.5px solid #fb923c;border-radius:10px;padding:12px 14px;"><strong style="color:#9a3412;">↩️ Registrar devolução em lote</strong><small style="display:block;color:#c2410c;margin-top:3px;">Os tubos serão identificados como devolvidos e fora da obra.</small></div>
+        <label style="display:grid;gap:5px;"><span style="font-size:12px;font-weight:800;">MOTIVO / OBSERVAÇÃO DA DEVOLUÇÃO *</span><textarea id="spoolBulkReturnReason" required rows="3" placeholder="Digite o motivo real, sem preenchimento automático" style="padding:10px 12px;border-radius:8px;border:1.5px solid #fdba74;font-weight:700;resize:vertical;"></textarea></label>
+      </div>
+      <div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button type="submit" class="button" style="background:#ea580c;color:#fff;font-weight:800;">↩️ Devolver ${ids.length} Spools</button></div>
+    </form>
+  `, 'modal-medium');
+}
+
+function spoolConfirmBulkReturn(event) {
+  event.preventDefault();
+  const ids = spoolGetSelectedIds({ visibleOnly: true });
+  if (!ids.length) return;
+  const idSet = new Set(ids);
+  const reason = document.getElementById('spoolBulkReturnReason')?.value.trim();
+  const date = getLocalDateStr();
+  const now = new Date().toISOString();
+  const user = window.currentUser?.name || 'Operador';
+  spoolDb = spoolDb.map(item => idSet.has(item.id) ? {
+    ...item,
+    status: 'returned',
+    returnedDate: date,
+    returnedAt: now,
+    returnedBy: user,
+    returnedReason: reason,
+    installedDate: '',
+    installedAt: '',
+    installedBy: ''
+  } : item);
+  spoolSaveAll(spoolDb);
+  spoolSelectedIds.clear();
+  spoolMultiSelectMode = false;
+  closeModal();
+  renderSpools();
+  toast(`↩️ ${ids.length} spool(s) marcados como DEVOLVIDOS.`);
+}
+
 function spoolBulkSetStatus(newStatus) {
-  const ids = spoolGetSelectedIds();
+  const ids = spoolGetSelectedIds({ visibleOnly: true });
   if (!ids.length) return toast('Selecione ao menos um spool.', true);
 
   if (newStatus === 'rejected') {
@@ -4370,6 +5348,10 @@ function spoolBulkSetStatus(newStatus) {
       updated.rejectedAt = '';
       updated.rejectedBy = '';
       updated.rejectedReason = '';
+      updated.returnedDate = '';
+      updated.returnedAt = '';
+      updated.returnedBy = '';
+      updated.returnedReason = '';
     } else if (newStatus === 'installed') {
       if (!updated.receivedDate) {
         updated.receivedDate = dateStr;
@@ -4383,6 +5365,10 @@ function spoolBulkSetStatus(newStatus) {
       updated.rejectedAt = '';
       updated.rejectedBy = '';
       updated.rejectedReason = '';
+      updated.returnedDate = '';
+      updated.returnedAt = '';
+      updated.returnedBy = '';
+      updated.returnedReason = '';
     } else if (newStatus === 'not-started') {
       updated.receivedDate = '';
       updated.receivedAt = '';
@@ -4394,6 +5380,10 @@ function spoolBulkSetStatus(newStatus) {
       updated.rejectedAt = '';
       updated.rejectedBy = '';
       updated.rejectedReason = '';
+      updated.returnedDate = '';
+      updated.returnedAt = '';
+      updated.returnedBy = '';
+      updated.returnedReason = '';
     }
     return updated;
   });
@@ -4656,6 +5646,7 @@ function spoolOpenReportPDF(scope = 'daily') {
   const installedCount = items.filter(s => s.status === 'installed').length;
   const receivedCount = items.filter(s => s.status === 'received').length;
   const rejectedCount = items.filter(s => s.status === 'rejected').length;
+  const returnedCount = items.filter(s => s.status === 'returned').length;
   const pendingCount = items.filter(s => s.status === 'not-started').length;
   const straightCount = items.filter(s => s.type === 'straight').length;
   const branchCount = items.filter(s => s.type === 'branch').length;
@@ -4672,6 +5663,8 @@ function spoolOpenReportPDF(scope = 'daily') {
       statusBadge = '<span style="display:inline-block; padding:2px 8px; border-radius:4px; font-weight:800; font-size:10px; background:#fef9c3; color:#a16207; border:1px solid #fde047;">🟡 Recebido</span>';
     } else if (s.status === 'rejected') {
       statusBadge = '<span style="display:inline-block; padding:2px 8px; border-radius:4px; font-weight:800; font-size:10px; background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5;">🔴 Reprovado</span>';
+    } else if (s.status === 'returned') {
+      statusBadge = '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-weight:800;font-size:10px;background:#ffedd5;color:#9a3412;border:1px solid #fdba74;">↩️ Devolvido</span>';
     }
 
     let instInfo = s.installedDate ? `${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '—';
@@ -4682,12 +5675,17 @@ function spoolOpenReportPDF(scope = 'daily') {
       if (s.rejectedDate) {
         recInfo = `<span style="color:#b91c1c; font-weight:800;">🔴 ${formatSpoolDateDisplay(s.rejectedDate)}</span>`;
       }
+    } else if (s.status === 'returned') {
+      instInfo = '<span style="color:#9a3412;font-weight:800;">↩️ DEVOLVIDO / FORA DA OBRA</span>';
+      recInfo = s.returnedDate ? `<span style="color:#9a3412;font-weight:800;">↩️ ${formatSpoolDateDisplay(s.returnedDate)}</span>` : '—';
     }
 
-    const obsContent = s.status === 'rejected' && s.rejectedReason ? `[REPROVADO: ${s.rejectedReason}] ${s.notes || ''}` : (s.notes || '');
+    const obsContent = s.status === 'rejected' && s.rejectedReason
+      ? `[REPROVADO: ${s.rejectedReason}] ${s.notes || ''}`
+      : (s.status === 'returned' && s.returnedReason ? `[DEVOLVIDO: ${s.returnedReason}] ${s.notes || ''}` : (s.notes || ''));
 
     return `
-      <tr style="${s.status === 'rejected' ? 'background:#fff8f8;' : ''}">
+      <tr style="${s.status === 'rejected' ? 'background:#fff8f8;' : (s.status === 'returned' ? 'background:#fff7ed;' : '')}">
         <td style="text-align:center; font-weight:800; color:#0f172a; padding:6px 8px; border:1px solid #cbd5e1;">${esc(spoolDisplayNumber(s))}</td>
         <td style="text-align:center; font-weight:700; padding:6px 8px; border:1px solid #cbd5e1;">${esc(normalizeDh(s.dh))}</td>
         <td style="padding:6px 8px; border:1px solid #cbd5e1;">${esc(secName)}${s.subArea ? `<small style="display:block; color:#92400e;">${esc(s.subArea)}</small>` : ''}</td>
@@ -4695,9 +5693,9 @@ function spoolOpenReportPDF(scope = 'daily') {
         <td style="text-align:center; font-weight:800; padding:6px 8px; border:1px solid #cbd5e1;">${esc(s.diameter || '—')}</td>
         <td style="text-align:center; padding:6px 8px; border:1px solid #cbd5e1;">${statusBadge}</td>
         <td style="text-align:center; font-size:10px; padding:6px 8px; border:1px solid #cbd5e1;">${recInfo}</td>
-        <td style="text-align:center; font-size:10px; font-weight:700; color:${s.status === 'rejected' ? '#b91c1c' : '#15803d'}; padding:6px 8px; border:1px solid #cbd5e1;">${instInfo}</td>
-        <td style="padding:6px 8px; border:1px solid #cbd5e1;">${esc(s.status === 'rejected' ? (s.rejectedBy || 'Fiscalização') : (s.installedBy || 'Equipe HVAC'))}</td>
-        <td style="color:${s.status === 'rejected' ? '#b91c1c' : '#64748b'}; font-size:10px; padding:6px 8px; border:1px solid #cbd5e1; font-weight:${s.status === 'rejected' ? '700' : 'normal'};">${esc(obsContent)}</td>
+        <td style="text-align:center; font-size:10px; font-weight:700; color:${s.status === 'rejected' ? '#b91c1c' : (s.status === 'returned' ? '#9a3412' : '#15803d')}; padding:6px 8px; border:1px solid #cbd5e1;">${instInfo}</td>
+        <td style="padding:6px 8px; border:1px solid #cbd5e1;">${esc(s.status === 'rejected' ? (s.rejectedBy || 'Fiscalização') : (s.status === 'returned' ? (s.returnedBy || 'Logística') : (s.installedBy || 'Equipe HVAC')))}</td>
+        <td style="color:${s.status === 'rejected' ? '#b91c1c' : (s.status === 'returned' ? '#9a3412' : '#64748b')}; font-size:10px; padding:6px 8px; border:1px solid #cbd5e1; font-weight:${s.status === 'rejected' || s.status === 'returned' ? '700' : 'normal'};">${esc(obsContent)}</td>
       </tr>
     `;
   }).join('');
@@ -4753,7 +5751,7 @@ function spoolOpenReportPDF(scope = 'daily') {
       </header>
 
       <!-- QUADRO RESUMO EXECUTIVO (KPIS) -->
-      <div class="report-summary" style="display:grid; grid-template-columns:repeat(6, 1fr); margin-bottom:16px; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; background:#f8fafc;">
+      <div class="report-summary" style="display:grid; grid-template-columns:repeat(7, 1fr); margin-bottom:16px; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; background:#f8fafc;">
         <span style="padding:10px 14px; border-right:1px solid #e2e8f0; display:grid; gap:2px;">
           <b style="font-size:18px; color:#0f172a; font-weight:900;">${totalItems}</b>
           <small style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">Total de Peças</small>
@@ -4769,6 +5767,10 @@ function spoolOpenReportPDF(scope = 'daily') {
         <span style="padding:10px 14px; border-right:1px solid #e2e8f0; display:grid; gap:2px; background:#fef2f2;">
           <b style="font-size:18px; color:#b91c1c; font-weight:900;">${rejectedCount}</b>
           <small style="font-size:10px; font-weight:800; color:#b91c1c; text-transform:uppercase;">Reprovados</small>
+        </span>
+        <span style="padding:10px 14px;border-right:1px solid #e2e8f0;display:grid;gap:2px;background:#fff7ed;">
+          <b style="font-size:18px;color:#ea580c;font-weight:900;">${returnedCount}</b>
+          <small style="font-size:10px;font-weight:800;color:#9a3412;text-transform:uppercase;">Devolvidos</small>
         </span>
         <span style="padding:10px 14px; border-right:1px solid #e2e8f0; display:grid; gap:2px;">
           <b style="font-size:18px; color:#64748b; font-weight:900;">${pendingCount}</b>
@@ -4907,7 +5909,8 @@ function spoolCopyFilteredReport(customList = null) {
       'activity': `Atividade no Dia (${dateFormatted})`,
       'installed': `Instalados no Dia (${dateFormatted})`,
       'received': `Recebidos no Dia (${dateFormatted})`,
-      'rejected': `Reprovados no Dia (${dateFormatted})`
+      'rejected': `Reprovados no Dia (${dateFormatted})`,
+      'returned': `Devolvidos no Dia (${dateFormatted})`
     };
     filterDesc.push(`Data: *${modeMap[spoolDateFilterMode] || dateFormatted}*`);
   }
@@ -4918,6 +5921,7 @@ function spoolCopyFilteredReport(customList = null) {
       'received': 'Recebido',
       'installed': 'Instalado',
       'rejected': '🔴 Reprovado / Quarentena',
+      'returned': '↩️ Devolvido',
       'installed_on_date': `Instalados no Dia (${dateFormatted})`,
       'received_on_date': `Recebidos no Dia (${dateFormatted})`,
       'rejected_on_date': `Reprovados no Dia (${dateFormatted})`,
@@ -4934,6 +5938,7 @@ function spoolCopyFilteredReport(customList = null) {
   const installed = list.filter(s => s.status === 'installed');
   const received = list.filter(s => s.status === 'received');
   const rejected = list.filter(s => s.status === 'rejected');
+  const returned = list.filter(s => s.status === 'returned');
   const pending = list.filter(s => s.status === 'not-started');
 
   const straight = list.filter(s => s.type === 'straight');
@@ -4955,6 +5960,7 @@ function spoolCopyFilteredReport(customList = null) {
   if (rejected.length > 0) {
     text += `🔴 *Reprovados / Quarentena:* ${rejected.length}\n`;
   }
+  if (returned.length > 0) text += `↩️ *Devolvidos:* ${returned.length}\n`;
   text += `⚪ *Pendentes:* ${pending.length}\n`;
   if (straight.length || branches.length || valves.length) {
     text += `📏 Retos: ${straight.length} · 📐 Derivações: ${branches.length}${valves.length ? ` · 🔘 Válvulas: ${valves.length}` : ''}\n`;
@@ -4993,6 +5999,17 @@ function spoolCopyFilteredReport(customList = null) {
       }).join('\n') + `\n`;
     }
 
+    if (returned.length > 0) {
+      text += `\n↩️ *DEVOLVIDOS (${returned.length}):*\n`;
+      text += returned.map(s => {
+        const dia = s.diameter ? ` (${s.diameter})` : '';
+        const dh = s.dh ? ` · ${s.dh}` : '';
+        const reason = s.returnedReason ? ` [Motivo: ${s.returnedReason}]` : '';
+        const date = s.returnedDate ? ` — ${formatSpoolDateShort(s.returnedDate)}${s.returnedAt ? ` às ${formatSpoolTime(s.returnedAt)}` : ''}` : '';
+        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${reason}${date}`;
+      }).join('\n') + `\n`;
+    }
+
     if (pending.length > 0) {
       text += `\n⚪ *PENDENTES (${pending.length}):*\n`;
       text += pending.map(s => {
@@ -5004,7 +6021,7 @@ function spoolCopyFilteredReport(customList = null) {
   } else {
     text += `\n📋 *PRIMEIRAS 60 TAGS (de ${list.length} itens):*\n`;
     const sample = list.slice(0, 60);
-    text += sample.map(s => `• ${spoolDisplayNumber(s)} (${s.dh || 'DH'} - ${s.status === 'installed' ? '🟢' : (s.status === 'received' ? '🟡' : (s.status === 'rejected' ? '🔴' : '⚪'))})`).join('\n');
+    text += sample.map(s => `• ${spoolDisplayNumber(s)} (${s.dh || 'DH'} - ${s.status === 'installed' ? '🟢' : (s.status === 'received' ? '🟡' : (s.status === 'rejected' ? '🔴' : (s.status === 'returned' ? '↩️' : '⚪')))})`).join('\n');
     text += `\n\n_(+ ${list.length - 60} spools não detalhados na mensagem. Baixe a planilha Excel para a relação completa.)_\n`;
   }
 
@@ -5033,6 +6050,7 @@ function spoolCopyDailyReport(dateStr = '') {
   const straight = installed.filter(s => s.type === 'straight');
   const branches = installed.filter(s => s.type === 'branch');
   const rejectedOnDay = sectorSpools.filter(s => s.status === 'rejected' && (s.rejectedDate === targetDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === targetDate)));
+  const returnedOnDay = sectorSpools.filter(s => s.status === 'returned' && (s.returnedDate === targetDate || (s.returnedAt && formatSpoolLocalDate(s.returnedAt) === targetDate)));
 
   const allStraight = sectorSpools.filter(s => s.type === 'straight');
   const straightInstalledTotal = allStraight.filter(s => s.status === 'installed').length;
@@ -5055,6 +6073,10 @@ function spoolCopyDailyReport(dateStr = '') {
   if (rejectedOnDay.length > 0) {
     text += `\n🔴 *REPROVADOS NO DIA:* ${rejectedOnDay.length} tubos\n`;
     text += `${rejectedOnDay.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${s.rejectedReason ? ` [${s.rejectedReason}]` : ''}`).join('\n')}\n`;
+  }
+  if (returnedOnDay.length > 0) {
+    text += `\n↩️ *DEVOLVIDOS NO DIA:* ${returnedOnDay.length} tubos\n`;
+    text += `${returnedOnDay.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${s.returnedReason ? ` [${s.returnedReason}]` : ''}`).join('\n')}\n`;
   }
 
   text += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -5244,7 +6266,7 @@ function spoolClearSectorData(sectorId, dh) {
   }
 
   spoolDb = spoolDb.filter(s => !((sectorId === 'all' || s.area === sectorId) && (dh === 'ALL' || normalizeDh(s.dh) === normalizeDh(dh))));
-  spoolSaveAll(spoolDb);
+  spoolSaveAll(spoolDb, { allowMassDelete: true, reason: `limpeza-${dh}-${sectorId}` });
   renderSpools();
   toast(`🗑️ Spools apagados com sucesso.`);
 }
@@ -5259,6 +6281,7 @@ function spoolOpenTrackingModal(spoolId) {
 
   const isInst = spool.status === 'installed';
   const isRec = spool.status === 'received';
+  const isReturned = spool.status === 'returned';
   const sector = spoolGetSectorMeta(spool.area, [spool]);
   const todayStr = getLocalDateStr();
 
@@ -5284,7 +6307,9 @@ function spoolOpenTrackingModal(spoolId) {
                 ? '<span class="spool-status in-progress" style="font-size:13px; font-weight:900; padding:6px 14px;"><i></i>🟡 RECEBIDO</span>'
                 : (spool.status === 'rejected'
                   ? '<span class="spool-status rejected" style="font-size:13px; font-weight:900; padding:6px 14px; background:#fee2e2; color:#b91c1c; border-color:#fca5a5;"><i></i>🔴 REPROVADO / QUARENTENA</span>'
-                  : '<span class="spool-status" style="font-size:13px; font-weight:900; padding:6px 14px;"><i></i>⚪ PENDENTE</span>'))}
+                  : (isReturned
+                    ? '<span class="spool-status" style="font-size:13px;font-weight:900;padding:6px 14px;background:#ffedd5;color:#9a3412;border-color:#fdba74;"><i></i>↩️ DEVOLVIDO</span>'
+                    : '<span class="spool-status" style="font-size:13px; font-weight:900; padding:6px 14px;"><i></i>⚪ PENDENTE</span>')))}
           </div>
         </div>
 
@@ -5335,7 +6360,7 @@ function spoolOpenTrackingModal(spoolId) {
           <div style="background:${spool.status === 'rejected' || spool.rejectedDate ? '#fef2f2' : '#ffffff'}; border:1.5px solid ${spool.status === 'rejected' || spool.rejectedDate ? '#ef4444' : '#cbd5e1'}; border-radius:10px; padding:14px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
               <strong style="font-size:13px; color:#b91c1c; display:flex; align-items:center; gap:6px;">
-                <span>🔴</span> 3. Reprovação / Quarentena / Devolução
+                <span>🔴</span> 3. Reprovação / Quarentena
               </strong>
               ${spool.status === 'rejected' || spool.rejectedDate ? `<span style="font-size:11px; font-weight:800; color:#b91c1c; background:#fee2e2; padding:2px 8px; border-radius:4px;">REPROVADO (${formatSpoolDateDisplay(spool.rejectedDate || '')})${spool.rejectedAt ? ` às ${formatSpoolTime(spool.rejectedAt)}` : ''}</span>` : '<span style="font-size:11px; font-weight:700; color:#94a3b8;">NÃO REPROVADO</span>'}
             </div>
@@ -5355,10 +6380,23 @@ function spoolOpenTrackingModal(spoolId) {
             </div>
           </div>
 
-          <!-- 4. PARTE / SEQUÊNCIA E SUBÁREA -->
+          <!-- 4. BLOCO DE DEVOLUÇÃO -->
+          <div style="background:${spool.status === 'returned' || spool.returnedDate ? '#fff7ed' : '#ffffff'};border:1.5px solid ${spool.status === 'returned' || spool.returnedDate ? '#f97316' : '#cbd5e1'};border-radius:10px;padding:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+              <strong style="font-size:13px;color:#9a3412;display:flex;align-items:center;gap:6px;"><span>↩️</span> 4. Devolução do Tubo</strong>
+              ${spool.returnedDate ? `<span style="font-size:11px;font-weight:800;color:#9a3412;background:#ffedd5;padding:2px 8px;border-radius:4px;">DEVOLVIDO (${formatSpoolDateDisplay(spool.returnedDate)})${spool.returnedAt ? ` às ${formatSpoolTime(spool.returnedAt)}` : ''}</span>` : '<span style="font-size:11px;font-weight:700;color:#94a3b8;">NÃO DEVOLVIDO</span>'}
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
+              <label style="font-size:11px;font-weight:700;color:#475569;">Data da devolução:<input type="date" id="spoolModalReturnDate" value="${spool.returnedDate || ''}" style="display:block;width:100%;margin-top:4px;padding:8px 10px;border-radius:6px;border:1px solid #cbd5e1;font-weight:700;"></label>
+              <label style="font-size:11px;font-weight:700;color:#475569;">Horário da devolução:<input type="time" id="spoolModalReturnTime" value="${formatSpoolTime(spool.returnedAt) || (spool.returnedDate ? getLocalTimeStr() : '')}" style="display:block;width:100%;margin-top:4px;padding:8px 10px;border-radius:6px;border:1px solid #cbd5e1;font-weight:700;"></label>
+            </div>
+            <label style="font-size:11px;font-weight:700;color:#475569;">Motivo / observação da devolução:<textarea id="spoolModalReturnReason" rows="2" placeholder="Digite o motivo real da devolução" style="display:block;width:100%;margin-top:4px;padding:8px 10px;border-radius:6px;border:1px solid #fdba74;font-weight:700;resize:vertical;">${esc(spool.returnedReason || '')}</textarea></label>
+          </div>
+
+          <!-- 5. PARTE / SEQUÊNCIA E SUBÁREA -->
           <div style="background:#faf5ff; border:1.5px solid #d8b4fe; border-radius:10px; padding:14px;">
             <strong style="font-size:13px; color:#6d28d9; display:flex; align-items:center; gap:6px; margin-bottom:10px;">
-              <span>📦</span> 4. Identificação / Sequência do Spool
+              <span>📦</span> 5. Identificação / Sequência do Spool
             </strong>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
               <div>
@@ -5376,10 +6414,10 @@ function spoolOpenTrackingModal(spoolId) {
             </div>
           </div>
 
-          <!-- 5. RESPONSÁVEL PELO APONTAMENTO -->
+          <!-- 6. RESPONSÁVEL PELO APONTAMENTO -->
           <div>
             <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Responsável pelo Apontamento / Montagem / Inspeção:</label>
-            <input type="text" id="spoolModalResp" placeholder="Ex.: Pedro Alves, Equipe HVAC..." value="${esc(spool.installedBy || spool.receivedBy || spool.rejectedBy || '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;">
+            <input type="text" id="spoolModalResp" placeholder="Ex.: Pedro Alves, Equipe HVAC..." value="${esc(spool.installedBy || spool.receivedBy || spool.rejectedBy || spool.returnedBy || '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:700;">
           </div>
 
           <!-- ATALHOS RÁPIDOS -->
@@ -5387,16 +6425,17 @@ function spoolOpenTrackingModal(spoolId) {
             <button type="button" class="button compact" style="background:#0284c7; color:#ffffff; font-weight:700;" onclick="const t = getLocalDateStr(); const cur = getLocalTimeStr(); document.getElementById('spoolModalRecDate').value = t; document.getElementById('spoolModalRecTime').value = cur;">
               🟡 Recebido Agora
             </button>
-            <button type="button" class="button button-green compact" style="font-weight:700;" onclick="const t = getLocalDateStr(); const cur = getLocalTimeStr(); document.getElementById('spoolModalInstDate').value = t; document.getElementById('spoolModalInstTime').value = cur; document.getElementById('spoolModalRecDate').value = t; document.getElementById('spoolModalRecTime').value = cur; document.getElementById('spoolModalRejDate').value = ''; document.getElementById('spoolModalRejTime').value = '';">
+            <button type="button" class="button button-green compact" style="font-weight:700;" onclick="const t = getLocalDateStr(); const cur = getLocalTimeStr(); document.getElementById('spoolModalInstDate').value = t; document.getElementById('spoolModalInstTime').value = cur; document.getElementById('spoolModalRecDate').value = t; document.getElementById('spoolModalRecTime').value = cur; document.getElementById('spoolModalRejDate').value = ''; document.getElementById('spoolModalRejTime').value = ''; document.getElementById('spoolModalReturnDate').value = ''; document.getElementById('spoolModalReturnTime').value = '';">
               🟢 Montado Hoje (Mesmo Horário)
             </button>
-            <button type="button" class="button compact" style="background:#ef4444; color:#ffffff; font-weight:700;" onclick="const t = getLocalDateStr(); const cur = getLocalTimeStr(); document.getElementById('spoolModalRejDate').value = t; document.getElementById('spoolModalRejTime').value = cur; document.getElementById('spoolModalInstDate').value = ''; document.getElementById('spoolModalInstTime').value = ''; if(!document.getElementById('spoolModalRejReason').value) document.getElementById('spoolModalRejReason').value = 'Duplicidade enviada pela fábrica'; toast('Marcado para Reprovação');">
+            <button type="button" class="button compact" style="background:#ef4444; color:#ffffff; font-weight:700;" onclick="const t = getLocalDateStr(); const cur = getLocalTimeStr(); document.getElementById('spoolModalRejDate').value = t; document.getElementById('spoolModalRejTime').value = cur; document.getElementById('spoolModalInstDate').value = ''; document.getElementById('spoolModalInstTime').value = ''; document.getElementById('spoolModalReturnDate').value = ''; document.getElementById('spoolModalReturnTime').value = ''; document.getElementById('spoolModalRejReason').focus(); toast('Informe o motivo da reprovação');">
               🔴 Reprovar Hoje
             </button>
+            <button type="button" class="button compact" style="background:#ea580c;color:#ffffff;font-weight:700;" onclick="const t=getLocalDateStr();const cur=getLocalTimeStr();document.getElementById('spoolModalReturnDate').value=t;document.getElementById('spoolModalReturnTime').value=cur;document.getElementById('spoolModalInstDate').value='';document.getElementById('spoolModalInstTime').value='';document.getElementById('spoolModalReturnReason').focus();toast('Informe o motivo da devolução');">↩️ Devolver Hoje</button>
             <button type="button" class="button button-dark compact" style="font-weight:700;" onclick="const cur = document.getElementById('spoolModalInstTime').value || document.getElementById('spoolModalRecTime').value || getLocalTimeStr(); document.getElementById('spoolModalRecTime').value = cur; document.getElementById('spoolModalInstTime').value = cur; toast('Horários igualados!');">
               ⏱️ Igualar Horários
             </button>
-            <button type="button" class="button button-outline compact" style="color:#ef4444; border-color:#fca5a5; font-weight:700;" onclick="document.getElementById('spoolModalRecDate').value = ''; document.getElementById('spoolModalRecTime').value = ''; document.getElementById('spoolModalInstDate').value = ''; document.getElementById('spoolModalInstTime').value = ''; document.getElementById('spoolModalRejDate').value = ''; document.getElementById('spoolModalRejTime').value = ''; document.getElementById('spoolModalRejReason').value = '';">
+            <button type="button" class="button button-outline compact" style="color:#ef4444; border-color:#fca5a5; font-weight:700;" onclick="document.getElementById('spoolModalRecDate').value = ''; document.getElementById('spoolModalRecTime').value = ''; document.getElementById('spoolModalInstDate').value = ''; document.getElementById('spoolModalInstTime').value = ''; document.getElementById('spoolModalRejDate').value = ''; document.getElementById('spoolModalRejTime').value = ''; document.getElementById('spoolModalRejReason').value = ''; document.getElementById('spoolModalReturnDate').value = ''; document.getElementById('spoolModalReturnTime').value = ''; document.getElementById('spoolModalReturnReason').value = '';">
               ↩️ Limpar (Pendente)
             </button>
           </div>
@@ -5424,6 +6463,11 @@ function spoolSaveModalDates(spoolId) {
   const rejDate = document.getElementById('spoolModalRejDate')?.value || '';
   const rejTime = document.getElementById('spoolModalRejTime')?.value || '';
   const rejReason = document.getElementById('spoolModalRejReason')?.value.trim() || '';
+  const returnDate = document.getElementById('spoolModalReturnDate')?.value || '';
+  const returnTime = document.getElementById('spoolModalReturnTime')?.value || '';
+  const returnReason = document.getElementById('spoolModalReturnReason')?.value.trim() || '';
+  if (returnDate && !returnReason) return toast('Informe o motivo / observação da devolução.', true);
+  if (rejDate && !rejReason) return toast('Informe o motivo da reprovação.', true);
   const resp = document.getElementById('spoolModalResp')?.value.trim() || '';
   const partVal = (document.getElementById('spoolModalPart')?.value || '').trim();
   const subAreaVal = (document.getElementById('spoolModalSubArea')?.value || '').trim();
@@ -5447,7 +6491,16 @@ function spoolSaveModalDates(spoolId) {
   item.rejectedReason = rejReason;
   if (rejDate && resp) item.rejectedBy = resp;
 
-  if (rejDate) {
+  item.returnedDate = returnDate;
+  item.returnedAt = returnDate ? buildIsoFromLocalDateAndTime(returnDate, returnTime) : '';
+  item.returnedReason = returnReason;
+  if (returnDate && resp) item.returnedBy = resp;
+
+  if (returnDate) {
+    item.status = 'returned';
+    item.installedDate = '';
+    item.installedAt = '';
+  } else if (rejDate) {
     item.status = 'rejected';
     item.installedDate = '';
     item.installedAt = '';
@@ -5456,6 +6509,10 @@ function spoolSaveModalDates(spoolId) {
     item.rejectedDate = '';
     item.rejectedAt = '';
     item.rejectedReason = '';
+    item.returnedDate = '';
+    item.returnedAt = '';
+    item.returnedBy = '';
+    item.returnedReason = '';
     if (!item.receivedDate) {
       item.receivedDate = instDate;
       item.receivedAt = item.installedAt;
@@ -5465,6 +6522,10 @@ function spoolSaveModalDates(spoolId) {
     item.rejectedDate = '';
     item.rejectedAt = '';
     item.rejectedReason = '';
+    item.returnedDate = '';
+    item.returnedAt = '';
+    item.returnedBy = '';
+    item.returnedReason = '';
   } else {
     item.status = 'not-started';
     item.receivedAt = '';
@@ -5474,13 +6535,19 @@ function spoolSaveModalDates(spoolId) {
     item.installedDate = '';
     item.rejectedDate = '';
     item.rejectedReason = '';
+    item.returnedDate = '';
+    item.returnedAt = '';
+    item.returnedBy = '';
+    item.returnedReason = '';
   }
 
   spoolSaveAll(spoolDb);
   renderSpools();
   closeModal();
 
-  if (item.status === 'rejected') {
+  if (item.status === 'returned') {
+    toast(`↩️ Spool ${item.number} marcado como DEVOLVIDO em ${formatSpoolDateShort(item.returnedDate)} (${item.returnedReason})`);
+  } else if (item.status === 'rejected') {
     toast(`🔴 Spool ${item.number} marcado como REPROVADO em ${formatSpoolDateShort(item.rejectedDate)}${item.rejectedReason ? ` (${item.rejectedReason})` : ''}`);
   } else {
     toast(`✅ Spool ${item.number}: Recebido ${item.receivedDate ? formatSpoolDateShort(item.receivedDate) + ' ' + formatSpoolTime(item.receivedAt) : '—'} | Instalado ${item.installedDate ? formatSpoolDateShort(item.installedDate) + ' ' + formatSpoolTime(item.installedAt) : '—'}`);
@@ -5514,8 +6581,12 @@ window.spoolSelectSubArea = spoolSelectSubArea;
 window.spoolSetItemStatus = spoolSetItemStatus;
 window.spoolPromptRejectItem = spoolPromptRejectItem;
 window.spoolConfirmRejectItem = spoolConfirmRejectItem;
+window.spoolPromptReturnItem = spoolPromptReturnItem;
+window.spoolConfirmReturnItem = spoolConfirmReturnItem;
 window.spoolBulkReject = spoolBulkReject;
 window.spoolConfirmBulkReject = spoolConfirmBulkReject;
+window.spoolBulkReturn = spoolBulkReturn;
+window.spoolConfirmBulkReturn = spoolConfirmBulkReturn;
 window.spoolOpenImportModal = spoolOpenImportModal;
 window.spoolHandleExcelUpload = spoolHandleExcelUpload;
 window.spoolConfirmImport = spoolConfirmImport;
@@ -5548,3 +6619,14 @@ window.spoolDownloadSupercoreSpreadsheet = spoolDownloadSupercoreSpreadsheet;
 window.spoolOpenReportPDF = spoolOpenReportPDF;
 window.spoolSaveModalDates = spoolSaveModalDates;
 window.formatSpoolDateDisplay = formatSpoolDateDisplay;
+window.spoolSelectControlView = spoolSelectControlView;
+window.spoolOpenAssetModal = spoolOpenAssetModal;
+window.spoolSaveAsset = spoolSaveAsset;
+window.spoolSetAssetStatus = spoolSetAssetStatus;
+window.spoolPromptAssetException = spoolPromptAssetException;
+window.spoolConfirmAssetException = spoolConfirmAssetException;
+window.spoolDeleteAsset = spoolDeleteAsset;
+window.spoolSetAuxSearch = spoolSetAuxSearch;
+window.spoolSetAuxStatusFilter = spoolSetAuxStatusFilter;
+window.spoolClearAuxFilters = spoolClearAuxFilters;
+window.spoolForceSyncNow = spoolForceSyncNow;

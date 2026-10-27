@@ -877,6 +877,126 @@ h3 { font-size: 14px; }
   .radio-filters { grid-template-columns: 1fr; }
 }
 
+/* Controle integrado de spools, suportes e isométricos */
+.spool-control-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 6px;
+  overflow-x: auto;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+}
+.spool-control-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #334155;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.spool-control-tab span {
+  min-width: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  font-size: 10px;
+}
+.spool-control-tab.active {
+  background: #fff;
+  color: #0f172a;
+  border-color: #94a3b8;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, .1);
+}
+.spool-control-tab.active span { background: #0f766e; color: #fff; }
+.spool-aux-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+  overflow-x: auto;
+}
+.spool-aux-kpi {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 66px;
+  padding: 11px 13px;
+  border: 1.5px solid var(--asset-border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--asset-color);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.spool-aux-kpi strong { font-size: 24px; }
+.spool-aux-kpi.active { background: var(--asset-bg); box-shadow: inset 0 0 0 1px var(--asset-color); }
+.spool-aux-panel { overflow: hidden; }
+.spool-aux-toolbar {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(150px, 190px) minmax(150px, 190px) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 14px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+.spool-aux-search { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.spool-aux-search input { flex: 1; min-width: 0; }
+.spool-aux-table { width: 100%; min-width: 940px; }
+.spool-aux-table th, .spool-aux-table td { padding: 11px 12px; vertical-align: middle; }
+.spool-aux-table td small { display: block; margin-top: 3px; color: #64748b; }
+.spool-asset-number { display: inline-block; padding: 5px 10px; border-radius: 6px; background: #0f172a; color: #fff; font-family: ui-monospace, monospace; letter-spacing: .3px; }
+.spool-support-type, .spool-dh-inline, .spool-asset-status { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.spool-support-type.fixed { color: #4338ca; background: #eef2ff; border-color: #c7d2fe; }
+.spool-support-type.movable { color: #a16207; background: #fefce8; border-color: #fde68a; }
+.spool-dh-inline { color: #0369a1; background: #e0f2fe; border-color: #bae6fd; }
+.spool-asset-actions { display: flex; flex-wrap: wrap; gap: 5px; min-width: 210px; }
+.spool-asset-actions button { min-width: 31px; min-height: 31px; padding: 4px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; cursor: pointer; }
+.spool-asset-actions button:hover { background: #f1f5f9; border-color: #64748b; }
+.spool-aux-empty { padding: 36px !important; text-align: center; color: #64748b; font-weight: 700; }
+.spool-asset-form { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+.spool-asset-form label, .spool-exception-form label { display: grid; gap: 5px; color: #334155; font-size: 11px; font-weight: 800; }
+.spool-asset-form input, .spool-asset-form select, .spool-asset-form textarea,
+.spool-exception-form input, .spool-exception-form textarea { width: 100%; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #0f172a; font: inherit; font-size: 13px; }
+.spool-asset-form-wide { grid-column: 1 / -1; }
+.spool-exception-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.spool-exception-form label:first-child { grid-column: 1 / -1; }
+.spool-tube-card.status-returned { background: #fff7ed; border-color: #f97316; box-shadow: 0 0 0 2px rgba(249,115,22,.12); }
+.spool-tube-card.status-returned .tube-tag { color: #fff; background: #ea580c; }
+.spool-pipe-seg.status-returned { background: linear-gradient(180deg, #ffedd5, #fed7aa); border-color: #f97316; }
+.spool-pipe-seg.status-returned .seg-tag { color: #fff; background: #ea580c; }
+.spool-pipe-seg.status-returned .seg-idx { color: #9a3412; }
+.spool-tag-pill.status-returned { background: #ea580c !important; border-color: #c2410c !important; color: #fff !important; }
+
+@media (max-width: 900px) {
+  .spool-aux-kpis { grid-template-columns: repeat(5, minmax(145px, 1fr)); }
+  .spool-aux-toolbar { grid-template-columns: 1fr 1fr; }
+  .spool-aux-search { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .spool-control-tabs { gap: 5px; }
+  .spool-control-tab { flex: 1 0 auto; padding: 7px 10px; font-size: 11px; }
+  .spool-aux-toolbar { grid-template-columns: 1fr; }
+  .spool-aux-search { grid-column: auto; flex-wrap: wrap; }
+  .spool-aux-search input { flex-basis: calc(100% - 30px); }
+  .spool-asset-form, .spool-exception-form { grid-template-columns: 1fr; }
+  .spool-asset-form-wide, .spool-exception-form label:first-child { grid-column: auto; }
+}
+
 /* Controle unificado de materiais */
 .inventory-toolbar { display: grid; grid-template-columns: minmax(300px,1fr) 180px auto auto; gap: 9px; align-items: end; margin-bottom: 13px; }
 .inventory-toolbar .search-box { min-width: 0; height: 48px; }
@@ -3750,4 +3870,129 @@ body.sidebar-collapsed .mobile-menu { display: inline-grid !important; }
   background: #fffbeb;
   color: #b45309;
   border-color: #fde68a;
+}
+
+/* Responsive containment: workforce and shared application surfaces */
+.main-area, .main-area main, #app, .page-head, .page-head > div, .page-actions,
+.panel, .workforce-control-panel, .workforce-control-toolbar,
+.workforce-control-table-wrap, .workforce-daily-summary, .table-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+.workforce-control-panel, .panel { contain: inline-size; }
+.workforce-control-table-wrap, .table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 1024px) {
+  .workforce-control-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workforce-control-toolbar .search-box {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+  .workforce-control-toolbar .filter-field,
+  .workforce-control-toolbar select,
+  .workforce-control-toolbar input { width: 100%; min-width: 0; }
+  .workforce-control-table-wrap {
+    max-height: 68vh;
+    overflow: auto;
+    scrollbar-gutter: stable both-edges;
+    touch-action: pan-x pan-y;
+  }
+  .workforce-control-table {
+    width: var(--workforce-table-mobile-width) !important;
+    min-width: var(--workforce-table-mobile-width) !important;
+    table-layout: fixed !important;
+  }
+  .workforce-control-table col.workforce-company-column,
+  .workforce-control-table col.workforce-status-column,
+  .workforce-control-table .workforce-sticky-company,
+  .workforce-control-table .workforce-col-vinculo { display: none !important; }
+  .workforce-control-table col.workforce-person-column { width: 140px !important; }
+  .workforce-control-table col.workforce-day-column { width: 44px !important; }
+  .workforce-control-table .workforce-sticky-person {
+    left: 0 !important;
+    width: 140px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+    padding: 6px 8px !important;
+    white-space: normal !important;
+  }
+  .workforce-control-table thead .workforce-sticky-person { background: #f1f5f9 !important; }
+  .workforce-control-table tbody .workforce-sticky-person { background: #fff !important; }
+  .workforce-control-table tfoot .workforce-sticky-person { background: #eaf2ed !important; }
+  .workforce-control-table .workforce-sticky-person strong,
+  .workforce-control-table .workforce-sticky-person small { overflow: hidden; text-overflow: ellipsis; }
+  .workforce-control-table .workforce-sticky-person strong {
+    display: -webkit-box;
+    font-size: 11px;
+    line-height: 1.25;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .workforce-control-table .workforce-sticky-person small {
+    display: block;
+    font-size: 9px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .mobile-company-tag { display: inline; }
+}
+
+@media (max-width: 760px) {
+  html, body, .app-shell, .main-area {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  main { width: 100%; padding: 18px 10px 36px; }
+  .page-head { gap: 13px; }
+  .page-actions {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .page-actions .button { width: 100%; min-width: 0; }
+  .workforce-summary { gap: 8px; }
+  .workforce-summary > div { min-height: 74px; gap: 8px; padding: 11px; }
+  .workforce-summary > div > span { width: 32px; height: 32px; }
+  .workforce-summary p strong { font-size: 17px; }
+  .workforce-tabs { display: flex; width: 100%; }
+  .workforce-tabs button {
+    min-width: 0;
+    flex: 1;
+    justify-content: center;
+    padding-inline: 7px;
+    text-align: center;
+  }
+  .workforce-control-toolbar { grid-template-columns: minmax(0, 1fr); padding: 10px; }
+  .workforce-control-toolbar .search-box { grid-column: auto; }
+  .attendance-guide { gap: 8px 10px; padding: 10px; }
+  .attendance-guide span { flex: 1 1 135px; }
+  .workforce-daily-head {
+    align-items: stretch;
+    flex-direction: column;
+    padding-inline: 10px;
+  }
+  .workforce-daily-head input { width: 100%; }
+  .workforce-daily-summary { padding-inline: 10px; }
+  .workforce-subview-toolbar { padding: 8px 10px; }
+  .workforce-control-mode-tabs .mode-tab {
+    min-width: 0;
+    padding-inline: 6px;
+    font-size: 9px;
+    text-align: center;
+  }
+  .workforce-control-table-wrap {
+    max-height: 70dvh;
+    padding-bottom: 10px;
+    scrollbar-gutter: auto;
+  }
+  .panel-head { min-height: 0; align-items: flex-start; padding: 14px; }
+  .data-table:not(.workforce-control-table) { width: max-content; min-width: 100%; }
 }
