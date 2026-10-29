@@ -879,48 +879,25 @@ h3 { font-size: 14px; }
   .radio-filters { grid-template-columns: 1fr; }
 }
 
-/* Controle integrado de spools, suportes e isométricos */
-.spool-control-tabs {
+/* Controle integrado de spools e suportes */
+.spool-kind-filter {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin: 0 0 16px;
-  padding: 6px;
-  overflow-x: auto;
-  background: #e2e8f0;
-  border: 1px solid #cbd5e1;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #94a3b8;
   border-radius: 12px;
 }
-.spool-control-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 42px;
-  padding: 8px 16px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: #334155;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.spool-control-tab span {
-  min-width: 22px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: #cbd5e1;
-  font-size: 10px;
-}
-.spool-control-tab.active {
-  background: #fff;
-  color: #0f172a;
-  border-color: #94a3b8;
-  box-shadow: 0 2px 7px rgba(15, 23, 42, .1);
-}
-.spool-control-tab.active span { background: #0f766e; color: #fff; }
+.spool-kind-filter > div { display: grid; gap: 3px; }
+.spool-kind-filter strong { color: #0f172a; font-size: 12px; letter-spacing: .04em; }
+.spool-kind-filter small { color: #64748b; font-size: 11px; }
+.spool-kind-filter select { min-width: 225px; min-height: 42px; border: 1.5px solid #0f766e; background: #fff; color: #0f172a; font-weight: 800; }
+.spool-protected-delete-button { margin-left: auto; padding: 6px 12px; border: 1px solid #fca5a5; border-radius: 6px; background: #fee2e2; color: #b91c1c; font-size: 11px; font-weight: 800; cursor: pointer; }
+.spool-delete-password-box { display: grid; gap: 7px; }
+.spool-delete-password-box input { width: 100%; padding: 11px 12px; border: 1.5px solid #f87171; border-radius: 8px; font: inherit; }
 .spool-aux-kpis {
   display: grid;
   grid-template-columns: repeat(5, minmax(130px, 1fr));
@@ -990,8 +967,9 @@ h3 { font-size: 14px; }
   .spool-aux-search { grid-column: 1 / -1; }
 }
 @media (max-width: 600px) {
-  .spool-control-tabs { gap: 5px; }
-  .spool-control-tab { flex: 1 0 auto; padding: 7px 10px; font-size: 11px; }
+  .spool-kind-filter { align-items: stretch; flex-direction: column; }
+  .spool-kind-filter select { width: 100%; min-width: 0; }
+  .spool-protected-delete-button { width: 100%; margin-left: 0; }
   .spool-aux-toolbar { grid-template-columns: 1fr; }
   .spool-aux-search { grid-column: auto; flex-wrap: wrap; }
   .spool-aux-search input { flex-basis: calc(100% - 30px); }

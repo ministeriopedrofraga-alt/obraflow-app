@@ -199,6 +199,38 @@ function spoolTextKey(value) {
     .replace(/^-+|-+$/g, '');
 }
 
+// Mantém uma única representação para a sequência física do spool.
+// Assim, "2/4", "2 de 4" e "parte 2 de 4" identificam a mesma peça,
+// enquanto 1 de 4, 2 de 4 etc. continuam sendo registros distintos.
+function spoolNormalizePart(value) {
+  const raw = String(value || '').trim().replace(/\s+/g, ' ');
+  if (!raw) return '';
+
+  const fraction = raw.match(/^(?:parte\s*)?(\d+)\s*(?:de|\/)\s*(\d+)$/i);
+  if (fraction) {
+    return `${parseInt(fraction[1], 10)} de ${parseInt(fraction[2], 10)}`;
+  }
+
+  const numberedPart = raw.match(/^(parte|sub)\s*(\d+)$/i);
+  if (numberedPart) {
+    return `${numberedPart[1].toLowerCase()} ${parseInt(numberedPart[2], 10)}`;
+  }
+
+  return raw;
+}
+
+// As planilhas antigas guardavam o circuito apenas nas observações
+// (ex.: "Conjunto 1 - Alimentação (C1A9)"). Recuperar esse dado evita
+// confundir duas ocorrências legítimas da mesma TAG e da mesma sequência.
+function spoolResolveCircuit(spool) {
+  const explicit = String(spool?.circuit || '').trim();
+  if (explicit) return explicit.toUpperCase();
+
+  const legacyText = `${spool?.notes || ''} ${spool?.id || ''}`;
+  const match = legacyText.match(/\bC\d+[A-Z]\d+\b/i);
+  return match ? match[0].toUpperCase() : '';
+}
+
 function spoolCanonicalSubArea(value, sectorId = '') {
   const valueKey = spoolTextKey(value);
   if (!valueKey) return '';
@@ -260,8 +292,8 @@ function spoolBuildStableId(spool) {
     normalizeDh(spool.dh),
     normalizeSector(spool.area),
     spool.number,
-    spool.part || spool.seq || '',
-    spool.circuit || '',
+    spoolNormalizePart(spool.part || spool.seq || ''),
+    spoolResolveCircuit(spool),
     spoolCanonicalSubArea(spool.subArea, normalizeSector(spool.area))
   ].map(spoolTextKey).filter(Boolean);
   return parts.join('-');
@@ -273,8 +305,8 @@ function spoolRecordKey(item) {
     normalizeDh(item.dh),
     normalizeSector(item.area),
     item.number,
-    item.part || item.seq || '',
-    item.circuit || '',
+    spoolNormalizePart(item.part || item.seq || ''),
+    spoolResolveCircuit(item),
     spoolCanonicalSubArea(item.subArea, normalizeSector(item.area))
   ].map(spoolTextKey).join('|');
 }
@@ -433,7 +465,7 @@ async function spoolForceSyncNow() {
   const updated = await syncSpoolsFromSupabase({ force: true });
   if (updated) {
     renderSpools();
-    toast('✅ Spools, suportes e isométricos atualizados do servidor.');
+    toast('✅ Spools e suportes atualizados do servidor.');
   } else {
     toast('Não foi possível atualizar agora. Os dados locais foram preservados.', true);
     if (button) {
@@ -525,6 +557,8 @@ function spoolSaveAuxiliary() {
     spoolTrackDeletedRecords('isometrics', previousIsometrics, spoolIsoDb);
     localStorage.setItem(SPOOL_SUPPORT_STORE_KEY, JSON.stringify(spoolSupportDb));
     localStorage.setItem(SPOOL_ISO_STORE_KEY, JSON.stringify(spoolIsoDb));
+    const navCount = document.getElementById('navSpoolCount');
+    if (navCount) navCount.textContent = spoolDb.length + spoolSupportDb.length;
     spoolMarkSyncPending();
     spoolSyncRemote(spoolDb).catch(() => {});
   } catch (error) {
@@ -533,7 +567,7 @@ function spoolSaveAuxiliary() {
 }
 
 function spoolGetAllControlItems() {
-  return [...spoolDb, ...spoolSupportDb, ...spoolIsoDb];
+  return [...spoolDb, ...spoolSupportDb];
 }
 
 // 34 Spools Oficiais do SUPERCORE DH 04 (Identificados a partir do esquema do tablet)
@@ -1297,6 +1331,9 @@ function spoolLoadAll() {
           s.dh = normalizeDh(s.dh);
           s.area = normalizeSector(s.area);
           s.number = String(s.number || '').trim();
+          if (s.part || s.seq) s.part = spoolNormalizePart(s.part || s.seq);
+          const inferredCircuit = spoolResolveCircuit(s);
+          if (inferredCircuit) s.circuit = inferredCircuit;
           if (!s.status) s.status = 'not-started';
           if (!s.type) s.type = 'straight';
           return s;
@@ -1343,7 +1380,7 @@ function spoolSaveAll(spools, options = {}) {
     spoolTrackDeletedRecords('spools', previousSpools, spoolDb);
     localStorage.setItem(SPOOL_STORE_KEY, JSON.stringify(spoolDb));
     const navCount = document.getElementById('navSpoolCount');
-    if (navCount) navCount.textContent = spoolDb.length;
+    if (navCount) navCount.textContent = spoolDb.length + spoolSupportDb.length;
     spoolMarkSyncPending();
     spoolSyncRemote(spoolDb).catch(() => {});
     return true;
@@ -1361,9 +1398,9 @@ function spoolDeduplicateList(list) {
     const normDh = normalizeDh(s.dh);
     const normSec = normalizeSector(s.area);
     const numberKey = spoolTextKey(s.number);
-    const partKey = spoolTextKey(s.part || s.seq || '');
+    const partKey = spoolTextKey(spoolNormalizePart(s.part || s.seq || ''));
     const subKey = spoolCanonicalSubArea(s.subArea, normSec);
-    const circuitKey = spoolTextKey(s.circuit || '');
+    const circuitKey = spoolTextKey(spoolResolveCircuit(s));
     // O identificador lógico remove duplicatas reais, mas preserva partes e subáreas distintas.
     const key = `${normDh}_${normSec}_${numberKey}_${partKey}_${circuitKey}_${subKey}`;
     const existing = map.get(key);
@@ -1500,7 +1537,7 @@ async function syncSpoolsFromSupabase(options = {}) {
         localStorage.setItem(SPOOL_DELETED_STORE_KEY, JSON.stringify(spoolDeletedState));
       } catch(e) {}
       const navCount = document.getElementById('navSpoolCount');
-      if (navCount) navCount.textContent = spoolDb.length;
+      if (navCount) navCount.textContent = spoolDb.length + spoolSupportDb.length;
       if (window.location.hash === '#spools') {
         renderSpools();
       }
@@ -1523,8 +1560,8 @@ window.syncSpoolProjectsFromSupabase = syncSpoolsFromSupabase;
 function spoolUpdateSyncIndicator(synced) {
   const badge = document.getElementById('spoolSyncBadge');
   if (!badge) return;
-  const viewCount = spoolControlView === 'supports' ? spoolSupportDb.length : (spoolControlView === 'isometrics' ? spoolIsoDb.length : spoolDb.length);
-  const viewLabel = spoolControlView === 'supports' ? 'suportes' : (spoolControlView === 'isometrics' ? 'isométricos' : 'spools');
+  const viewCount = spoolControlView === 'supports' ? spoolSupportDb.length : spoolDb.length;
+  const viewLabel = spoolControlView === 'supports' ? 'suportes' : 'spools';
   if (synced) {
     badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; margin-right:4px;"></span> Online (${viewCount} ${viewLabel}) • Supabase Sincronizado`;
     badge.style.color = '#065f46';
@@ -1635,9 +1672,10 @@ let spoolSafeTapMode = localStorage.getItem('obraflow_spool_safe_tap') !== 'fals
 let spoolMapCollapsed = localStorage.getItem('obraflow_spool_map_collapsed') === 'true'; // Recolher mapa de spools
 let spoolMultiSelectMode = false;
 let spoolSelectedIds = new Set();
-let spoolControlView = localStorage.getItem('obraflow_spool_control_view') || 'spools';
+let spoolControlView = localStorage.getItem('obraflow_spool_control_view') === 'supports' ? 'supports' : 'spools';
 let spoolAuxStatusFilter = 'all';
 let spoolAuxSearchTerm = '';
+let spoolPendingProtectedDelete = null;
 
 if (spoolActiveSector === 'all') {
   spoolActiveSubArea = 'all';
@@ -1794,24 +1832,23 @@ function spoolShowAllMySpools() {
   toast('Mostrando todos os spools cadastrados!');
 }
 
-function spoolRenderControlTabs() {
+function spoolRenderKindFilter() {
   return `
-    <nav class="spool-control-tabs" aria-label="Tipo de controle">
-      <button type="button" class="spool-control-tab ${spoolControlView === 'spools' ? 'active' : ''}" onclick="spoolSelectControlView('spools')">
-        🧵 Spools <span>${spoolDb.length}</span>
-      </button>
-      <button type="button" class="spool-control-tab ${spoolControlView === 'supports' ? 'active' : ''}" onclick="spoolSelectControlView('supports')">
-        🧰 Suportes <span>${spoolSupportDb.length}</span>
-      </button>
-      <button type="button" class="spool-control-tab ${spoolControlView === 'isometrics' ? 'active' : ''}" onclick="spoolSelectControlView('isometrics')">
-        📐 Isométricos (ISO) <span>${spoolIsoDb.length}</span>
-      </button>
-    </nav>
+    <div class="spool-kind-filter" aria-label="Filtrar controle por tipo">
+      <div>
+        <strong>FILTRAR POR TIPO</strong>
+        <small>Spools e suportes usam os mesmos setores, subáreas e Data Halls.</small>
+      </div>
+      <select id="spoolKindFilterSelect" class="spool-filter-select" onchange="spoolSelectControlView(this.value)">
+        <option value="spools" ${spoolControlView === 'spools' ? 'selected' : ''}>🧵 Spools (${spoolDb.length})</option>
+        <option value="supports" ${spoolControlView === 'supports' ? 'selected' : ''}>🧰 Suportes (${spoolSupportDb.length})</option>
+      </select>
+    </div>
   `;
 }
 
 function spoolSelectControlView(view) {
-  if (!['spools', 'supports', 'isometrics'].includes(view)) return;
+  if (!['spools', 'supports'].includes(view)) return;
   spoolControlView = view;
   localStorage.setItem('obraflow_spool_control_view', view);
   spoolSelectedIds.clear();
@@ -1836,10 +1873,25 @@ function spoolRenderAuxiliaryControl(app, kind) {
   const source = isSupport ? spoolSupportDb : spoolIsoDb;
   const singular = isSupport ? 'Suporte' : 'Isométrico';
   const plural = isSupport ? 'Suportes' : 'Isométricos';
-  const availableSectors = spoolGetAvailableSectors(spoolGetAllControlItems());
-  const filtered = source
+  const operationalItems = spoolGetAllControlItems();
+  const availableSectors = spoolGetAvailableSectors(operationalItems);
+  if (spoolActiveSector !== 'all' && !availableSectors.some(sector => sector.id === spoolActiveSector)) {
+    spoolActiveSector = 'all';
+    spoolActiveSubArea = 'all';
+    localStorage.setItem('obraflow_spool_active_sector', 'all');
+    localStorage.setItem('obraflow_spool_active_subarea', 'all');
+  }
+  const availableSubAreas = spoolGetAvailableSubAreas(operationalItems, spoolActiveSector);
+  const activeSubAreaKey = spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector);
+  if (spoolActiveSubArea !== 'all' && !availableSubAreas.some(subArea => subArea.id === activeSubAreaKey)) {
+    spoolActiveSubArea = 'all';
+    localStorage.setItem('obraflow_spool_active_subarea', 'all');
+  }
+  const locationItems = source
     .filter(item => spoolActiveSector === 'all' || item.area === spoolActiveSector)
-    .filter(item => spoolActiveDh === 'ALL' || normalizeDh(item.dh) === normalizeDh(spoolActiveDh))
+    .filter(item => spoolActiveSubArea === 'all' || spoolCanonicalSubArea(item.subArea, item.area) === spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector))
+    .filter(item => spoolActiveDh === 'ALL' || normalizeDh(item.dh) === normalizeDh(spoolActiveDh));
+  const filtered = locationItems
     .filter(item => spoolAuxStatusFilter === 'all' || item.status === spoolAuxStatusFilter)
     .filter(item => {
       const term = spoolAuxSearchTerm.trim().toLowerCase();
@@ -1849,21 +1901,19 @@ function spoolRenderAuxiliaryControl(app, kind) {
     })
     .sort((a, b) => String(a.number).localeCompare(String(b.number), 'pt-BR', { numeric: true }));
   const totals = ['not-started', 'received', 'installed', 'rejected', 'returned']
-    .reduce((acc, status) => ({ ...acc, [status]: source.filter(item => item.status === status).length }), {});
+    .reduce((acc, status) => ({ ...acc, [status]: locationItems.filter(item => item.status === status).length }), {});
 
   app.innerHTML = `
     ${pageHeader(
-      `Controle de ${plural}`,
-      isSupport
-        ? 'Cadastro de suportes por setor, com identificação do número e tipo fixo ou móvel.'
-        : 'Controle de isométricos por setor e Data Hall, com acompanhamento de recebimento e liberação.',
-      'MÓDULO DE SPOOLS & TUBULAÇÃO',
+      'Controle Operacional de Spools e Suportes',
+      'Um único controle para os mesmos setores, subáreas e Data Halls. Use o filtro de tipo para alternar a lista.',
+      'MÓDULO DE REFRIGERAÇÃO & TUBULAÇÃO',
       `<span id="spoolSyncBadge" class="spool-sync-badge">${icon('clock')} Online · ${source.length} ${plural.toLowerCase()}</span>
        <button id="spoolForceSyncButton" class="button button-outline" onclick="spoolForceSyncNow()" title="Buscar agora as alterações feitas em outros aparelhos">🔄 Atualizar agora</button>
        <button class="button button-green" onclick="spoolOpenAssetModal('${kind}')">${icon('plus')} Novo ${singular}</button>`
     )}
 
-    ${spoolRenderControlTabs()}
+    ${spoolRenderKindFilter()}
 
     <div class="spool-sector-bar" aria-label="Setores da Obra">
       <button type="button" class="spool-sector-btn ${spoolActiveSector === 'all' ? 'active' : ''}" onclick="spoolSelectSector('all')">
@@ -1875,6 +1925,42 @@ function spoolRenderAuxiliaryControl(app, kind) {
           <span>${sector.icon}</span><span>${esc(sector.name)}</span><span class="spool-sector-badge">${count}</span>
         </button>`;
       }).join('')}
+    </div>
+
+    ${availableSubAreas.length ? `
+      <div class="spool-subarea-bar" aria-label="Subáreas da Obra">
+        <span class="spool-subarea-label">🗂️ SUBÁREAS:</span>
+        <button type="button" class="spool-subarea-btn ${spoolActiveSubArea === 'all' ? 'active' : ''}" onclick="spoolSelectSubArea('all')">
+          <span>Todas as Subáreas</span>
+          <span class="spool-sector-badge">${source.filter(item => spoolActiveSector === 'all' || item.area === spoolActiveSector).length}</span>
+        </button>
+        ${availableSubAreas.map(sub => {
+          const subItems = source.filter(item =>
+            (spoolActiveSector === 'all' || item.area === spoolActiveSector) &&
+            spoolCanonicalSubArea(item.subArea, item.area) === sub.id
+          );
+          return `<button type="button" class="spool-subarea-btn ${spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector) === sub.id ? 'active' : ''}" data-subarea="${esc(sub.id)}" onclick="spoolSelectSubArea(this.dataset.subarea)">
+            <span>📍 ${esc(sub.name)}</span><span class="spool-sector-badge">${subItems.length}</span>
+          </button>`;
+        }).join('')}
+      </div>
+    ` : ''}
+
+    <div class="spool-dh-bar" style="margin-bottom:16px; display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
+      <span style="font-size:11px; font-weight:900; color:#475569; text-transform:uppercase; margin-right:6px;">LOCAL POR DATA HALL:</span>
+      <button type="button" class="spool-dh-pill ${spoolActiveDh === 'ALL' ? 'active' : ''}" onclick="spoolSelectDh('ALL')">
+        Todos os DHs <span class="spool-dh-pill-badge">${source.filter(item => spoolActiveSector === 'all' || item.area === spoolActiveSector).length}</span>
+      </button>
+      ${Array.from({ length: 10 }, (_, index) => {
+        const dh = `DH ${String(index + 1).padStart(2, '0')}`;
+        const count = source.filter(item => (spoolActiveSector === 'all' || item.area === spoolActiveSector) && normalizeDh(item.dh) === dh).length;
+        return `<button type="button" class="spool-dh-pill ${normalizeDh(spoolActiveDh) === dh && spoolActiveDh !== 'ALL' ? 'active' : ''}" onclick="spoolSelectDh('${dh}')">
+          ${dh} <span class="spool-dh-pill-badge">${count}</span>
+        </button>`;
+      }).join('')}
+      ${locationItems.length ? `<button type="button" class="button compact spool-protected-delete-button" onclick="spoolClearSupportsInCurrentLocation()" title="Exige a senha do usuário conectado">
+        ${icon('trash')} Excluir todos deste local (${locationItems.length}) 🔒
+      </button>` : ''}
     </div>
 
     <div class="spool-aux-kpis">
@@ -1959,8 +2045,10 @@ function spoolClearAuxFilters() {
   spoolAuxSearchTerm = '';
   spoolAuxStatusFilter = 'all';
   spoolActiveSector = 'all';
+  spoolActiveSubArea = 'all';
   spoolActiveDh = 'ALL';
   localStorage.setItem('obraflow_spool_active_sector', 'all');
+  localStorage.setItem('obraflow_spool_active_subarea', 'all');
   localStorage.setItem('obraflow_spool_active_dh', 'ALL');
   renderSpools();
 }
@@ -2113,6 +2201,123 @@ function spoolDeleteAsset(kind, assetId) {
   toast(`${item.number} excluído.`);
 }
 
+function spoolCancelProtectedDelete() {
+  spoolPendingProtectedDelete = null;
+  closeModal();
+}
+
+function spoolRequestProtectedDelete({ title, description, count, itemLabel, action }) {
+  if (!count || typeof action !== 'function') return;
+  spoolPendingProtectedDelete = { action, count, itemLabel };
+  modal(`
+    <form onsubmit="spoolConfirmProtectedDelete(event)">
+      ${modalHead(title, 'Esta ação exige confirmação com a senha do usuário conectado.')}
+      <div class="modal-body" style="display:grid;gap:14px;">
+        <div style="padding:13px 14px;border:1.5px solid #ef4444;border-radius:10px;background:#fef2f2;color:#991b1b;">
+          <strong style="display:block;margin-bottom:4px;">⚠️ Exclusão protegida de ${count} ${esc(itemLabel)}</strong>
+          <span style="font-size:12px;line-height:1.5;">${esc(description)}</span>
+        </div>
+        <label class="spool-delete-password-box">
+          <span style="font-size:12px;font-weight:800;color:#0f172a;">Senha ou PIN de acesso *</span>
+          <input id="spoolDeletePasswordInput" type="password" name="password" required autocomplete="current-password" placeholder="Digite sua senha para confirmar">
+          <small style="color:#64748b;">Use a mesma senha ou PIN usado para entrar no ObraFlow.</small>
+        </label>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="button button-outline" onclick="spoolCancelProtectedDelete()">Cancelar</button>
+        <button id="spoolProtectedDeleteSubmit" type="submit" class="button" style="background:#dc2626;color:#fff;font-weight:800;">🔒 Confirmar exclusão</button>
+      </div>
+    </form>
+  `, 'modal-medium');
+  setTimeout(() => document.getElementById('spoolDeletePasswordInput')?.focus(), 50);
+}
+
+async function spoolValidateProtectedDeletePassword(password) {
+  const informedPassword = String(password || '').trim();
+  if (!informedPassword) return false;
+
+  // Mantém compatibilidade com os PINs mestres já aceitos no login do sistema.
+  if (informedPassword === '1234' || informedPassword === '0000') return true;
+
+  const activeUser = typeof currentUser !== 'undefined' ? currentUser : null;
+  const approvals = typeof userApprovals !== 'undefined' && Array.isArray(userApprovals) ? userApprovals : [];
+  const activeEmail = String(activeUser?.email || '').trim().toLowerCase();
+  const approval = approvals.find(user =>
+    (activeUser?.id && user?.id === activeUser.id) ||
+    (activeEmail && String(user?.email || '').trim().toLowerCase() === activeEmail)
+  );
+  if (approval?.password) return String(approval.password) === informedPassword;
+
+  const client = typeof getSupabase === 'function' ? getSupabase() : null;
+  if (activeEmail && client?.auth?.signInWithPassword) {
+    try {
+      const { error } = await client.auth.signInWithPassword({ email: activeEmail, password: informedPassword });
+      return !error;
+    } catch (error) {
+      console.warn('Não foi possível validar a senha para exclusão protegida:', error);
+    }
+  }
+  return false;
+}
+
+async function spoolConfirmProtectedDelete(event) {
+  event.preventDefault();
+  const pending = spoolPendingProtectedDelete;
+  if (!pending) return closeModal();
+
+  const submitButton = document.getElementById('spoolProtectedDeleteSubmit');
+  const password = event.target.elements.password?.value || '';
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = '⏳ Validando senha...';
+  }
+
+  const validPassword = await spoolValidateProtectedDeletePassword(password);
+  if (!validPassword) {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = '🔒 Confirmar exclusão';
+    }
+    event.target.elements.password?.select();
+    return toast('Senha incorreta. Nenhum item foi excluído.', true);
+  }
+
+  spoolPendingProtectedDelete = null;
+  closeModal();
+  try {
+    await pending.action();
+  } catch (error) {
+    console.error('Falha na exclusão protegida:', error);
+    toast('Não foi possível concluir a exclusão. Os dados foram preservados.', true);
+  }
+}
+
+function spoolClearSupportsInCurrentLocation() {
+  const items = spoolSupportDb.filter(item =>
+    (spoolActiveSector === 'all' || item.area === spoolActiveSector) &&
+    (spoolActiveSubArea === 'all' || spoolCanonicalSubArea(item.subArea, item.area) === spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector)) &&
+    (spoolActiveDh === 'ALL' || normalizeDh(item.dh) === normalizeDh(spoolActiveDh))
+  );
+  if (!items.length) return toast('Não há suportes neste local para excluir.', true);
+
+  const ids = new Set(items.map(item => item.id));
+  const sectorLabel = spoolActiveSector === 'all' ? 'todos os setores' : spoolGetSectorMeta(spoolActiveSector, spoolGetAllControlItems()).name;
+  const subAreaLabel = spoolActiveSubArea === 'all' ? '' : `, subárea ${spoolActiveSubArea}`;
+  const dhLabel = spoolActiveDh === 'ALL' ? 'todos os Data Halls' : spoolActiveDh;
+  spoolRequestProtectedDelete({
+    title: 'Excluir todos os suportes deste local?',
+    description: `Serão excluídos ${items.length} suporte(s) de ${sectorLabel}${subAreaLabel}, ${dhLabel}. Esta ação será sincronizada com os outros aparelhos.`,
+    count: items.length,
+    itemLabel: items.length === 1 ? 'suporte' : 'suportes',
+    action: () => {
+      spoolSupportDb = spoolSupportDb.filter(item => !ids.has(item.id));
+      spoolSaveAuxiliary();
+      renderSpools();
+      toast(`🗑️ ${items.length} suporte(s) excluído(s) com senha confirmada.`);
+    }
+  });
+}
+
 /* ==========================================================================
    RENDERIZAÇÃO DA TELA PRINCIPAL (renderSpools)
    ========================================================================== */
@@ -2124,14 +2329,10 @@ function renderSpools() {
     spoolRenderAuxiliaryControl(app, 'support');
     return;
   }
-  if (spoolControlView === 'isometrics') {
-    spoolRenderAuxiliaryControl(app, 'iso');
-    return;
-  }
 
   const todayStr = getLocalDateStr();
   const filterDate = spoolSelectedDate || todayStr;
-  const availableSectors = spoolGetAvailableSectors(spoolDb);
+  const availableSectors = spoolGetAvailableSectors(spoolGetAllControlItems());
 
   // Um setor salvo de uma planilha antiga não pode manter a tela vazia depois
   // que outra planilha, com setores diferentes, substituir a base.
@@ -2142,7 +2343,7 @@ function renderSpools() {
     localStorage.setItem('obraflow_spool_active_subarea', 'all');
   }
 
-  const availableSubAreas = spoolGetAvailableSubAreas(spoolDb, spoolActiveSector);
+  const availableSubAreas = spoolGetAvailableSubAreas(spoolGetAllControlItems(), spoolActiveSector);
   const activeSubAreaKey = spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector);
   if (spoolActiveSubArea !== 'all' && !availableSubAreas.some(sub => sub.id === activeSubAreaKey)) {
     spoolActiveSubArea = 'all';
@@ -2151,7 +2352,7 @@ function renderSpools() {
 
   // Atualizar badge do menu lateral com o total de spools cadastrados
   const navCount = document.getElementById('navSpoolCount');
-  if (navCount) navCount.textContent = spoolDb.length;
+  if (navCount) navCount.textContent = spoolDb.length + spoolSupportDb.length;
 
   // Lista com todos os filtros aplicados
   const filteredSpools = spoolFilterList(spoolDb);
@@ -2194,8 +2395,8 @@ function renderSpools() {
 
   app.innerHTML = `
     ${pageHeader(
-      'Controle Operacional de Spools',
-      'Acompanhamento diário de montagem por DH, trechos retos e derivações com apontamento em 1 clique.',
+      'Controle Operacional de Spools e Suportes',
+      'Um único controle para os mesmos setores, subáreas e Data Halls. Use o filtro de tipo para alternar a lista.',
       'MÓDULO DE REFRIGERAÇÃO & TUBULAÇÃO',
       `<span id="spoolSyncBadge" class="spool-sync-badge">${icon('clock')} Online (${spoolDb.length} spools)</span>
        <button id="spoolForceSyncButton" class="button button-outline" onclick="spoolForceSyncNow()" title="Buscar agora as alterações feitas no tablet ou em outro computador">🔄 Atualizar agora</button>
@@ -2212,7 +2413,7 @@ function renderSpools() {
        <button class="button button-outline" onclick="spoolOpenManualEntryModal()" title="Escrever / colar tags manualmente">${icon('plus')} Escrever Spools</button>`
     )}
 
-    ${spoolRenderControlTabs()}
+    ${spoolRenderKindFilter()}
 
     <!-- BANNER DE AJUDA SE O FILTRO ATUAL ESTIVER VAZIO MAS EXISTIREM SPOOLS CADASTRADOS -->
     ${(filteredSpools.length === 0 && spoolDb.length > 0) ? `
@@ -2304,8 +2505,8 @@ function renderSpools() {
         `;
       }).join('')}
       ${(spoolActiveDh !== 'ALL' && spoolDb.some(s => normalizeDh(s.dh) === normalizeDh(spoolActiveDh))) ? `
-        <button type="button" class="button compact" style="margin-left:auto; background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-size:11px; font-weight:800; padding:5px 12px; border-radius:6px; cursor:pointer;" onclick="spoolClearDh('${spoolActiveDh}')" title="Apagar todos os spools do ${spoolActiveDh}">
-          ${icon('trash')} Limpar spools do ${spoolActiveDh} (${spoolDb.filter(s => normalizeDh(s.dh) === normalizeDh(spoolActiveDh)).length})
+        <button type="button" class="button compact spool-protected-delete-button" onclick="spoolClearDh('${spoolActiveDh}')" title="Exige a senha do usuário conectado">
+          ${icon('trash')} Excluir todos os spools do ${spoolActiveDh} (${spoolDb.filter(s => normalizeDh(s.dh) === normalizeDh(spoolActiveDh)).length}) 🔒
         </button>
       ` : ''}
     </div>
@@ -2638,7 +2839,7 @@ function renderSpools() {
           ✏️ Editar Selecionados
         </button>
         <button type="button" class="button compact" style="background:#dc2626; color:#ffffff; font-weight:800; border:none; height:32px; padding:4px 14px; border-radius:6px; cursor:pointer;" onclick="spoolBulkDelete()">
-          🗑️ Excluir Selecionados
+          🔒 Excluir Selecionados
         </button>
         <button type="button" class="button compact" onclick="spoolBulkReject()" style="background:#b91c1c; color:#ffffff; font-weight:800; border:none; height:32px; padding:4px 12px; border-radius:6px; cursor:pointer;">
           🔴 Reprovar
@@ -2907,7 +3108,7 @@ function spoolRenderTubeTable(list, filterDate) {
             ✏️ Editar Selecionados
           </button>
           <button type="button" class="button compact" onclick="spoolBulkDelete()" style="background:#dc2626; color:#ffffff; font-weight:800; border:none; height:30px; padding:4px 14px; border-radius:6px; cursor:pointer; font-size:12px;">
-            🗑️ Excluir Selecionados
+            🔒 Excluir Selecionados
           </button>
           <button type="button" class="button compact" onclick="spoolBulkReject()" style="background:#dc2626; color:#ffffff; font-weight:800; border:none; height:30px; padding:4px 12px; border-radius:6px; cursor:pointer; font-size:12px;">
             🔴 Marcar Reprovado
@@ -4587,7 +4788,7 @@ async function spoolHandleExcelUpload(event) {
           parsedSpools.push({
             id: `spool-${targetDh.replace(/\s+/g, '')}-${sectorVal}-${tagVal}${safePartId}`,
             number: tagVal,
-            part: partSuffix || '',
+            part: spoolNormalizePart(partSuffix || ''),
             subArea: subAreaColVal || '',
             dh: targetDh,
             area: sectorVal,
@@ -4608,6 +4809,7 @@ async function spoolHandleExcelUpload(event) {
             returnedAt,
             returnedBy,
             returnedReason,
+            circuit: spoolResolveCircuit({ notes: notesVal }),
             notes: notesVal
           });
         });
@@ -4789,10 +4991,10 @@ function spoolConfirmImport(importedSpools) {
   } else {
     // merge: atualiza existentes ou adiciona novos
     list.forEach(imp => {
-      const existing = spoolDb.find(s =>
-        (s.id === imp.id) ||
-        (s.number === imp.number && (s.part || '') === (imp.part || '') && s.area === imp.area && normalizeDh(s.dh) === normalizeDh(imp.dh))
-      );
+      // A mesma TAG pode existir em partes, circuitos e subáreas diferentes.
+      // Usa a mesma identidade composta adotada pelo cadastro e pela sincronização.
+      const importedKey = spoolRecordKey(imp);
+      const existing = spoolDb.find(s => spoolRecordKey(s) === importedKey);
       if (existing) {
         existing.type = imp.type;
         existing.diameter = imp.diameter;
@@ -4932,14 +5134,19 @@ function spoolClearDh(dhName) {
   const items = spoolDb.filter(s => normalizeDh(s.dh) === norm);
   if (!items.length) return toast(`Não há spools cadastrados no ${norm}.`, true);
 
-  if (!confirm(`Deseja realmente apagar TODOS os ${items.length} spool(s) do ${norm}?`)) {
-    return;
-  }
-
-  spoolDb = spoolDb.filter(s => normalizeDh(s.dh) !== norm);
-  spoolSaveAll(spoolDb, { allowMassDelete: true, reason: `exclusao-${norm}` });
-  renderSpools();
-  toast(`🗑️ ${items.length} spool(s) do ${norm} apagado(s) com sucesso.`);
+  const ids = new Set(items.map(item => item.id));
+  spoolRequestProtectedDelete({
+    title: `Excluir todos os spools do ${norm}?`,
+    description: `Serão excluídos permanentemente ${items.length} spool(s) do ${norm}. Um backup local de recuperação será criado antes da alteração.`,
+    count: items.length,
+    itemLabel: items.length === 1 ? 'spool' : 'spools',
+    action: () => {
+      spoolDb = spoolDb.filter(item => !ids.has(item.id));
+      spoolSaveAll(spoolDb, { allowMassDelete: true, reason: `exclusao-${norm}` });
+      renderSpools();
+      toast(`🗑️ ${items.length} spool(s) do ${norm} excluído(s) com senha confirmada.`);
+    }
+  });
 }
 
 /* ==========================================================================
@@ -5197,17 +5404,21 @@ function spoolBulkDelete() {
   const ids = spoolGetSelectedIds({ visibleOnly: true });
   if (!ids.length) return toast('Selecione ao menos um spool para excluir.', true);
 
-  if (!confirm(`⚠️ Deseja realmente excluir permanentemente os ${ids.length} spool(s) selecionado(s)? Esta ação não poderá ser desfeita.`)) {
-    return;
-  }
-
   const idSet = new Set(ids);
-  spoolDb = spoolDb.filter(s => !idSet.has(s.id));
-  spoolSelectedIds.clear();
-  spoolMultiSelectMode = false;
-  spoolSaveAll(spoolDb, { allowMassDelete: true, reason: 'exclusao-em-lote' });
-  renderSpools();
-  toast(`🗑️ ${ids.length} spool(s) excluído(s) com sucesso!`);
+  spoolRequestProtectedDelete({
+    title: 'Excluir os spools selecionados?',
+    description: `Serão excluídos permanentemente ${ids.length} spool(s) selecionado(s). Um backup local de recuperação será criado antes da alteração.`,
+    count: ids.length,
+    itemLabel: ids.length === 1 ? 'spool' : 'spools',
+    action: () => {
+      spoolDb = spoolDb.filter(item => !idSet.has(item.id));
+      spoolSelectedIds.clear();
+      spoolMultiSelectMode = false;
+      spoolSaveAll(spoolDb, { allowMassDelete: true, reason: 'exclusao-em-lote' });
+      renderSpools();
+      toast(`🗑️ ${ids.length} spool(s) excluído(s) com senha confirmada.`);
+    }
+  });
 }
 
 function spoolBulkReject() {
@@ -5545,7 +5756,7 @@ function spoolSaveManualBatch(event) {
   const parsedTags = tags.map(rawTag => {
     const match = rawTag.match(/^(.+?)\s*[\(\[\-]\s*(\d+\s*(?:de|\/)\s*\d+|parte\s*\d+|sub\s*\d+)\s*[\)\]]?$/i);
     return match
-      ? { number: match[1].trim(), part: match[2].trim(), explicitPart: true }
+      ? { number: match[1].trim(), part: spoolNormalizePart(match[2]), explicitPart: true }
       : { number: rawTag, part: `${partCurrent} de ${partTotal}`, explicitPart: false };
   });
 
@@ -5566,31 +5777,26 @@ function spoolSaveManualBatch(event) {
   let count = 0;
   let skipped = 0;
   parsedTags.forEach(({ number, part }) => {
-    const existing = spoolDb.find(s =>
-      s.number === number &&
-      (s.part || '') === part &&
-      s.area === sector &&
-      normalizeDh(s.dh) === dh &&
-      spoolCanonicalSubArea(s.subArea, s.area) === spoolCanonicalSubArea(subArea, sector)
-    );
+    const newSpool = {
+      number: String(number || '').trim(),
+      part: spoolNormalizePart(part),
+      subArea,
+      dh,
+      area: sector,
+      sectorName,
+      type,
+      diameter,
+      status: 'not-started',
+      installedDate: '',
+      installedAt: '',
+      installedBy: '',
+      receivedDate: '',
+      receivedAt: '',
+      notes
+    };
+    const newSpoolKey = spoolRecordKey(newSpool);
+    const existing = spoolDb.find(s => spoolRecordKey(s) === newSpoolKey);
     if (!existing) {
-      const newSpool = {
-        number,
-        part,
-        subArea,
-        dh,
-        area: sector,
-        sectorName,
-        type,
-        diameter,
-        status: 'not-started',
-        installedDate: '',
-        installedAt: '',
-        installedBy: '',
-        receivedDate: '',
-        receivedAt: '',
-        notes
-      };
       newSpool.id = spoolBuildStableId(newSpool);
       spoolDb.push(newSpool);
       count++;
@@ -5600,7 +5806,7 @@ function spoolSaveManualBatch(event) {
   });
 
   if (!count) {
-    return toast('Nenhum spool novo foi cadastrado. A TAG, parte, setor, DH e subárea informados já existem.', true);
+    return toast('Esta peça já está cadastrada neste local. O mesmo número de spool é permitido quando a parte/sequência ou o circuito forem diferentes.', true);
   }
 
   spoolSaveAll(spoolDb);
@@ -6257,22 +6463,28 @@ function spoolPromptFallbackCopy(text, title = 'Relatório de Spools') {
 
 function spoolClearSectorData(sectorId, dh) {
   const sectorName = sectorId === 'all' ? 'Todos os Setores' : (SPOOL_SECTORS[sectorId]?.name || sectorId);
-  const count = spoolDb.filter(s => (sectorId === 'all' || s.area === sectorId) && (dh === 'ALL' || normalizeDh(s.dh) === normalizeDh(dh))).length;
+  const items = spoolDb.filter(s => (sectorId === 'all' || s.area === sectorId) && (dh === 'ALL' || normalizeDh(s.dh) === normalizeDh(dh)));
+  const count = items.length;
 
   if (!count) return toast('Não há spools cadastrados neste setor para limpar.', true);
 
-  if (!confirm(`Deseja realmente apagar TODOS os ${count} spools do ${sectorName} (${dh})?`)) {
-    return;
-  }
-
-  spoolDb = spoolDb.filter(s => !((sectorId === 'all' || s.area === sectorId) && (dh === 'ALL' || normalizeDh(s.dh) === normalizeDh(dh))));
-  spoolSaveAll(spoolDb, { allowMassDelete: true, reason: `limpeza-${dh}-${sectorId}` });
-  renderSpools();
-  toast(`🗑️ Spools apagados com sucesso.`);
+  const ids = new Set(items.map(item => item.id));
+  spoolRequestProtectedDelete({
+    title: `Excluir todos os spools de ${sectorName}?`,
+    description: `Serão excluídos ${count} spool(s) de ${sectorName} (${dh}). Um backup local de recuperação será criado antes da alteração.`,
+    count,
+    itemLabel: count === 1 ? 'spool' : 'spools',
+    action: () => {
+      spoolDb = spoolDb.filter(item => !ids.has(item.id));
+      spoolSaveAll(spoolDb, { allowMassDelete: true, reason: `limpeza-${dh}-${sectorId}` });
+      renderSpools();
+      toast('🗑️ Spools excluídos com senha confirmada.');
+    }
+  });
 }
 
 function spoolTotalCount() {
-  return spoolDb.length;
+  return spoolDb.length + spoolSupportDb.length;
 }
 
 function spoolOpenTrackingModal(spoolId) {
@@ -6630,3 +6842,6 @@ window.spoolSetAuxSearch = spoolSetAuxSearch;
 window.spoolSetAuxStatusFilter = spoolSetAuxStatusFilter;
 window.spoolClearAuxFilters = spoolClearAuxFilters;
 window.spoolForceSyncNow = spoolForceSyncNow;
+window.spoolClearSupportsInCurrentLocation = spoolClearSupportsInCurrentLocation;
+window.spoolConfirmProtectedDelete = spoolConfirmProtectedDelete;
+window.spoolCancelProtectedDelete = spoolCancelProtectedDelete;
