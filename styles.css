@@ -2094,6 +2094,48 @@ body.sidebar-collapsed .mobile-menu { display: inline-grid !important; }
     touch-action: pan-x pan-y;
   }
 
+  /* Quadro de efetivo compacto no mobile — cabe sem scroll horizontal */
+  .quadro-efetivo-table {
+    min-width: 0;
+    width: 100%;
+    font-size: 11px;
+  }
+  .quadro-efetivo-table th {
+    padding: 7px 4px;
+    font-size: 9px;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  /* Abreviar rótulos dos cabeçalhos via CSS content */
+  .quadro-efetivo-table thead th:nth-child(1)::after { content: ''; }
+  .quadro-efetivo-table thead th:nth-child(2) { font-size: 0; }
+  .quadro-efetivo-table thead th:nth-child(2)::after { content: 'DIUR.'; font-size: 9px; }
+  .quadro-efetivo-table thead th:nth-child(3) { font-size: 0; }
+  .quadro-efetivo-table thead th:nth-child(3)::after { content: 'NOT.'; font-size: 9px; }
+  .quadro-efetivo-table thead th:nth-child(4) { font-size: 0; }
+  .quadro-efetivo-table thead th:nth-child(4)::after { content: 'S/T'; font-size: 9px; }
+  .quadro-efetivo-table thead th:nth-child(5) { font-size: 0; }
+  .quadro-efetivo-table thead th:nth-child(5)::after { content: 'PRES.'; font-size: 9px; }
+  .quadro-efetivo-table thead th:nth-child(6) { font-size: 0; }
+  .quadro-efetivo-table thead th:nth-child(6)::after { content: 'TOTAL'; font-size: 9px; }
+  .quadro-efetivo-table td {
+    padding: 7px 4px;
+    font-size: 11px;
+  }
+  .quadro-col-company {
+    font-size: 10px;
+    word-break: break-word;
+    max-width: 110px;
+  }
+  .quadro-col-shift, .quadro-col-daily, .quadro-col-geral {
+    font-size: 12px;
+    min-width: 28px;
+  }
+  .quadro-efetivo-table tfoot td {
+    padding: 7px 4px;
+    font-size: 11px;
+  }
+
   /* O modal de importação/edição precisa continuar rolando mesmo
      quando o body fica travado ao fundo. */
   .modal-backdrop {
