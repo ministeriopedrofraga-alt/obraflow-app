@@ -5679,7 +5679,7 @@ function updateWorkforceSummaryUI(date = workforceSummaryDate) {
   });
 }
 
-function setWorkforceAttendance(encodedKey, date, value) {
+function setWorkforceAttendance(encodedKey, date, value, callerButton = null) {
   if (!isMasterUser()) {
     toast('Apenas usuários com perfil Master podem alterar a presença do efetivo.', true);
     return;
@@ -5694,7 +5694,25 @@ function setWorkforceAttendance(encodedKey, date, value) {
   workforceDataRevision++;
   saveLocalBackup();
   scheduleWorkforceRemoteSave();
-  
+
+  const presentation = attendancePresentation(normalizedValue);
+
+  // Atualiza visualmente a célula da tabela mensal de forma cirúrgica e imediata.
+  // Prioriza o botão passado diretamente (evita querySelector frágil com onclick*);
+  // caso contrário busca pela linha da pessoa na tabela e encontra a célula da data.
+  const cellBtn = callerButton instanceof HTMLElement && callerButton.classList.contains('attendance-cell')
+    ? callerButton
+    : (() => {
+        const row = document.querySelector(`.workforce-control-row[data-person-key="${encodedKey}"]`);
+        return row ? row.querySelector(`button.attendance-cell[data-date="${date}"]`) : null;
+      })();
+  if (cellBtn) {
+    cellBtn.dataset.value = presentation.value;
+    cellBtn.className = `attendance-cell ${presentation.state}`;
+    cellBtn.textContent = presentation.label;
+    cellBtn.title = `${presentation.title} · clique para alterar`;
+  }
+
   // Atualiza visualmente o card mobile/diário de forma cirúrgica (sem perder rolagem)
   const card = document.querySelector(`.workforce-mobile-card[data-person-key="${encodedKey}"]`);
   if (card) {
@@ -5705,20 +5723,9 @@ function setWorkforceAttendance(encodedKey, date, value) {
     else if (normalizedValue === 'FOLGA') card.querySelector('.att-off')?.classList.add('active');
     const shiftStatus = card.querySelector('.workforce-shift-status');
     if (shiftStatus) {
-      const presentation = attendancePresentation(normalizedValue);
       shiftStatus.className = `workforce-shift-status ${presentation.state}`;
       shiftStatus.textContent = presentation.title;
     }
-  }
-
-  // Atualiza a célula correspondente na tabela mensal se estiver presente
-  const cellBtn = document.querySelector(`button.attendance-cell[data-date="${date}"][onclick*="${encodedKey}"]`);
-  if (cellBtn) {
-    const presentation = attendancePresentation(normalizedValue);
-    cellBtn.dataset.value = presentation.value;
-    cellBtn.className = `attendance-cell ${presentation.state}`;
-    cellBtn.textContent = presentation.label;
-    cellBtn.title = `${presentation.title} · clique para alterar`;
   }
 
   // A edição de outra coluna não deve trocar silenciosamente a data do resumo.
@@ -6070,7 +6077,9 @@ function cycleWorkforceAttendance(encodedKey, date, button) {
   const order = ['', 'D', 'N', '0', 'FOLGA'];
   const currentForCycle = current === '1' ? '' : normalizeAttendanceValue(current);
   const next = order[(order.indexOf(currentForCycle) + 1) % order.length];
-  setWorkforceAttendance(encodedKey, date, next);
+  // Passa o botão diretamente para que setWorkforceAttendance possa atualizar
+  // a célula de forma imediata e precisa, sem depender de querySelector frágil.
+  setWorkforceAttendance(encodedKey, date, next, button);
 }
 function openPersonModal(index=null) {
   if (!isMasterUser()) {
