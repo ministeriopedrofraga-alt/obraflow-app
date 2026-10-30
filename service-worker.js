@@ -1,19 +1,19 @@
 const CACHE_PREFIX = 'datacenter-omnia-';
-const SHELL_CACHE = `${CACHE_PREFIX}shell-20261027-spool-support-unified-v2`;
-const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-20261027-spool-support-unified-v2`;
+const SHELL_CACHE = `${CACHE_PREFIX}shell-20261029-workforce-master-only-v1`;
+const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-20261029-workforce-master-only-v1`;
 
 const APP_SHELL = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
-  '/styles.css?v=20261027_spool_support_unified_v2',
+  '/styles.css?v=20261029_workforce_master_only_v1',
   '/offline-sync.js?v=20261021_1',
   '/inventory.js?v=20261017_4',
   '/cautelas.js?v=20261021_offline_sync_v1',
   '/radios.js?v=20261023_workforce_source_v1',
   '/spools.js?v=20261027_spool_support_unified_v2',
   '/qr-scanner.js?v=20261017_1',
-  '/app.js?v=20261027_workforce_total_scope_v11',
+  '/app.js?v=20261029_workforce_master_only_v1',
   '/exceljs.min.js',
   '/assets/workforce-seed.json',
   '/assets/heating-cooling-logo.png',

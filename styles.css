@@ -411,7 +411,8 @@ h3 { font-size: 14px; }
 .workforce-control-table .workforce-sticky-person strong, .workforce-control-table .workforce-sticky-person small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workforce-control-table .workforce-sticky-person small { margin-top: 2px; color: var(--muted); font-size: 8px; }
 .attendance-cell { display: grid; width: 29px; height: 29px; margin: auto; place-items: center; border: 1px solid transparent; border-radius: 7px; font: 800 10px DM Sans,sans-serif; cursor: pointer; transition: transform .12s ease,box-shadow .12s ease; }
-.attendance-cell:hover { transform: translateY(-1px); box-shadow: 0 3px 9px #10251b1a; }
+.attendance-cell:hover:not(:disabled):not(.read-only) { transform: translateY(-1px); box-shadow: 0 3px 9px #10251b1a; }
+.attendance-cell:disabled, .attendance-cell.read-only { cursor: default !important; transform: none !important; box-shadow: none !important; }
 .attendance-cell.present { color: #52616b; border-color: #cfd9df; background: #edf1f4; }
 .attendance-cell.day { color: #17613f; border-color: #9fd4b6; background: #d9f3e4; }
 .attendance-cell.night { color: #4338a0; border-color: #bbb7ee; background: #e9e8ff; }

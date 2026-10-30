@@ -367,7 +367,7 @@ function normalizeAccessRole(role) {
     .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ');
 
-  if (['admin', 'administrador', 'administradora', 'administrator', 'super admin', 'superadmin'].includes(key)) return 'admin';
+  if (['admin', 'administrador', 'administradora', 'administrator', 'super admin', 'superadmin', 'master', 'usuario master', 'master admin'].includes(key)) return 'admin';
   if (['gestor', 'gestora', 'gestor de obra', 'gestora de obra', 'manager', 'gerente', 'almoxarife'].includes(key)) return 'gestor';
   if (['engenheiro', 'engenheira', 'engenheiro fiscal', 'fiscal'].includes(key)) return 'engenheiro';
   if (['operator', 'operador', 'operadora', 'operador de campo', 'tecnico', 'tecnica'].includes(key)) return 'operador';
@@ -377,6 +377,14 @@ function normalizeAccessRole(role) {
 function isSystemAdminEmail(email) {
   return SYSTEM_ADMIN_EMAILS.has(String(email || '').trim().toLowerCase());
 }
+
+function isMasterUser(user = currentUser) {
+  if (!user) return false;
+  if (isSystemAdminEmail(user.email)) return true;
+  const role = getEffectiveAccessRole(user);
+  return role === 'admin';
+}
+window.isMasterUser = isMasterUser;
 
 function getEffectiveAccessRole(user = currentUser) {
   if (!user) return 'visitante';
@@ -398,7 +406,7 @@ function getEffectiveAccessRole(user = currentUser) {
 
 function accessRoleLabel(role) {
   const labels = {
-    admin: 'Administrador',
+    admin: 'Master / Administrador',
     gestor: 'Gestor de obra',
     engenheiro: 'Engenheiro / Fiscal',
     operador: 'Operador de campo',
@@ -3594,7 +3602,8 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
                   <select onchange="updatePendingUserRole('${esc(u.id)}', this.value, '${esc(u.email)}')" style="padding:4px 8px; border-radius:6px; border:1px solid var(--line); font-size:12px;">
                     <option value="operador" ${u.role === 'operador' ? 'selected' : ''}>Operador de Campo</option>
                     <option value="engenheiro" ${u.role === 'engenheiro' ? 'selected' : ''}>Engenheiro</option>
-                    <option value="gestor" ${u.role === 'gestor' || u.role === 'admin' ? 'selected' : ''}>Gestor de Obra</option>
+                    <option value="gestor" ${u.role === 'gestor' ? 'selected' : ''}>Gestor de Obra</option>
+                    <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Master / Administrador</option>
                   </select>
                 </td>
                 <td style="padding:14px 16px; color:var(--muted); font-size:12px;">${fullDate(u.created_at)}</td>
@@ -3639,9 +3648,12 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
                 <td style="padding:14px 16px; color:var(--muted);">${esc(u.email)}</td>
                 <td style="padding:14px 16px;">${esc(u.company || '—')}</td>
                 <td style="padding:14px 16px;">
-                  <span class="badge" style="background:${u.role==='gestor'||u.role==='admin'?'#e7f5ee':'#eaf3fb'}; color:${u.role==='gestor'||u.role==='admin'?'#206b49':'#3977b9'}; padding:3px 8px; border-radius:6px; font-weight:700; font-size:11px;">
-                    ${u.role === 'gestor' || u.role === 'admin' ? 'Gestor de Obra' : u.role === 'engenheiro' ? 'Engenheiro' : 'Operador'}
-                  </span>
+                  <select onchange="updateApprovedUserRole('${esc(u.id)}', this.value, '${esc(u.email)}')" style="padding:4px 8px; border-radius:6px; border:1px solid var(--line); font-size:12px; font-weight:700; color:${u.role==='admin'?'#206b49':u.role==='gestor'?'#206b49':'#334155'};">
+                    <option value="operador" ${u.role === 'operador' ? 'selected' : ''}>Operador de Campo</option>
+                    <option value="engenheiro" ${u.role === 'engenheiro' ? 'selected' : ''}>Engenheiro</option>
+                    <option value="gestor" ${u.role === 'gestor' ? 'selected' : ''}>Gestor de Obra</option>
+                    <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Master / Administrador</option>
+                  </select>
                 </td>
                 <td style="padding:14px 16px; color:var(--muted); font-size:12px;">${fullDate(u.approved_at || u.created_at)}</td>
                 <td style="padding:14px 16px; text-align:right; white-space:nowrap;">
@@ -3926,6 +3938,22 @@ function updatePendingUserRole(id, newRole, email) {
     user.updated_at = new Date().toISOString();
     localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
     saveUserApprovalToSupabase(user);
+  }
+}
+
+async function updateApprovedUserRole(id, newRole, email) {
+  if (!isMasterUser()) {
+    toast('Apenas o Administrador Master pode alterar perfis de acesso.', true);
+    return;
+  }
+  const user = findUserApproval(id, email);
+  if (user) {
+    user.role = normalizeAccessRole(newRole);
+    user.updated_at = new Date().toISOString();
+    localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
+    await saveUserApprovalToSupabase(user);
+    toast(`Perfil de ${user.name} atualizado para ${accessRoleLabel(user.role)}.`);
+    renderUserManagement();
   }
 }
 
@@ -5497,7 +5525,12 @@ function workforceAttendanceCell(person, date) {
   const value = workforceAttendanceValue(person, date);
   const presentation = attendancePresentation(value);
   const encodedKey = encodeURIComponent(workforcePersonKey(person)).replace(/'/g, '%27');
-  return `<button type="button" class="attendance-cell ${presentation.state}" data-value="${presentation.value}" data-date="${date}" title="${presentation.title} · clique para alterar" onclick="cycleWorkforceAttendance('${encodedKey}','${date}',this)">${presentation.label}</button>`;
+  const canEdit = isMasterUser();
+  const title = canEdit
+    ? `${presentation.title} · clique para alterar`
+    : `${presentation.title} (Apenas Master pode alterar)`;
+  const disabledAttr = canEdit ? '' : 'disabled aria-disabled="true"';
+  return `<button type="button" class="attendance-cell ${presentation.state} ${canEdit ? '' : 'read-only'}" data-value="${presentation.value}" data-date="${date}" title="${title}" ${disabledAttr} onclick="cycleWorkforceAttendance('${encodedKey}','${date}',this)">${presentation.label}</button>`;
 }
 
 function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
@@ -5576,10 +5609,22 @@ function workforceDailySummaryHTML(date = workforceSummaryDate) {
 
 function renderWorkforceDailyCardsHTML(companies) {
   const date = workforceSummaryDate;
+  const canEdit = isMasterUser();
   const cards = workforce.map(person => {
     const encodedKey = encodeURIComponent(workforcePersonKey(person)).replace(/'/g, '%27');
     const val = workforceAttendanceValue(person, date);
     const presentation = attendancePresentation(val);
+    const actionsHTML = canEdit ? `
+        <div class="workforce-mobile-card-actions">
+          <button type="button" class="mobile-att-btn att-day ${val === 'D' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', 'D')">D Diurno</button>
+          <button type="button" class="mobile-att-btn att-night ${val === 'N' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', 'N')">N Noturno</button>
+          <button type="button" class="mobile-att-btn att-absent ${val === '0' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', '0')">0 Aus.</button>
+          <button type="button" class="mobile-att-btn att-off ${val === 'FOLGA' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', 'FOLGA')">F Folga</button>
+          <button type="button" class="mobile-att-btn att-clear" onclick="setWorkforceAttendance('${encodedKey}', '${date}', '')" title="Limpar marcação">✕</button>
+        </div>` : `
+        <div class="workforce-mobile-card-actions read-only" style="opacity:0.75; font-size:11px; color:var(--muted); padding-top:4px;">
+          <span style="display:inline-flex; align-items:center; gap:4px;">🔒 Apenas perfil Master pode alterar</span>
+        </div>`;
     return `
       <div class="workforce-mobile-card" data-person-key="${encodedKey}" data-company="${esc(person.company)}" data-search="${esc(normalizeWorkforceSearch(`${person.name} ${person.company} ${person.role || ''}`))}">
         <div class="workforce-mobile-card-info">
@@ -5587,13 +5632,7 @@ function renderWorkforceDailyCardsHTML(companies) {
           <small>${esc(person.company)} · ${esc(person.role || 'Sem função')}</small>
           <span class="workforce-shift-status ${presentation.state}">${esc(presentation.title)}</span>
         </div>
-        <div class="workforce-mobile-card-actions">
-          <button type="button" class="mobile-att-btn att-day ${val === 'D' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', 'D')">D Diurno</button>
-          <button type="button" class="mobile-att-btn att-night ${val === 'N' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', 'N')">N Noturno</button>
-          <button type="button" class="mobile-att-btn att-absent ${val === '0' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', '0')">0 Aus.</button>
-          <button type="button" class="mobile-att-btn att-off ${val === 'FOLGA' ? 'active' : ''}" onclick="setWorkforceAttendance('${encodedKey}', '${date}', 'FOLGA')">F Folga</button>
-          <button type="button" class="mobile-att-btn att-clear" onclick="setWorkforceAttendance('${encodedKey}', '${date}', '')" title="Limpar marcação">✕</button>
-        </div>
+        ${actionsHTML}
       </div>
     `;
   }).join('');
@@ -5641,6 +5680,10 @@ function updateWorkforceSummaryUI(date = workforceSummaryDate) {
 }
 
 function setWorkforceAttendance(encodedKey, date, value) {
+  if (!isMasterUser()) {
+    toast('Apenas usuários com perfil Master podem alterar a presença do efetivo.', true);
+    return;
+  }
   const key = decodeURIComponent(encodedKey);
   const normalizedValue = normalizeAttendanceValue(value);
   if (!workforceAttendance[key]) workforceAttendance[key] = {};
@@ -5765,7 +5808,8 @@ function renderWorkforceControl(companies) {
 }
 
 function renderWorkforceDirectory(companies) {
-  return `<div class="simple-filters workforce-filters"><label class="search-box">${icon('search')}<input id="workforceSearch" type="search" placeholder="Buscar nome, função, contato ou empresa..." oninput="filterWorkforce()"></label><label class="filter-field"><span>Empresa</span><select id="workforceCompany" onchange="filterWorkforce()"><option value="">Todas</option>${companies.map(company=>`<option>${esc(company)}</option>`).join('')}</select></label></div><article class="panel"><div class="panel-head"><div><h2>Pessoas cadastradas</h2><p>Fonte única para responsáveis de equipamentos, rádios e checklists</p></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Nome</th><th>Empresa</th><th>Função</th><th>Vínculo</th><th>Contato</th><th></th></tr></thead><tbody>${workforce.map((person,index)=>`<tr class="workforce-row" data-person-key="${encodeURIComponent(workforcePersonKey(person)).replace(/'/g,'%27')}" data-company="${esc(person?.company||'')}" data-search="${esc(normalizeWorkforceSearch(`${person?.name||''} ${person?.company||''} ${person?.role||''} ${person?.phone||''}`))}"><td><strong>${esc(person?.name||'')}</strong></td><td>${esc(person?.company||'')}</td><td>${esc(person?.role||'—')}</td><td>${esc(person?.status||'—')}</td><td>${esc(person?.phone||'—')}</td><td><div class="control-row-actions"><button class="icon-button" title="Editar" onclick="openPersonModal(${index})">${icon('edit')}</button><button class="icon-button" title="Excluir" onclick="deletePerson(${index})">${icon('trash')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="no-filter-results" id="noWorkforceResults">Nenhuma pessoa encontrada.</div></article>`;
+  const canEdit = isMasterUser();
+  return `<div class="simple-filters workforce-filters"><label class="search-box">${icon('search')}<input id="workforceSearch" type="search" placeholder="Buscar nome, função, contato ou empresa..." oninput="filterWorkforce()"></label><label class="filter-field"><span>Empresa</span><select id="workforceCompany" onchange="filterWorkforce()"><option value="">Todas</option>${companies.map(company=>`<option>${esc(company)}</option>`).join('')}</select></label></div><article class="panel"><div class="panel-head"><div><h2>Pessoas cadastradas</h2><p>Fonte única para responsáveis de equipamentos, rádios e checklists</p></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Nome</th><th>Empresa</th><th>Função</th><th>Vínculo</th><th>Contato</th>${canEdit ? '<th></th>' : ''}</tr></thead><tbody>${workforce.map((person,index)=>`<tr class="workforce-row" data-person-key="${encodeURIComponent(workforcePersonKey(person)).replace(/'/g,'%27')}" data-company="${esc(person?.company||'')}" data-search="${esc(normalizeWorkforceSearch(`${person?.name||''} ${person?.company||''} ${person?.role||''} ${person?.phone||''}`))}"><td><strong>${esc(person?.name||'')}</strong></td><td>${esc(person?.company||'')}</td><td>${esc(person?.role||'—')}</td><td>${esc(person?.status||'—')}</td><td>${esc(person?.phone||'—')}</td>${canEdit ? `<td><div class="control-row-actions"><button class="icon-button" title="Editar" onclick="openPersonModal(${index})">${icon('edit')}</button><button class="icon-button" title="Excluir" onclick="deletePerson(${index})">${icon('trash')}</button></div></td>` : ''}</tr>`).join('')}</tbody></table></div><div class="no-filter-results" id="noWorkforceResults">Nenhuma pessoa encontrada.</div></article>`;
 }
 
 function renderCompanies() {
@@ -5776,7 +5820,20 @@ function renderCompanies() {
   const dayToday = workforce.filter(person => workforceAttendanceValue(person, workforceSummaryDate) === 'D').length;
   const nightToday = workforce.filter(person => workforceAttendanceValue(person, workforceSummaryDate) === 'N').length;
   const view = workforceView === 'directory' ? renderWorkforceDirectory(companies) : renderWorkforceControl(companies);
-  document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Controle o cadastro e a presença diária da equipe dentro do app.', 'CADASTRO CENTRAL', `<button class="button button-outline" onclick="syncWorkforceFromSupabase().then(() => { renderCompanies(); toast('Marcações e efetivo sincronizados com a nuvem!'); })">${icon('refresh')} Sincronizar</button><button class="button button-outline" onclick="openWorkforceModal()">${icon('plus')} Cadastro em massa</button><button class="button button-outline" onclick="openWorkforceCopyModal()">${icon('clipboard')} Copiar relação</button><button class="button button-outline" onclick="openWorkforcePDF()">${icon('download')} Baixar PDF</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Baixar Excel</button><button class="button button-green" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>`)}<section class="workforce-summary"><div><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas</small></p></div><div><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div><span>${icon('check')}</span><p><strong>${presentToday}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`))} · ${dayToday} diurno · ${nightToday} noturno</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source||'Cadastro manual')}</strong><span>${workforceMeta.updatedAt?`${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}`:''}</span></p></div></section><div class="workforce-tabs"><button class="${workforceView === 'control' ? 'active' : ''}" onclick="setWorkforceView('control')">${icon('chart')} Controle diário</button><button class="${workforceView === 'directory' ? 'active' : ''}" onclick="setWorkforceView('directory')">${icon('user')} Cadastro de pessoas</button></div>${view}`;
+  const canEdit = isMasterUser();
+  const masterBadge = canEdit
+    ? `<span class="badge" style="background:#e7f5ee; color:#206b49; font-weight:700; font-size:11px; padding:6px 10px; border-radius:6px; display:inline-flex; align-items:center; gap:4px;">🔒 Modo Edição Master</span>`
+    : `<span class="badge" style="background:#f1f5f9; color:#475569; font-weight:600; font-size:11px; padding:6px 10px; border-radius:6px; display:inline-flex; align-items:center; gap:4px;">👁️ Apenas Leitura (Edição restrita a Master)</span>`;
+  const headerActions = `
+    ${masterBadge}
+    <button class="button button-outline" onclick="syncWorkforceFromSupabase().then(() => { renderCompanies(); toast('Marcações e efetivo sincronizados com a nuvem!'); })">${icon('refresh')} Sincronizar</button>
+    ${canEdit ? `<button class="button button-outline" onclick="openWorkforceModal()">${icon('plus')} Cadastro em massa</button>` : ''}
+    <button class="button button-outline" onclick="openWorkforceCopyModal()">${icon('clipboard')} Copiar relação</button>
+    <button class="button button-outline" onclick="openWorkforcePDF()">${icon('download')} Baixar PDF</button>
+    <button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Baixar Excel</button>
+    ${canEdit ? `<button class="button button-green" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>` : ''}
+  `;
+  document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Controle o cadastro e a presença diária da equipe dentro do app.', 'CADASTRO CENTRAL', headerActions)}<section class="workforce-summary"><div><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas</small></p></div><div><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div><span>${icon('check')}</span><p><strong>${presentToday}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`))} · ${dayToday} diurno · ${nightToday} noturno</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source||'Cadastro manual')}</strong><span>${workforceMeta.updatedAt?`${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}`:''}</span></p></div></section><div class="workforce-tabs"><button class="${workforceView === 'control' ? 'active' : ''}" onclick="setWorkforceView('control')">${icon('chart')} Controle diário</button><button class="${workforceView === 'directory' ? 'active' : ''}" onclick="setWorkforceView('directory')">${icon('user')} Cadastro de pessoas</button></div>${view}`;
   
   if (workforceView === 'control' && workforceControlSubView === 'table') {
     filterWorkforceControl();
@@ -6004,6 +6061,10 @@ function changeWorkforceSummaryDate(date) {
 }
 
 function cycleWorkforceAttendance(encodedKey, date, button) {
+  if (!isMasterUser()) {
+    toast('Apenas usuários com perfil Master podem alterar a presença do efetivo.', true);
+    return;
+  }
   const key = decodeURIComponent(encodedKey);
   const current = workforceAttendance[key]?.[date] || '';
   const order = ['', 'D', 'N', '0', 'FOLGA'];
@@ -6012,11 +6073,20 @@ function cycleWorkforceAttendance(encodedKey, date, button) {
   setWorkforceAttendance(encodedKey, date, next);
 }
 function openPersonModal(index=null) {
+  if (!isMasterUser()) {
+    toast('Apenas usuários com perfil Master podem adicionar ou editar pessoas no efetivo.', true);
+    return;
+  }
   const person=index===null?null:workforce[index]; const companies=[...new Set(workforce.map(item=>item?.company).filter(Boolean))].sort(safeSort);
   modal(`<form onsubmit="savePerson(event,${index===null?'null':index})">${modalHead(person?'Editar pessoa':'Adicionar pessoa','Cadastro individual do efetivo da obra')}<div class="modal-body"><div class="form-grid"><div class="field full"><label>Empresa <em>*</em></label><input name="company" required list="companySuggestions" placeholder="Selecione ou digite uma nova empresa" value="${esc(person?.company||'')}"><datalist id="companySuggestions">${companies.map(company=>`<option value="${esc(company)}"></option>`).join('')}</datalist></div><div class="field full"><label>Nome completo <em>*</em></label><input name="name" required placeholder="Nome da pessoa" value="${esc(person?.name||'')}"></div><div class="field"><label>Função <em>*</em></label><input name="role" required placeholder="Ex.: Operador de PTA" value="${esc(person?.role||'')}"></div><div class="field"><label>Vínculo / status</label><select name="status"><option value="">Não informado</option><option value="DIRETA" ${person?.status==='DIRETA'?'selected':''}>Direta</option><option value="INDIRETA" ${person?.status==='INDIRETA'?'selected':''}>Indireta</option><option value="TERCEIRO" ${person?.status==='TERCEIRO'?'selected':''}>Terceiro</option></select></div><div class="field"><label>Perfil de Acesso</label><select name="accessRole"><option value="operator" ${person?.accessRole!=='admin'?'selected':''}>Operador / Campo (Sem acesso administrativo)</option><option value="admin" ${person?.accessRole==='admin'?'selected':''}>Gestor / Administrador (Acesso completo)</option></select></div><div class="field"><label>PIN de Acesso (Gestão)</label><input name="pin" maxlength="8" placeholder="Ex.: 1234" value="${esc(person?.pin||'')}"></div><div class="field full"><label>Telefone</label><input name="phone" placeholder="(85) 99999-9999" value="${esc(person?.phone||'')}"></div></div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Salvar pessoa</button></div></form>`,'modal-small');
 }
 async function savePerson(event,index) {
-  event.preventDefault(); const data=Object.fromEntries(new FormData(event.target)); Object.keys(data).forEach(key=>data[key]=String(data[key]).replace(/\s+/g,' ').trim());
+  event.preventDefault();
+  if (!isMasterUser()) {
+    toast('Apenas usuários com perfil Master podem salvar alterações no efetivo.', true);
+    return;
+  }
+  const data=Object.fromEntries(new FormData(event.target)); Object.keys(data).forEach(key=>data[key]=String(data[key]).replace(/\s+/g,' ').trim());
   const duplicate=workforce.some((person,i)=>i!==index&&workforcePersonKey(person)===workforcePersonKey(data)); if(duplicate)return toast('Esta pessoa já está cadastrada nesta empresa.',true);
   const previous = index === null ? null : workforce[index];
   const previousKey = previous ? workforcePersonKey(previous) : '';
@@ -6046,6 +6116,10 @@ async function savePerson(event,index) {
 }
 function personMessage(index) { return index===null?'Pessoa adicionada ao efetivo.':'Cadastro atualizado.'; }
 async function deletePerson(index) {
+  if (!isMasterUser()) {
+    toast('Apenas usuários com perfil Master podem excluir pessoas do efetivo.', true);
+    return;
+  }
   const person = workforce[index];
   if (!person || !confirm(`Excluir ${person.name} da lista de efetivo e suas marcações diárias?`)) return;
 
@@ -6069,6 +6143,10 @@ async function deletePerson(index) {
     : `${person.name} foi removido neste aparelho e será sincronizado quando a conexão voltar.`, !shared);
 }
 function openWorkforceModal() {
+  if (!isMasterUser()) {
+    toast('Apenas usuários com perfil Master podem acessar o cadastro em massa.', true);
+    return;
+  }
   const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
   modal(`${modalHead('Cadastro em massa do efetivo','Escolha entre importar uma planilha ou colar vários nomes')}<div class="modal-body">
     <div class="bulk-workforce-grid">
@@ -6127,6 +6205,10 @@ function previewBulkWorkforce() {
 
 async function saveBulkWorkforce(event) {
   event.preventDefault();
+  if (!isMasterUser()) {
+    toast('Apenas usuários com perfil Master podem realizar cadastro em massa.', true);
+    return;
+  }
   const form = event.currentTarget;
   const data = new FormData(form);
   const company = String(data.get('company') || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR');
@@ -6305,6 +6387,11 @@ async function downloadWorkforceImportTemplate() {
 
 async function handleWorkforceUpload(event) {
   const file=event.target.files?.[0]; if(!file) return;
+  if (!isMasterUser()) {
+    event.target.value = '';
+    toast('Apenas usuários com perfil Master podem importar planilhas de efetivo.', true);
+    return;
+  }
   if(!await ensureExcelLibrary()) { event.target.value=''; return toast('Não foi possível carregar o leitor de Excel. Verifique a internet e tente novamente.',true); }
   try {
     // Sincroniza marcações e cadastro remotos mais recentes do Supabase antes de mesclar a planilha
