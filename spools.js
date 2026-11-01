@@ -2550,81 +2550,7 @@ function renderSpools() {
       </div>
     ` : ''}
 
-    <!-- 1. SETORES LIDOS DOS DADOS DA PLANILHA -->
-    <div class="spool-sector-bar" aria-label="Setores da Obra">
-      <button type="button" class="spool-sector-btn ${spoolActiveSector === 'all' ? 'active' : ''}" onclick="spoolSelectSector('all')">
-        <span>🌐</span>
-        <span>Todos os Setores</span>
-        <span class="spool-sector-badge">${spoolDb.filter(s => s.status === 'installed' && (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh))).length}/${spoolDb.filter(s => (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh))).length}</span>
-      </button>
-
-      ${availableSectors.map(sec => {
-        const count = spoolDb.filter(s => s.area === sec.id && (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh))).length;
-        const done = spoolDb.filter(s => s.area === sec.id && (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh)) && s.status === 'installed').length;
-        return `
-          <button type="button" class="spool-sector-btn ${spoolActiveSector === sec.id ? 'active' : ''}" data-sector="${esc(sec.id)}" onclick="spoolSelectSector(this.dataset.sector)">
-            <span>${sec.icon}</span>
-            <span>${esc(sec.name)}</span>
-            <span class="spool-sector-badge">${done}/${count}</span>
-          </button>
-        `;
-      }).join('')}
-    </div>
-
-    ${availableSubAreas.length ? `
-      <!-- 2. SUBÁREAS LIDAS DOS DADOS DA PLANILHA -->
-      <div class="spool-subarea-bar" aria-label="Subáreas da Obra">
-        <span class="spool-subarea-label">🗂️ SUBÁREAS:</span>
-        <button type="button" class="spool-subarea-btn ${spoolActiveSubArea === 'all' ? 'active' : ''}" onclick="spoolSelectSubArea('all')">
-          <span>Todas as Subáreas</span>
-          <span class="spool-sector-badge">${spoolDb.filter(s =>
-            (spoolActiveSector === 'all' || s.area === spoolActiveSector) &&
-            (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh))
-          ).length}</span>
-        </button>
-        ${availableSubAreas.map(sub => {
-          const subItems = spoolDb.filter(s =>
-            (spoolActiveSector === 'all' || s.area === spoolActiveSector) &&
-            (spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh)) &&
-            spoolCanonicalSubArea(s.subArea, s.area) === sub.id
-          );
-          const done = subItems.filter(s => s.status === 'installed').length;
-          return `
-            <button type="button" class="spool-subarea-btn ${spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector) === sub.id ? 'active' : ''}" data-subarea="${esc(sub.id)}" onclick="spoolSelectSubArea(this.dataset.subarea)">
-              <span>📍 ${esc(sub.name)}</span>
-              <span class="spool-sector-badge">${done}/${subItems.length}</span>
-            </button>
-          `;
-        }).join('')}
-      </div>
-    ` : ''}
-
-    <!-- 3. SELETOR DE DATA HALL (DH 01 A DH 10) COM CONTAGEM REAL E BOTÃO DE LIMPEZA -->
-    <div class="spool-dh-bar" style="margin-bottom:16px; display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
-      <span style="font-size:11px; font-weight:900; color:#475569; text-transform:uppercase; margin-right:6px;">PROJETO POR DATA HALL:</span>
-      <button type="button" class="spool-dh-pill ${spoolActiveDh === 'ALL' ? 'active' : ''}" onclick="spoolSelectDh('ALL')" title="Ver todos os Data Halls juntos">
-        Todos os DHs
-        <span class="spool-dh-pill-badge">${spoolDb.filter(s => spoolActiveSector === 'all' || s.area === spoolActiveSector).length}</span>
-      </button>
-      ${Array.from({ length: 10 }, (_, i) => {
-        const dhName = `DH ${String(i + 1).padStart(2, '0')}`;
-        const isActive = normalizeDh(spoolActiveDh) === dhName;
-        const count = spoolDb.filter(s => (spoolActiveSector === 'all' || s.area === spoolActiveSector) && normalizeDh(s.dh) === dhName).length;
-        return `
-          <button type="button" class="spool-dh-pill ${isActive ? 'active' : ''}" onclick="spoolSelectDh('${dhName}')">
-            ${dhName}
-            <span class="spool-dh-pill-badge">${count}</span>
-          </button>
-        `;
-      }).join('')}
-      ${(spoolActiveDh !== 'ALL' && spoolDb.some(s => normalizeDh(s.dh) === normalizeDh(spoolActiveDh))) ? `
-        <button type="button" class="button compact spool-protected-delete-button" onclick="spoolClearDh('${spoolActiveDh}')" title="Exige a senha do usuário conectado">
-          ${icon('trash')} Excluir todos os spools do ${spoolActiveDh} (${spoolDb.filter(s => normalizeDh(s.dh) === normalizeDh(spoolActiveDh)).length}) 🔒
-        </button>
-      ` : ''}
-    </div>
-
-    <!-- 3. PAINEL DE FECHAMENTO DO DIA & METAS -->
+    <!-- 1. PAINEL DE FECHAMENTO DO DIA & METAS -->
     <section class="spool-daily-close">
       <div class="spool-kpi-card tone-installed ${spoolListFilter === 'installed_today' ? 'is-active-tab' : ''}" onclick="spoolSetFilter('installed_today')" title="Clique para ver os tubos instalados no dia">
         <span class="spool-kpi-label">INSTALADOS NO DIA <span class="spool-kpi-badge badge-good">VER LISTA 🟢</span></span>
@@ -2669,10 +2595,7 @@ function renderSpools() {
       </div>
     </section>
 
-    <!-- 4. BARRAMENTO PRINCIPAL DA LINHA: TRECHOS RETOS + VÁLVULAS (SE HOUVER) -->
-    ${spoolRenderPipelineBar(baseSectorSpools, sectorMeta)}
-
-    <!-- 5. BARRA DE FILTROS AVANÇADOS COMPLETA (SOLICITADA PELO USUÁRIO) -->
+    <!-- 2. FILTROS PRINCIPAIS: substituem os antigos botões rápidos redundantes -->
     <div class="spool-filters-bar" aria-label="Filtros de Spools">
       <!-- Filtro DH -->
       <div class="spool-filter-group">
@@ -2797,6 +2720,14 @@ function renderSpools() {
         </div>
       ` : ''}
 
+      ${(spoolActiveDh !== 'ALL' && spoolDb.some(s => normalizeDh(s.dh) === normalizeDh(spoolActiveDh))) ? `
+        <div class="spool-filter-group">
+          <button type="button" class="button compact spool-protected-delete-button" onclick="spoolClearDh('${spoolActiveDh}')" title="Exige a senha do usuário conectado">
+            ${icon('trash')} Excluir ${spoolActiveDh} 🔒
+          </button>
+        </div>
+      ` : ''}
+
       <!-- Botões de Ação Direta no Toolbar: Copiar Filtro, PDF com Logos e Excel -->
       <div class="spool-filter-group" style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
         <button type="button" class="button button-outline compact" onclick="spoolCopyFilteredReport()" style="height:36px; font-weight:800; color:#0f172a; border-color:#cbd5e1; background:#ffffff;" title="Copiar os ${filteredSpools.length} spools filtrados na tela para WhatsApp">
@@ -2811,32 +2742,10 @@ function renderSpools() {
       </div>
     </div>
 
-    <!-- ABAS RÁPIDAS SECUNDÁRIAS -->
-    <div class="spool-corte-toolbar" style="border-radius:10px; margin-bottom:14px; background:#f8fafc; border:1px solid #e2e8f0; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-      <div class="spool-corte-pills">
-        <button type="button" class="spool-corte-btn ${spoolListFilter === 'all' ? 'active' : ''}" onclick="spoolSetFilter('all')">
-          📋 Todos (${baseSectorSpools.length})
-        </button>
-        <button type="button" class="spool-corte-btn ${spoolListFilter === 'straight' ? 'active' : ''}" onclick="spoolSetFilter('straight')">
-          📏 Trechos Retos (${straightSpools.length})
-        </button>
-        <button type="button" class="spool-corte-btn ${spoolListFilter === 'branch' ? 'active' : ''}" onclick="spoolSetFilter('branch')">
-          📐 Derivações (${branchSpools.length})
-        </button>
-        <button type="button" class="spool-corte-btn ${spoolListFilter === 'installed_today' ? 'active' : ''}" onclick="spoolSetFilter('installed_today')">
-          🟢 Instalados no Dia (${installedToday.length})
-        </button>
-        <button type="button" class="spool-corte-btn ${spoolListFilter === 'received_today' ? 'active' : ''}" onclick="spoolSetFilter('received_today')">
-          🟡 Recebidos no Dia (${receivedToday.length})
-        </button>
-        <button type="button" class="spool-corte-btn ${spoolListFilter === 'pending' ? 'active' : ''}" onclick="spoolSetFilter('pending')">
-          ⏳ Pendentes (${totalPending})
-        </button>
-      </div>
+    ${spoolRenderSectorMap(spoolDb, availableSectors)}
 
-      <div style="font-size:12px; font-weight:800; color:#475569;">
-        Mostrando <strong id="spoolVisibleCount">${filteredSpools.length}</strong> de <strong>${spoolDb.length}</strong> spools cadastrados
-      </div>
+    <div class="spool-results-summary" aria-live="polite">
+      Mostrando <strong id="spoolVisibleCount">${filteredSpools.length}</strong> de <strong>${spoolDb.length}</strong> spools cadastrados
     </div>
 
     <!-- BANNER SE A ABA DE INSTALADOS HOJE ESTIVER ATIVA -->
@@ -2974,74 +2883,65 @@ function renderSpools() {
   spoolUpdateSelection();
 }
 
-/* ==========================================================================
-   BARRAMENTO PRINCIPAL VISUAL (LINHA MESTRA)
-   ========================================================================== */
-function spoolRenderPipelineBar(sectorSpools, sectorMeta) {
-  const lineItems = sectorSpools.filter(s => s.type === 'straight' || s.type === 'valve');
-  if (!lineItems.length) return '';
+function spoolRenderSectorMap(items, sectors) {
+  const dhItems = items.filter(item =>
+    spoolActiveDh === 'ALL' || normalizeDh(item.dh) === normalizeDh(spoolActiveDh)
+  );
+  if (!dhItems.length || !sectors.length) return '';
 
-  const valves = lineItems.filter(s => s.type === 'valve');
-  const straightPipes = lineItems.filter(s => s.type === 'straight');
-  const installedCount = lineItems.filter(s => s.status === 'installed').length;
-  const progressPercent = Math.round((installedCount / lineItems.length) * 100);
-
-  const v1 = valves[0];
-  const v2 = valves[1];
-  const ordered = [];
-  if (v1) ordered.push({ item: v1, label: 'VÁLV. ENTRADA' });
-  straightPipes.forEach((p, idx) => {
-    ordered.push({ item: p, label: `RETO #${idx + 1}` });
+  const statusTotals = (list) => ({
+    installed: list.filter(item => item.status === 'installed').length,
+    received: list.filter(item => item.status === 'received').length,
+    pending: list.filter(item => item.status === 'not-started').length,
+    rejected: list.filter(item => item.status === 'rejected').length,
+    returned: list.filter(item => item.status === 'returned').length
   });
-  if (v2) ordered.push({ item: v2, label: 'VÁLV. FIM' });
-  const pipelineRenderLimit = window.innerWidth <= 768 ? SPOOL_MOBILE_PAGE_SIZE : SPOOL_DESKTOP_PAGE_SIZE;
-  const renderedOrdered = ordered.slice(0, pipelineRenderLimit);
-  const hiddenPipelineCount = Math.max(0, ordered.length - renderedOrdered.length);
+  const cardMarkup = (sector, list, isOverview = false) => {
+    const stats = statusTotals(list);
+    const progress = list.length ? Math.round((stats.installed / list.length) * 100) : 0;
+    const sectorId = isOverview ? 'all' : sector.id;
+    const isActive = spoolActiveSector === sectorId;
+    const title = isOverview ? 'Visão geral' : sector.name;
+    const iconText = isOverview ? '🌐' : (sector.icon || '📍');
+    return `
+      <button type="button" class="spool-map-card${isActive ? ' is-active' : ''}" data-sector="${esc(sectorId)}" onclick="spoolSelectSector(this.dataset.sector)" aria-pressed="${isActive}" title="Filtrar a lista por ${esc(title)}">
+        <span class="spool-map-card-head">
+          <span class="spool-map-card-title"><span aria-hidden="true">${iconText}</span> ${esc(title)}</span>
+          <strong>${stats.installed}/${list.length}</strong>
+        </span>
+        <span class="spool-map-progress" aria-label="${progress}% instalado"><i style="width:${progress}%"></i></span>
+        <span class="spool-map-progress-label">${progress}% instalado</span>
+        <span class="spool-map-statuses">
+          <span class="installed">● ${stats.installed} instalados</span>
+          <span class="received">● ${stats.received} recebidos</span>
+          <span class="pending">● ${stats.pending} pendentes</span>
+          ${stats.rejected ? `<span class="rejected">● ${stats.rejected} reprovados</span>` : ''}
+          ${stats.returned ? `<span class="returned">● ${stats.returned} devolvidos</span>` : ''}
+        </span>
+      </button>
+    `;
+  };
+
+  const sectorCards = sectors.map(sector => ({
+    sector,
+    items: dhItems.filter(item => item.area === sector.id)
+  })).filter(entry => entry.items.length);
 
   return `
-    <div class="spool-pipeline-container">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <strong style="font-size:14px; font-weight:800; color:#38bdf8;">
-            🚰 BARRAMENTO PRINCIPAL · LINHA MESTRA (${straightPipes.length} Tubos Retos + ${valves.length} Válvulas)
-          </strong>
-          <span style="font-size:11px; background:#1e293b; color:#cbd5e1; padding:2px 8px; border-radius:10px; border:1px solid #475569;">
-            ${installedCount}/${lineItems.length} montados (${progressPercent}%)
-          </span>
+    <section class="spool-visual-map" aria-labelledby="spoolVisualMapTitle">
+      <div class="spool-map-heading">
+        <div>
+          <span class="spool-map-eyebrow">VISÃO DA OBRA</span>
+          <h3 id="spoolVisualMapTitle">Mapa visual por setor</h3>
         </div>
-        <div style="font-size:11px; color:#94a3b8;">
-          ${hiddenPipelineCount
-            ? `Exibindo os primeiros ${renderedOrdered.length} trechos · use os filtros para localizar os demais`
-            : '👈 Arraste para os lados para percorrer a linha toda · Clique no tubo para mudar status 👉'}
-        </div>
+        <span class="spool-map-scope">${spoolActiveDh === 'ALL' ? 'Todos os Data Halls' : esc(spoolActiveDh)} · ${dhItems.length} spools</span>
       </div>
-
-      <div class="spool-pipeline-track">
-        ${renderedOrdered.map((node, i) => {
-          const s = node.item;
-          const isValve = s.type === 'valve';
-          const isInst = s.status === 'installed';
-          const isRec = s.status === 'received';
-          const isRej = s.status === 'rejected';
-          const isReturned = s.status === 'returned';
-          const statusClass = isInst ? 'status-installed' : (isRec ? 'status-received' : (isRej ? 'status-rejected' : (isReturned ? 'status-returned' : 'status-pending')));
-          const valveClass = isValve ? 'is-valve' : '';
-          const selectedClass = spoolSelectedIds.has(s.id) ? 'is-selected' : '';
-          const segRecInfo = s.receivedDate ? `\n• Recebido: ${formatSpoolDateDisplay(s.receivedDate)}${s.receivedAt ? ` às ${formatSpoolTime(s.receivedAt)}` : ''}` : '';
-          const segInstInfo = s.installedDate ? `\n• Instalado: ${formatSpoolDateDisplay(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '';
-          const segRejInfo = s.rejectedDate ? `\n• Reprovado: ${formatSpoolDateDisplay(s.rejectedDate)}${s.rejectedReason ? ` (${s.rejectedReason})` : ''}` : '';
-          const segReturnInfo = s.returnedDate ? `\n• Devolvido: ${formatSpoolDateDisplay(s.returnedDate)}${s.returnedReason ? ` (${s.returnedReason})` : ''}` : '';
-
-          return `
-            <div class="spool-pipe-seg ${valveClass} ${statusClass} ${selectedClass}" data-spool-id="${esc(s.id)}" onclick="spoolHandleTubeTap('${s.id}', event)" title="${isValve ? 'Válvula de Linha' : 'Tubo Reto'} ${esc(spoolDisplayNumber(s))} (${node.label})${segRecInfo}${segInstInfo}${segRejInfo}${segReturnInfo}\nClique para ${spoolMultiSelectMode ? 'marcar/desmarcar' : (spoolSafeTapMode ? 'abrir menu de ações' : 'alternar status')}">
-              <span class="seg-tag">${esc(spoolDisplayNumber(s))}</span>
-              <span class="seg-idx">${node.label}</span>
-            </div>
-            ${i < renderedOrdered.length - 1 ? '<div class="spool-pipe-connector"></div>' : ''}
-          `;
-        }).join('')}
+      <div class="spool-map-grid">
+        ${cardMarkup({ id: 'all', name: 'Visão geral', icon: '🌐' }, dhItems, true)}
+        ${sectorCards.map(entry => cardMarkup(entry.sector, entry.items)).join('')}
       </div>
-    </div>
+      <p class="spool-map-help">Toque em um setor para filtrar a relação abaixo.</p>
+    </section>
   `;
 }
 
@@ -3172,13 +3072,13 @@ function spoolRenderTubeSquares(list, filterDate) {
                   <span>🟡 Rec:</span> <span>${formatSpoolDateShort(spool.receivedDate)}${spool.receivedAt ? ` ${formatSpoolTime(spool.receivedAt)}` : ''}</span>
                 </div>
               ` : (isRej ? `
-                <div style="color:#b91c1c; font-weight:900; display:flex; align-items:center; justify-content:center; gap:3px;">
+                <div class="tube-status-line is-rejected">
                   <span>🔴 Reprov:</span> <span>${formatSpoolDateShort(spool.rejectedDate || spool.installedDate || spool.receivedDate)}</span>
                 </div>
-                ${spool.rejectedReason ? `<small style="font-size:9px; color:#ef4444; font-weight:700; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${esc(spool.rejectedReason)}">${esc(spool.rejectedReason)}</small>` : ''}
+                ${spool.rejectedReason ? `<small class="tube-status-reason is-rejected" title="${esc(spool.rejectedReason)}">${esc(spool.rejectedReason)}</small>` : ''}
               ` : (isReturned ? `
-                <div style="color:#9a3412;font-weight:900;display:flex;align-items:center;justify-content:center;gap:3px;"><span>↩️ Devolvido:</span><span>${formatSpoolDateShort(spool.returnedDate)}</span></div>
-                ${spool.returnedReason ? `<small style="font-size:9px;color:#c2410c;font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(spool.returnedReason)}">${esc(spool.returnedReason)}</small>` : ''}
+                <div class="tube-status-line is-returned"><span>↩️ Devolvido:</span><span>${formatSpoolDateShort(spool.returnedDate)}</span></div>
+                ${spool.returnedReason ? `<small class="tube-status-reason is-returned" title="${esc(spool.returnedReason)}">${esc(spool.returnedReason)}</small>` : ''}
               ` : `
                 <div style="color:#64748b; font-weight:700;">⚪ Pendente</div>
               `)))}
@@ -6323,6 +6223,12 @@ function spoolCopyFilteredReport(customList = null) {
   const targetDate = spoolSelectedDate || getLocalDateStr();
   const dateFormatted = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
   const sectorMeta = spoolGetSectorMeta(spoolActiveSector, spoolDb);
+  const reportSectors = [...new Set(list.map(s => spoolGetSectorMeta(s.area, spoolDb).name).filter(Boolean))];
+  const reportSectorLabel = reportSectors.length ? reportSectors.join(', ') : sectorMeta.name;
+  const itemSectorLabel = (spool) => {
+    const name = spoolGetSectorMeta(spool.area, spoolDb).name;
+    return name ? ` · Setor: ${name}` : '';
+  };
 
   // Contexto dos filtros ativos
   const filterDesc = [];
@@ -6374,6 +6280,7 @@ function spoolCopyFilteredReport(customList = null) {
 
   let text = `🏗️ *RELATÓRIO DE SPOOLS (FILTRADOS)*\n`;
   text += `📍 *Data Center Omnia (DC01)*\n`;
+  text += `🏭 *Setor(es):* ${reportSectorLabel}\n`;
   if (filterDesc.length > 0) {
     text += `🎯 *Filtros:* ${filterDesc.join(' · ')}\n`;
   } else {
@@ -6401,7 +6308,7 @@ function spoolCopyFilteredReport(customList = null) {
         const dia = s.diameter ? ` (${s.diameter})` : '';
         const dh = s.dh ? ` · ${s.dh}` : '';
         const dt = s.installedDate ? ` — ${formatSpoolDateShort(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '';
-        return `• Tubo ${spoolDisplayNumber(s)}${dia}${dh}${dt}`;
+        return `• Tubo ${spoolDisplayNumber(s)}${dia}${dh}${itemSectorLabel(s)}${dt}`;
       }).join('\n') + `\n`;
     }
 
@@ -6411,7 +6318,7 @@ function spoolCopyFilteredReport(customList = null) {
         const dia = s.diameter ? ` (${s.diameter})` : '';
         const dh = s.dh ? ` · ${s.dh}` : '';
         const dt = s.receivedDate ? ` — ${formatSpoolDateShort(s.receivedDate)}${s.receivedAt ? ` às ${formatSpoolTime(s.receivedAt)}` : ''}` : '';
-        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${dt}`;
+        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${itemSectorLabel(s)}${dt}`;
       }).join('\n') + `\n`;
     }
 
@@ -6422,7 +6329,7 @@ function spoolCopyFilteredReport(customList = null) {
         const dh = s.dh ? ` · ${s.dh}` : '';
         const rsn = s.rejectedReason ? ` [Motivo: ${s.rejectedReason}]` : '';
         const dt = s.rejectedDate ? ` — ${formatSpoolDateShort(s.rejectedDate)}${s.rejectedAt ? ` às ${formatSpoolTime(s.rejectedAt)}` : ''}` : '';
-        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${rsn}${dt}`;
+        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${itemSectorLabel(s)}${rsn}${dt}`;
       }).join('\n') + `\n`;
     }
 
@@ -6433,7 +6340,7 @@ function spoolCopyFilteredReport(customList = null) {
         const dh = s.dh ? ` · ${s.dh}` : '';
         const reason = s.returnedReason ? ` [Motivo: ${s.returnedReason}]` : '';
         const date = s.returnedDate ? ` — ${formatSpoolDateShort(s.returnedDate)}${s.returnedAt ? ` às ${formatSpoolTime(s.returnedAt)}` : ''}` : '';
-        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${reason}${date}`;
+        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${itemSectorLabel(s)}${reason}${date}`;
       }).join('\n') + `\n`;
     }
 
@@ -6442,13 +6349,13 @@ function spoolCopyFilteredReport(customList = null) {
       text += pending.map(s => {
         const dia = s.diameter ? ` (${s.diameter})` : '';
         const dh = s.dh ? ` · ${s.dh}` : '';
-        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}`;
+        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${itemSectorLabel(s)}`;
       }).join('\n') + `\n`;
     }
   } else {
     text += `\n📋 *PRIMEIRAS 60 TAGS (de ${list.length} itens):*\n`;
     const sample = list.slice(0, 60);
-    text += sample.map(s => `• ${spoolDisplayNumber(s)} (${s.dh || 'DH'} - ${s.status === 'installed' ? '🟢' : (s.status === 'received' ? '🟡' : (s.status === 'rejected' ? '🔴' : (s.status === 'returned' ? '↩️' : '⚪')))})`).join('\n');
+    text += sample.map(s => `• ${spoolDisplayNumber(s)} (${s.dh || 'DH'} · ${spoolGetSectorMeta(s.area, spoolDb).name} · ${s.status === 'installed' ? '🟢' : (s.status === 'received' ? '🟡' : (s.status === 'rejected' ? '🔴' : (s.status === 'returned' ? '↩️' : '⚪')))})`).join('\n');
     text += `\n\n_(+ ${list.length - 60} spools não detalhados na mensagem. Baixe a planilha Excel para a relação completa.)_\n`;
   }
 
