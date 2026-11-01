@@ -2943,22 +2943,41 @@ function spoolRenderSectorMap(items, sectors) {
     const isActive = spoolActiveSector === sectorId;
     const title = isOverview ? 'Visão geral' : sector.name;
     const iconText = isOverview ? '🌐' : (sector.icon || '📍');
+    const statusButton = (status, count, label, cssClass) => {
+      const normalizedStatus = status === 'pending' ? 'not-started' : status;
+      const isStatusActive = isActive && (
+        spoolStatusFilter === normalizedStatus ||
+        (normalizedStatus === 'not-started' && spoolStatusFilter === 'pending')
+      );
+      return `
+        <button type="button" class="${cssClass}${isStatusActive ? ' is-active-status' : ''}"
+          data-sector="${esc(sectorId)}" data-status="${esc(normalizedStatus)}"
+          onclick="spoolOpenSectorMapStatus(this.dataset.sector, this.dataset.status)"
+          aria-label="Abrir ${count} ${esc(label)} de ${esc(title)}" title="Ver ${esc(label)} de ${esc(title)}" ${count ? '' : 'disabled'}>
+          <span aria-hidden="true">●</span> ${count} ${esc(label)}
+        </button>
+      `;
+    };
     return `
-      <button type="button" class="spool-map-card${isActive ? ' is-active' : ''}" data-sector="${esc(sectorId)}" onclick="spoolSelectSector(this.dataset.sector)" aria-pressed="${isActive}" title="Filtrar a lista por ${esc(title)}">
-        <span class="spool-map-card-head">
-          <span class="spool-map-card-title"><span aria-hidden="true">${iconText}</span> ${esc(title)}</span>
-          <strong>${stats.installed}/${list.length}</strong>
-        </span>
-        <span class="spool-map-progress" aria-label="${progress}% instalado"><i style="width:${progress}%"></i></span>
-        <span class="spool-map-progress-label">${progress}% instalado</span>
-        <span class="spool-map-statuses">
-          <span class="installed">● ${stats.installed} instalados</span>
-          <span class="received">● ${stats.received} recebidos</span>
-          <span class="pending">● ${stats.pending} pendentes</span>
-          ${stats.rejected ? `<span class="rejected">● ${stats.rejected} reprovados</span>` : ''}
-          ${stats.returned ? `<span class="returned">● ${stats.returned} devolvidos</span>` : ''}
-        </span>
-      </button>
+      <article class="spool-map-card${isActive ? ' is-active' : ''}" aria-label="${esc(title)}">
+        <button type="button" class="spool-map-card-main" data-sector="${esc(sectorId)}"
+          onclick="spoolOpenSectorMapStatus(this.dataset.sector, 'all')" aria-pressed="${isActive}"
+          title="Abrir todos os spools de ${esc(title)}">
+          <span class="spool-map-card-head">
+            <span class="spool-map-card-title"><span aria-hidden="true">${iconText}</span> ${esc(title)}</span>
+            <strong>${stats.installed}/${list.length}</strong>
+          </span>
+          <span class="spool-map-progress" aria-label="${progress}% instalado"><i style="width:${progress}%"></i></span>
+          <span class="spool-map-progress-label">${progress}% instalado</span>
+        </button>
+        <div class="spool-map-statuses" aria-label="Abrir peças por status">
+          ${statusButton('installed', stats.installed, 'instalados', 'installed')}
+          ${statusButton('received', stats.received, 'recebidos', 'received')}
+          ${statusButton('pending', stats.pending, 'pendentes', 'pending')}
+          ${stats.rejected ? statusButton('rejected', stats.rejected, 'reprovados', 'rejected') : ''}
+          ${stats.returned ? statusButton('returned', stats.returned, 'devolvidos', 'returned') : ''}
+        </div>
+      </article>
     `;
   };
 
@@ -2981,7 +3000,7 @@ function spoolRenderSectorMap(items, sectors) {
         ${cardMarkup({ id: 'all', name: 'Visão geral', icon: '🌐' }, progressItems, true)}
         ${sectorCards.map(entry => cardMarkup(entry.sector, entry.items)).join('')}
       </div>
-      <p class="spool-map-help">Toque em um setor para filtrar a relação abaixo. Filtros de status e data não alteram o percentual geral.</p>
+      <p class="spool-map-help">Toque no quadro para abrir o setor ou diretamente em um status para listar as peças. Filtros de status e data não alteram o percentual geral.</p>
     </section>
   `;
 }
@@ -3367,6 +3386,44 @@ function spoolSelectSector(sectorId) {
   localStorage.setItem('obraflow_spool_active_subarea', 'all');
   spoolKeepOnlyVisibleSelection();
   renderSpools();
+}
+
+function spoolOpenSectorMapStatus(sectorId, status = 'all') {
+  const validStatuses = ['all', 'not-started', 'received', 'installed', 'rejected', 'returned'];
+  const nextStatus = validStatuses.includes(status) ? status : 'all';
+  const statusLabels = {
+    'all': 'todos os spools',
+    'not-started': 'pendentes',
+    'received': 'recebidos',
+    'installed': 'instalados',
+    'rejected': 'reprovados',
+    'returned': 'devolvidos'
+  };
+
+  spoolActiveSector = sectorId || 'all';
+  spoolActiveSubArea = 'all';
+  spoolStatusFilter = nextStatus;
+  spoolDateFilterMode = 'all';
+  spoolRenderPage = 1;
+
+  // Preserva apenas o recorte tecnico dos cards Trecho/Ramal/Valvula. Abas de
+  // status antigas precisam sair para nao esconder o status que acabou de ser clicado.
+  if (!['straight', 'valve', 'branch'].includes(spoolListFilter)) {
+    spoolListFilter = 'all';
+  }
+
+  localStorage.setItem('obraflow_spool_active_sector', spoolActiveSector);
+  localStorage.setItem('obraflow_spool_active_subarea', 'all');
+  spoolKeepOnlyVisibleSelection();
+  renderSpools();
+  requestAnimationFrame(() => {
+    document.getElementById('spoolSearchResults')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  const sectorName = spoolActiveSector === 'all'
+    ? 'Visão geral'
+    : spoolGetSectorMeta(spoolActiveSector, spoolDb).name;
+  toast(`${sectorName}: exibindo ${statusLabels[nextStatus]}.`);
 }
 
 function spoolSelectDh(dhName) {

@@ -117,6 +117,10 @@ async function run() {
   result.straightProgressCorrect = straightMap.includes('64/64')
     && straightMap.includes('100% instalado')
     && straightMap.includes('Trechos retos');
+  result.mapStatusActionsRendered = straightMap.includes('data-status="installed"')
+    && straightMap.includes('spoolOpenSectorMapStatus(this.dataset.sector, this.dataset.status)')
+    && straightMap.includes('Abrir 64 instalados de Corredor FW A')
+    && straightMap.includes('data-status="not-started"');
 
   // Status e data filtram a relacao operacional, mas nao o denominador fisico.
   vm.runInContext("spoolTypeFilter='all'; spoolStatusFilter='installed'; spoolDateFilterMode='installed';", context);
@@ -129,7 +133,19 @@ async function run() {
   const quickStraightMap = context.window.spoolRenderSectorMap(fwAFixture, fwASectors);
   result.quickTypeProgressCorrect = quickStraightMap.includes('64/64') && quickStraightMap.includes('100% instalado');
 
-  if (!result.generalProgressPreserved || !result.straightProgressCorrect || !result.statusDoesNotFakeProgress || !result.quickTypeProgressCorrect) {
+  vm.runInContext("spoolListFilter='installed_today'; spoolDateFilterMode='installed'; spoolOpenSectorMapStatus('supercore', 'installed');", context);
+  const mapActionState = vm.runInContext("({ sector: spoolActiveSector, subArea: spoolActiveSubArea, status: spoolStatusFilter, dateMode: spoolDateFilterMode, listFilter: spoolListFilter, page: spoolRenderPage })", context);
+  result.mapStatusActionCorrect = mapActionState.sector === 'supercore'
+    && mapActionState.subArea === 'all'
+    && mapActionState.status === 'installed'
+    && mapActionState.dateMode === 'all'
+    && mapActionState.listFilter === 'all'
+    && mapActionState.page === 1;
+
+  vm.runInContext("spoolListFilter='straight'; spoolOpenSectorMapStatus('supercore', 'not-started');", context);
+  result.mapActionPreservesTechnicalType = vm.runInContext("spoolListFilter === 'straight' && spoolStatusFilter === 'not-started'", context);
+
+  if (!result.generalProgressPreserved || !result.straightProgressCorrect || !result.statusDoesNotFakeProgress || !result.quickTypeProgressCorrect || !result.mapStatusActionsRendered || !result.mapStatusActionCorrect || !result.mapActionPreservesTechnicalType) {
     throw new Error(`Falha no escopo do mapa de progresso: ${JSON.stringify(result)}`);
   }
 

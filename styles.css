@@ -3610,28 +3610,57 @@ body.sidebar-collapsed .mobile-menu { display: inline-grid !important; }
 .spool-map-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 10px; }
 .spool-map-card {
   display: grid;
-  gap: 8px;
   min-width: 0;
-  padding: 12px;
+  overflow: hidden;
   border: 1.5px solid #cbd5e1;
   border-radius: 11px;
   color: #0f172a;
   background: #fff;
   font: inherit;
   text-align: left;
-  cursor: pointer;
   transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
 .spool-map-card:hover { transform: translateY(-2px); border-color: #34d399; box-shadow: 0 6px 14px rgba(16,185,129,.12); }
 .spool-map-card.is-active { border-color: #059669; box-shadow: 0 0 0 2px rgba(5,150,105,.16); background: #f0fdf4; }
+.spool-map-card-main {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 12px 9px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.spool-map-card-main:hover { background: rgba(16,185,129,.05); }
+.spool-map-card-main:focus-visible,
+.spool-map-statuses button:focus-visible { outline: 3px solid rgba(2,132,199,.28); outline-offset: -2px; }
 .spool-map-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .spool-map-card-title { min-width: 0; overflow: hidden; color: #1e293b; font-size: 12px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
 .spool-map-card-head strong { flex: 0 0 auto; color: #047857; font-size: 13px; }
 .spool-map-progress { display: block; height: 7px; overflow: hidden; border-radius: 99px; background: #e2e8f0; }
 .spool-map-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #10b981, #059669); }
 .spool-map-progress-label { color: #475569; font-size: 10px; font-weight: 800; }
-.spool-map-statuses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 8px; font-size: 9px; font-weight: 800; }
-.spool-map-statuses span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spool-map-statuses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding: 0 12px 12px; font-size: 9px; font-weight: 800; }
+.spool-map-statuses button {
+  min-width: 0;
+  overflow: hidden;
+  padding: 5px 7px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: rgba(255,255,255,.78);
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.spool-map-statuses button:hover:not(:disabled) { border-color: currentColor; background: #fff; }
+.spool-map-statuses button:disabled { opacity: .48; cursor: default; }
+.spool-map-statuses button.is-active-status { border-color: currentColor; background: #fff; box-shadow: 0 0 0 2px rgba(15,23,42,.08); }
 .spool-map-statuses .installed { color: #047857; }
 .spool-map-statuses .received { color: #0369a1; }
 .spool-map-statuses .pending { color: #64748b; }

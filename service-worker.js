@@ -1,17 +1,17 @@
 const CACHE_PREFIX = 'datacenter-omnia-';
-const SHELL_CACHE = `${CACHE_PREFIX}shell-20261101-spool-progress-scope-v3`;
-const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-20261101-spool-progress-scope-v3`;
+const SHELL_CACHE = `${CACHE_PREFIX}shell-20261101-spool-map-actions-v4`;
+const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-20261101-spool-map-actions-v4`;
 
 const APP_SHELL = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
-  '/styles.css?v=20261101_spool_progress_scope_v3',
+  '/styles.css?v=20261101_spool_map_actions_v4',
   '/offline-sync.js?v=20261101_spool_queue_fix_v1',
   '/inventory.js?v=20261017_4',
   '/cautelas.js?v=20261021_offline_sync_v1',
   '/radios.js?v=20261023_workforce_source_v1',
-  '/spools.js?v=20261101_spool_progress_scope_v3',
+  '/spools.js?v=20261101_spool_map_actions_v4',
   '/qr-scanner.js?v=20261017_1',
   '/app.js?v=20261101_spool_queue_fix_v1',
   '/exceljs.min.js',
