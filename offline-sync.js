@@ -5,6 +5,10 @@
   const DB_VERSION = 1;
   const STORE_NAME = 'mutations';
   const FALLBACK_KEY = 'obraflow_offline_mutations_v1';
+  // O localStorage e sincrono e costuma ter apenas 5 MB. Corpos grandes (como o
+  // cadastro completo de milhares de spools) ficam somente no IndexedDB para
+  // nao travar o navegador nem impedir que os dados operacionais sejam salvos.
+  const FALLBACK_RECORD_MAX_BYTES = 100000;
   const listeners = new Set();
   let databasePromise = null;
   let useFallbackStorage = typeof indexedDB === 'undefined';
@@ -58,6 +62,11 @@
       console.warn('A fila de segurança do localStorage atingiu o limite; o IndexedDB continuará sendo usado:', error);
       return false;
     }
+  }
+
+  function canUseFallbackRecord(record) {
+    if (!record) return false;
+    return String(record.body || '').length <= FALLBACK_RECORD_MAX_BYTES;
   }
 
   async function withStore(mode, operation) {
@@ -165,8 +174,12 @@
   async function putRecord(record) {
     const records = fallbackList();
     const index = records.findIndex(item => item.id === record.id);
-    if (index >= 0) records[index] = record;
-    else records.push(record);
+    if (canUseFallbackRecord(record) || useFallbackStorage) {
+      if (index >= 0) records[index] = record;
+      else records.push(record);
+    } else if (index >= 0) {
+      records.splice(index, 1);
+    }
     saveFallback(records);
     if (useFallbackStorage) return;
     const database = await openDatabase();
@@ -216,7 +229,9 @@
     const id = mutationId(path, method, body, options.offlineKey);
     const now = Date.now();
     const scope = requestScope(path, body);
-    const existing = fallbackList().find(item => item.id === id);
+    // O registro pode existir somente no IndexedDB quando o corpo e grande.
+    // Consultar as duas camadas preserva createdAt e garante a compactacao.
+    const existing = await getRecord(id);
     const record = {
       id,
       path: String(path),

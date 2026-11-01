@@ -11,6 +11,9 @@ const SPOOL_SYNC_STATE_KEY = 'obraflow_spool_sync_state_v1';
 const SPOOL_DELETED_STORE_KEY = 'obraflow_spool_deleted_v1';
 const SPOOL_BACKUP_STORE_KEY = 'obraflow_spool_backups_v1';
 const SPOOL_MASS_DELETE_MINIMUM = 25;
+const SPOOL_REMOTE_SAVE_DELAY_MS = 1200;
+const SPOOL_MOBILE_PAGE_SIZE = 80;
+const SPOOL_DESKTOP_PAGE_SIZE = 160;
 try {
   localStorage.removeItem('obraflow_spools_v4');
   localStorage.removeItem('obraflow_spools_v3');
@@ -439,6 +442,7 @@ function spoolMarkSyncPending() {
   try {
     localStorage.setItem(SPOOL_SYNC_STATE_KEY, JSON.stringify({ pending: true, updatedAt: new Date().toISOString() }));
   } catch (error) {}
+  spoolUpdateSyncIndicator(false);
   return spoolDataRevision;
 }
 
@@ -560,7 +564,7 @@ function spoolSaveAuxiliary() {
     const navCount = document.getElementById('navSpoolCount');
     if (navCount) navCount.textContent = spoolDb.length + spoolSupportDb.length;
     spoolMarkSyncPending();
-    spoolSyncRemote(spoolDb).catch(() => {});
+    spoolScheduleRemoteSync();
   } catch (error) {
     console.error('Erro ao salvar suportes/isométricos:', error);
   }
@@ -1382,7 +1386,9 @@ function spoolSaveAll(spools, options = {}) {
     const navCount = document.getElementById('navSpoolCount');
     if (navCount) navCount.textContent = spoolDb.length + spoolSupportDb.length;
     spoolMarkSyncPending();
-    spoolSyncRemote(spoolDb).catch(() => {});
+    // Varias marcacoes seguidas geram um unico envio consolidado. O salvamento
+    // local acima continua imediato, inclusive sem internet.
+    spoolScheduleRemoteSync();
     return true;
   } catch (e) {
     console.error('Erro ao salvar spools:', e);
@@ -1422,8 +1428,28 @@ function spoolMergeLists(localList, remoteList) {
   return spoolDeduplicateList(spoolMergeRecordCollections(localList, remoteList));
 }
 
+function spoolScheduleRemoteSync(delayMs = SPOOL_REMOTE_SAVE_DELAY_MS) {
+  spoolRemoteSaveRequested = true;
+  if (spoolRemoteSaveTimer) clearTimeout(spoolRemoteSaveTimer);
+  if (navigator.onLine === false || typeof supabaseRestRequest !== 'function') return;
+  spoolRemoteSaveTimer = setTimeout(() => {
+    spoolRemoteSaveTimer = null;
+    spoolRemoteSaveRequested = false;
+    spoolSyncRemote(spoolDb).catch(() => false);
+  }, Math.max(0, Number(delayMs) || 0));
+}
+
 // Sync com Supabase (app_metadata - spool_registry)
 function spoolSyncRemote(spools) {
+  if (navigator.onLine === false) {
+    spoolUpdateSyncIndicator(false);
+    return Promise.resolve(false);
+  }
+  if (spoolRemoteSaveTimer) {
+    clearTimeout(spoolRemoteSaveTimer);
+    spoolRemoteSaveTimer = null;
+  }
+  spoolRemoteSaveRequested = false;
   const revisionAtStart = spoolDataRevision;
   const localSpools = JSON.parse(JSON.stringify(Array.isArray(spools) ? spools : []));
   const localSupports = JSON.parse(JSON.stringify(spoolSupportDb));
@@ -1438,7 +1464,10 @@ function spoolSyncRemote(spools) {
       if (typeof supabaseRestRequest !== 'function') return false;
       let remoteValue = null;
       try {
-        const rows = await supabaseRestRequest('app_metadata?key=eq.spool_registry&select=value');
+        const rows = await supabaseRestRequest('app_metadata?key=eq.spool_registry&select=value', {
+          flushPending: false,
+          timeoutMs: 30000
+        });
         remoteValue = Array.isArray(rows) ? rows[0]?.value : null;
       } catch (readError) {
         console.warn('Não foi possível conferir a versão remota dos spools antes de salvar:', readError);
@@ -1473,7 +1502,11 @@ function spoolSyncRemote(spools) {
       await supabaseRestRequest('app_metadata?on_conflict=key', {
         method: 'POST',
         headers: { Prefer: 'resolution=merge-duplicates' },
-        body: JSON.stringify({ key: 'spool_registry', value: payload })
+        body: JSON.stringify({ key: 'spool_registry', value: payload }),
+        // O estado de spool ja possui fila local propria. Duplicar este payload
+        // enorme na fila generica causava o aviso pendente preso e quota cheia.
+        queueOffline: false,
+        timeoutMs: 45000
       });
 
       // Não substitui uma edição que aconteceu enquanto o envio estava em andamento.
@@ -1492,6 +1525,9 @@ function spoolSyncRemote(spools) {
         spoolClearPendingSync();
       }
       spoolUpdateSyncIndicator(true);
+      if (spoolHasPendingSync() || spoolRemoteSaveRequested) {
+        spoolScheduleRemoteSync();
+      }
       return true;
     } catch (e) {
       console.warn('Falha no upload de spools para Supabase:', e);
@@ -1508,7 +1544,10 @@ function spoolSyncRemote(spools) {
 async function syncSpoolsFromSupabase(options = {}) {
   try {
     if (typeof supabaseRestRequest !== 'function') return false;
-    const rows = await supabaseRestRequest('app_metadata?key=eq.spool_registry&select=value');
+    const rows = await supabaseRestRequest('app_metadata?key=eq.spool_registry&select=value', {
+      flushPending: false,
+      timeoutMs: 30000
+    });
     const remoteValue = Array.isArray(rows) ? rows[0]?.value : null;
     if (remoteValue && Array.isArray(remoteValue.spools)) {
       const pendingLocal = spoolHasPendingSync();
@@ -1544,7 +1583,7 @@ async function syncSpoolsFromSupabase(options = {}) {
       spoolUpdateSyncIndicator(true);
       if (pendingLocal || localHasNewerSpool || localHasNewerSupport || localHasNewerIso
         || localHasMissingRemoteSpool || localHasMissingRemoteSupport || localHasMissingRemoteIso) {
-        spoolSyncRemote(spoolDb).catch(() => {});
+        return await spoolSyncRemote(spoolDb);
       }
       return true;
     }
@@ -1557,16 +1596,75 @@ async function syncSpoolsFromSupabase(options = {}) {
 window.syncSpoolsFromSupabase = syncSpoolsFromSupabase;
 window.syncSpoolProjectsFromSupabase = syncSpoolsFromSupabase;
 
+// Versoes anteriores colocavam o JSON completo de spools na fila generica.
+// Recupera esse ultimo retrato antes de remover a mutacao antiga, evitando que
+// uma marcacao feita no tablet seja descartada durante a atualizacao do app.
+async function spoolRecoverLegacyOfflineMutation() {
+  const manager = window.ObraflowOfflineSync;
+  if (!manager?.list || !manager?.complete) return 0;
+  const records = (await manager.list()).filter(record =>
+    record?.table === 'app_metadata' && record?.resource === 'spool_registry'
+  );
+  if (!records.length) return 0;
+
+  let recovered = false;
+  for (const record of records) {
+    try {
+      const body = typeof record.body === 'string' ? JSON.parse(record.body) : record.body;
+      const snapshot = body?.value;
+      if (snapshot && Array.isArray(snapshot.spools)) {
+        spoolDeletedState = {
+          spools: spoolMergeTombstones(spoolDeletedState.spools, snapshot.deletedSpools),
+          supports: spoolMergeTombstones(spoolDeletedState.supports, snapshot.deletedSupports),
+          isometrics: spoolMergeTombstones(spoolDeletedState.isometrics, snapshot.deletedIsometrics)
+        };
+        spoolDb = spoolDeduplicateList(spoolMergeRecordCollections(
+          spoolDb,
+          snapshot.spools,
+          { includeLocalOnly: true, deletedRecords: spoolDeletedState.spools }
+        ));
+        spoolSupportDb = spoolMergeRecordCollections(
+          spoolSupportDb,
+          snapshot.supports,
+          { includeLocalOnly: true, kind: 'support', deletedRecords: spoolDeletedState.supports }
+        );
+        spoolIsoDb = spoolMergeRecordCollections(
+          spoolIsoDb,
+          snapshot.isometrics,
+          { includeLocalOnly: true, kind: 'iso', deletedRecords: spoolDeletedState.isometrics }
+        );
+        recovered = true;
+      }
+    } catch (error) {
+      console.warn('Fila antiga de spools invalida; mantendo a copia local atual:', error);
+    }
+    await manager.complete(record);
+  }
+
+  if (recovered) {
+    localStorage.setItem(SPOOL_STORE_KEY, JSON.stringify(spoolDb));
+    localStorage.setItem(SPOOL_SUPPORT_STORE_KEY, JSON.stringify(spoolSupportDb));
+    localStorage.setItem(SPOOL_ISO_STORE_KEY, JSON.stringify(spoolIsoDb));
+    localStorage.setItem(SPOOL_DELETED_STORE_KEY, JSON.stringify(spoolDeletedState));
+    spoolMarkSyncPending();
+    spoolScheduleRemoteSync(100);
+    if (window.location.hash === '#spools') renderSpools();
+  }
+  await manager.refresh?.();
+  return records.length;
+}
+
 function spoolUpdateSyncIndicator(synced) {
   const badge = document.getElementById('spoolSyncBadge');
   if (!badge) return;
   const viewCount = spoolControlView === 'supports' ? spoolSupportDb.length : spoolDb.length;
   const viewLabel = spoolControlView === 'supports' ? 'suportes' : 'spools';
-  if (synced) {
+  if (synced && !spoolHasPendingSync()) {
     badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; margin-right:4px;"></span> Online (${viewCount} ${viewLabel}) • Supabase Sincronizado`;
     badge.style.color = '#065f46';
   } else {
-    badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#f59e0b; margin-right:4px;"></span> Local (${viewCount} ${viewLabel})`;
+    badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#f59e0b; margin-right:4px;"></span> Salvo neste aparelho (${viewCount} ${viewLabel}) • aguardando envio`;
+    badge.style.color = '#92400e';
   }
 }
 
@@ -1645,6 +1743,8 @@ let spoolIsoDb = spoolLoadAuxiliary('iso');
 let spoolDeletedState = spoolLoadDeletedState();
 let spoolDataRevision = 0;
 let spoolRemoteSaveChain = Promise.resolve(true);
+let spoolRemoteSaveTimer = null;
+let spoolRemoteSaveRequested = false;
 let spoolPendingRecoverySnapshot = null;
 
 // Auto-salvar apenas os dados sanitizados. Não reinsere setores ou spools que
@@ -1666,6 +1766,7 @@ let spoolDiameterFilter = 'all';
 let spoolListFilter = 'all';
 let spoolSearchTerm = '';
 let spoolSearchRenderTimer = null;
+let spoolRenderPage = 1;
 let spoolSelectedDate = getLocalDateStr(); // YYYY-MM-DD no fuso local
 let spoolDateFilterMode = 'all'; // 'all' (todas as datas), 'activity' (atividade no dia), 'installed' (instalados no dia), 'received' (recebidos no dia)
 let spoolSafeTapMode = localStorage.getItem('obraflow_spool_safe_tap') !== 'false'; // Padrão: Modo Seguro (sem risco de desmarcar no tablet)
@@ -2356,6 +2457,18 @@ function renderSpools() {
 
   // Lista com todos os filtros aplicados
   const filteredSpools = spoolFilterList(spoolDb);
+  const pageSize = window.innerWidth <= 768 ? SPOOL_MOBILE_PAGE_SIZE : SPOOL_DESKTOP_PAGE_SIZE;
+  const totalRenderPages = Math.max(1, Math.ceil(filteredSpools.length / pageSize));
+  spoolRenderPage = Math.min(Math.max(1, spoolRenderPage), totalRenderPages);
+  const renderStart = (spoolRenderPage - 1) * pageSize;
+  const renderedSpools = filteredSpools.slice(renderStart, renderStart + pageSize);
+  const renderPageMeta = {
+    page: spoolRenderPage,
+    totalPages: totalRenderPages,
+    total: filteredSpools.length,
+    start: filteredSpools.length ? renderStart + 1 : 0,
+    end: Math.min(renderStart + pageSize, filteredSpools.length)
+  };
   if (spoolMultiSelectMode && spoolSelectedIds.size) {
     const visibleIds = new Set(filteredSpools.map(item => item.id));
     spoolSelectedIds = new Set(Array.from(spoolSelectedIds).filter(id => visibleIds.has(id)));
@@ -2823,7 +2936,7 @@ function renderSpools() {
     ` : ''}
 
     <div id="spoolSearchResults">
-      ${spoolRenderSearchResults(filteredSpools, filterDate)}
+      ${spoolRenderSearchResults(renderedSpools, filterDate, renderPageMeta)}
     </div>
 
     <!-- BARRA FLUTUANTE DE AÇÕES EM MASSA (EXCLUSÃO E STATUS EM LOTE) -->
@@ -2881,6 +2994,9 @@ function spoolRenderPipelineBar(sectorSpools, sectorMeta) {
     ordered.push({ item: p, label: `RETO #${idx + 1}` });
   });
   if (v2) ordered.push({ item: v2, label: 'VÁLV. FIM' });
+  const pipelineRenderLimit = window.innerWidth <= 768 ? SPOOL_MOBILE_PAGE_SIZE : SPOOL_DESKTOP_PAGE_SIZE;
+  const renderedOrdered = ordered.slice(0, pipelineRenderLimit);
+  const hiddenPipelineCount = Math.max(0, ordered.length - renderedOrdered.length);
 
   return `
     <div class="spool-pipeline-container">
@@ -2894,12 +3010,14 @@ function spoolRenderPipelineBar(sectorSpools, sectorMeta) {
           </span>
         </div>
         <div style="font-size:11px; color:#94a3b8;">
-          👈 Arraste para os lados para percorrer a linha toda · Clique no tubo para mudar status 👉
+          ${hiddenPipelineCount
+            ? `Exibindo os primeiros ${renderedOrdered.length} trechos · use os filtros para localizar os demais`
+            : '👈 Arraste para os lados para percorrer a linha toda · Clique no tubo para mudar status 👉'}
         </div>
       </div>
 
       <div class="spool-pipeline-track">
-        ${ordered.map((node, i) => {
+        ${renderedOrdered.map((node, i) => {
           const s = node.item;
           const isValve = s.type === 'valve';
           const isInst = s.status === 'installed';
@@ -2919,7 +3037,7 @@ function spoolRenderPipelineBar(sectorSpools, sectorMeta) {
               <span class="seg-tag">${esc(spoolDisplayNumber(s))}</span>
               <span class="seg-idx">${node.label}</span>
             </div>
-            ${i < ordered.length - 1 ? '<div class="spool-pipe-connector"></div>' : ''}
+            ${i < renderedOrdered.length - 1 ? '<div class="spool-pipe-connector"></div>' : ''}
           `;
         }).join('')}
       </div>
@@ -2930,9 +3048,29 @@ function spoolRenderPipelineBar(sectorSpools, sectorMeta) {
 /* ==========================================================================
    RENDERIZAÇÃO DOS QUADRADOS DOS TUBOS
    ========================================================================== */
-function spoolRenderSearchResults(list, filterDate) {
+function spoolRenderPagination(meta = {}) {
+  if (Number(meta.totalPages || 1) <= 1) return '';
+  const page = Number(meta.page || 1);
+  const totalPages = Number(meta.totalPages || 1);
+  return `
+    <nav class="spool-pagination" aria-label="Paginas da lista de spools" style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin:12px 0;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;">
+      <button type="button" class="button button-outline compact" onclick="spoolSetRenderPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>Anterior</button>
+      <strong style="font-size:12px;color:#334155;">${meta.start}-${meta.end} de ${meta.total} &middot; Pagina ${page}/${totalPages}</strong>
+      <button type="button" class="button button-outline compact" onclick="spoolSetRenderPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>Proxima</button>
+    </nav>
+  `;
+}
+
+function spoolSetRenderPage(page) {
+  spoolRenderPage = Math.max(1, Number(page) || 1);
+  renderSpools();
+  requestAnimationFrame(() => document.getElementById('spoolSearchResults')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+}
+
+function spoolRenderSearchResults(list, filterDate, pageMeta = {}) {
   const sectorMeta = spoolGetSectorMeta(spoolActiveSector, spoolDb);
   return `
+    ${spoolRenderPagination(pageMeta)}
     <!-- 6. QUADRADOS DOS TUBOS COM TODAS AS TAGS VISIVEIS -->
     <div class="spool-tube-grid-wrap">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
@@ -2962,6 +3100,7 @@ function spoolRenderSearchResults(list, filterDate) {
 
     <!-- 7. TABELA OPERACIONAL COM TAGS EM ALTO CONTRASTE E COLUNA DATA HALL (DH) -->
     ${spoolRenderTubeTable(list, filterDate)}
+    ${spoolRenderPagination(pageMeta)}
   `;
 }
 
@@ -3307,7 +3446,16 @@ function spoolHandleSearchInput(input) {
     const results = document.getElementById('spoolSearchResults');
     if (!results || input !== document.getElementById('spoolSearchInput')) return;
     const filteredSpools = spoolFilterList(spoolDb);
-    results.innerHTML = spoolRenderSearchResults(filteredSpools, spoolSelectedDate || getLocalDateStr());
+    spoolRenderPage = 1;
+    const pageSize = window.innerWidth <= 768 ? SPOOL_MOBILE_PAGE_SIZE : SPOOL_DESKTOP_PAGE_SIZE;
+    const renderedSpools = filteredSpools.slice(0, pageSize);
+    results.innerHTML = spoolRenderSearchResults(renderedSpools, spoolSelectedDate || getLocalDateStr(), {
+      page: 1,
+      totalPages: Math.max(1, Math.ceil(filteredSpools.length / pageSize)),
+      total: filteredSpools.length,
+      start: filteredSpools.length ? 1 : 0,
+      end: Math.min(pageSize, filteredSpools.length)
+    });
     const visibleCount = document.getElementById('spoolVisibleCount');
     if (visibleCount) visibleCount.textContent = filteredSpools.length;
   }, 80);
@@ -4150,6 +4298,8 @@ function populateSpoolExcelSheet(sheet, items, validationItems = items) {
     { header: 'Status', key: 'status', width: 14 },
     { header: 'Data de Recebimento', key: 'recData', width: 18 },
     { header: 'Data de Instalação', key: 'instData', width: 18 },
+    { header: 'Data de Reprovação', key: 'rejData', width: 18 },
+    { header: 'Data de Devolução', key: 'returnData', width: 18 },
     { header: 'Responsável', key: 'resp', width: 22 },
     { header: 'Observações', key: 'obs', width: 32 }
   ];
@@ -4191,6 +4341,8 @@ function populateSpoolExcelSheet(sheet, items, validationItems = items) {
       status: statusName,
       recData: s.receivedDate || '',
       instData: s.installedDate || '',
+      rejData: s.rejectedDate || '',
+      returnData: s.returnedDate || '',
       resp: s.installedBy || s.rejectedBy || s.returnedBy || '',
       obs: obsContent
     });
@@ -4204,6 +4356,8 @@ function populateSpoolExcelSheet(sheet, items, validationItems = items) {
     row.getCell(8).alignment = { vertical: 'middle', horizontal: 'center' };
     row.getCell(9).alignment = { vertical: 'middle', horizontal: 'center' };
     row.getCell(10).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(11).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(12).alignment = { vertical: 'middle', horizontal: 'center' };
 
     if (s.status === 'rejected') {
       row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
@@ -4215,7 +4369,7 @@ function populateSpoolExcelSheet(sheet, items, validationItems = items) {
   });
 
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
-  sheet.autoFilter = { from: 'A1', to: `L${Math.max(2, sheet.rowCount)}` };
+  sheet.autoFilter = { from: 'A1', to: `N${Math.max(2, sheet.rowCount)}` };
 
   const maxValidRow = Math.max(2500, items.length + 500);
   applySpoolExcelDataValidations(
@@ -4301,7 +4455,7 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
   // Fallback caso ExcelJS não esteja disponível
   if (!window.XLSX) return toast('Biblioteca Excel carregando...', true);
 
-  const header = ['TAG / Spool', 'Parte / Sequência', 'Data Hall (DH)', 'Setor', 'Subárea', 'Classificação', 'Diâmetro', 'Status', 'Data de Recebimento', 'Data de Instalação', 'Responsável', 'Observações'];
+  const header = ['TAG / Spool', 'Parte / Sequência', 'Data Hall (DH)', 'Setor', 'Subárea', 'Classificação', 'Diâmetro', 'Status', 'Data de Recebimento', 'Data de Instalação', 'Data de Reprovação', 'Data de Devolução', 'Responsável', 'Observações'];
   const rows = [header];
   listToExport.forEach(s => {
     const secName = spoolSectorDisplayName(s);
@@ -4312,7 +4466,7 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
     const obsVal = s.status === 'rejected' && s.rejectedReason
       ? `[REPROVADO: ${s.rejectedReason}] ${s.notes || ''}`
       : (s.status === 'returned' && s.returnedReason ? `[DEVOLVIDO: ${s.returnedReason}] ${s.notes || ''}` : (s.notes || ''));
-    rows.push([s.number, s.part || s.seq || '', normalizeDh(s.dh), secName, s.subArea || '', typeName, s.diameter || '', statusName, s.receivedDate || '', s.installedDate || '', s.installedBy || s.rejectedBy || s.returnedBy || '', obsVal]);
+    rows.push([s.number, s.part || s.seq || '', normalizeDh(s.dh), secName, s.subArea || '', typeName, s.diameter || '', statusName, s.receivedDate || '', s.installedDate || '', s.rejectedDate || '', s.returnedDate || '', s.installedBy || s.rejectedBy || s.returnedBy || '', obsVal]);
   });
 
   const wb = XLSX.utils.book_new();
@@ -4381,7 +4535,7 @@ async function spoolDownloadSampleSpreadsheet() {
 
   // Fallback sem lista fixa: gera um modelo vazio em vez de servir setores antigos.
   if (window.XLSX) {
-    const header = ['TAG / Spool', 'Parte / Sequência', 'Data Hall (DH)', 'Setor', 'Subárea', 'Classificação', 'Diâmetro', 'Status', 'Data de Recebimento', 'Data de Instalação', 'Responsável', 'Observações'];
+    const header = ['TAG / Spool', 'Parte / Sequência', 'Data Hall (DH)', 'Setor', 'Subárea', 'Classificação', 'Diâmetro', 'Status', 'Data de Recebimento', 'Data de Instalação', 'Data de Reprovação', 'Data de Devolução', 'Responsável', 'Observações'];
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.aoa_to_sheet([header]);
     XLSX.utils.book_append_sheet(workbook, sheet, 'Modelo_Spools');
@@ -4580,6 +4734,8 @@ async function spoolHandleExcelUpload(event) {
       let sectorIdx = -1;
       let recDateIdx = -1;
       let instDateIdx = -1;
+      let rejDateIdx = -1;
+      let returnDateIdx = -1;
       let respIdx = -1;
       let notesIdx = -1;
       let partIdx = -1;
@@ -4600,6 +4756,8 @@ async function spoolHandleExcelUpload(event) {
           sectorIdx = rowStr.findIndex(h => /setor|área|area|corredor/i.test(h));
           recDateIdx = rowStr.findIndex(h => /rec.*data|data.*rec/i.test(h));
           instDateIdx = rowStr.findIndex(h => /inst.*data|data.*inst|montad.*em/i.test(h));
+          rejDateIdx = rowStr.findIndex(h => /reprov.*data|data.*reprov|rejeit.*data|data.*rejeit/i.test(h));
+          returnDateIdx = rowStr.findIndex(h => /devol.*data|data.*devol|retorn.*data|data.*retorn/i.test(h));
           respIdx = rowStr.findIndex(h => /resp|instalador|quem/i.test(h));
           notesIdx = rowStr.findIndex(h => /obs|observa|descri|nota/i.test(h));
           partIdx = rowStr.findIndex(h => /^(?:parte|parte\s*\/\s*sequ[eê]ncia|seq\.?|sequ[eê]ncia|sub.*pe[cç]a|divis[aã]o|conjunto)$/i.test(h));
@@ -4750,16 +4908,19 @@ async function spoolHandleExcelUpload(event) {
           let instAt = '';
           let instBy = '';
           if (statusVal === 'installed') {
-            instDate = (instDateIdx !== -1 && row[instDateIdx]) ? String(row[instDateIdx]).trim() : new Date().toISOString().slice(0, 10);
-            instAt = instDate ? `${instDate}T10:00:00.000Z` : new Date().toISOString();
+            // Nunca inventa "hoje" durante a leitura. No merge, uma data
+            // ausente preserva o historico existente; somente status novos
+            // recebem a data atual na confirmacao da importacao.
+            instDate = (instDateIdx !== -1 && row[instDateIdx]) ? String(row[instDateIdx]).trim() : '';
+            instAt = instDate ? `${instDate}T10:00:00.000Z` : '';
             instBy = (respIdx !== -1 && row[respIdx]) ? String(row[respIdx]).trim() : (currentUser?.name || 'Pedro Alves');
           }
 
           let recDate = '';
           let recAt = '';
           if (statusVal === 'received') {
-            recDate = (recDateIdx !== -1 && row[recDateIdx]) ? String(row[recDateIdx]).trim() : new Date().toISOString().slice(0, 10);
-            recAt = recDate ? `${recDate}T08:00:00.000Z` : new Date().toISOString();
+            recDate = (recDateIdx !== -1 && row[recDateIdx]) ? String(row[recDateIdx]).trim() : '';
+            recAt = recDate ? `${recDate}T08:00:00.000Z` : '';
           }
 
           let rejDate = '';
@@ -4767,10 +4928,10 @@ async function spoolHandleExcelUpload(event) {
           let rejBy = '';
           let rejReason = '';
           if (statusVal === 'rejected') {
-            rejDate = new Date().toISOString().slice(0, 10);
-            rejAt = new Date().toISOString();
+            rejDate = (rejDateIdx !== -1 && row[rejDateIdx]) ? String(row[rejDateIdx]).trim() : '';
+            rejAt = rejDate ? `${rejDate}T10:00:00.000Z` : '';
             rejBy = (respIdx !== -1 && row[respIdx]) ? String(row[respIdx]).trim() : (currentUser?.name || 'Pedro Alves');
-            rejReason = notesVal || 'Reprovado na importação';
+            rejReason = notesVal;
           }
 
           let returnedDate = '';
@@ -4778,10 +4939,10 @@ async function spoolHandleExcelUpload(event) {
           let returnedBy = '';
           let returnedReason = '';
           if (statusVal === 'returned') {
-            returnedDate = new Date().toISOString().slice(0, 10);
-            returnedAt = new Date().toISOString();
+            returnedDate = (returnDateIdx !== -1 && row[returnDateIdx]) ? String(row[returnDateIdx]).trim() : '';
+            returnedAt = returnedDate ? `${returnedDate}T10:00:00.000Z` : '';
             returnedBy = (respIdx !== -1 && row[respIdx]) ? String(row[respIdx]).trim() : (currentUser?.name || 'Pedro Alves');
-            returnedReason = notesVal || 'Devolvido na importação';
+            returnedReason = notesVal;
           }
 
           const safePartId = partSuffix ? `-${partSuffix.replace(/[^a-zA-Z0-9]/g, '_')}` : (currentCount > 0 ? `-${currentCount + 1}` : '');
@@ -4963,15 +5124,75 @@ async function spoolHandleExcelUpload(event) {
   }
 }
 
+function spoolPrepareImportedRecord(imported, existing = null) {
+  const item = { ...imported };
+  const sameStatus = existing?.status === item.status;
+  const today = getLocalDateStr();
+  const now = new Date().toISOString();
+  const user = window.currentUser?.name || 'Pedro Alves';
+  const previous = field => sameStatus ? (existing?.[field] || '') : '';
+  const timestamp = (date, fallbackTime = '10:00') => date
+    ? buildIsoFromLocalDateAndTime(date, fallbackTime)
+    : now;
+
+  // Recebimento e historico independente e deve sobreviver a mudancas para
+  // Instalado/Reprovado/Devolvido quando a planilha nao o informa novamente.
+  if (item.status !== 'not-started' && existing) {
+    item.receivedDate = item.receivedDate || existing.receivedDate || '';
+    item.receivedAt = item.receivedAt || existing.receivedAt || '';
+    item.receivedBy = item.receivedBy || existing.receivedBy || '';
+  }
+
+  if (item.status === 'installed') {
+    item.installedDate = item.installedDate || previous('installedDate') || today;
+    item.installedAt = item.installedAt || previous('installedAt') || timestamp(item.installedDate);
+    item.installedBy = item.installedBy || previous('installedBy') || user;
+    item.receivedDate = item.receivedDate || item.installedDate;
+    item.receivedAt = item.receivedAt || item.installedAt;
+    item.receivedBy = item.receivedBy || item.installedBy;
+    item.rejectedDate = item.rejectedAt = item.rejectedBy = item.rejectedReason = '';
+    item.returnedDate = item.returnedAt = item.returnedBy = item.returnedReason = '';
+  } else if (item.status === 'received') {
+    item.receivedDate = item.receivedDate || previous('receivedDate') || today;
+    item.receivedAt = item.receivedAt || previous('receivedAt') || timestamp(item.receivedDate, '08:00');
+    item.receivedBy = item.receivedBy || previous('receivedBy') || user;
+    item.installedDate = item.installedAt = item.installedBy = '';
+    item.rejectedDate = item.rejectedAt = item.rejectedBy = item.rejectedReason = '';
+    item.returnedDate = item.returnedAt = item.returnedBy = item.returnedReason = '';
+  } else if (item.status === 'rejected') {
+    item.rejectedDate = item.rejectedDate || previous('rejectedDate') || today;
+    item.rejectedAt = item.rejectedAt || previous('rejectedAt') || timestamp(item.rejectedDate);
+    item.rejectedBy = item.rejectedBy || previous('rejectedBy') || user;
+    item.rejectedReason = item.rejectedReason || previous('rejectedReason') || 'Reprovado na importação';
+    item.installedDate = item.installedAt = item.installedBy = '';
+    item.returnedDate = item.returnedAt = item.returnedBy = item.returnedReason = '';
+  } else if (item.status === 'returned') {
+    item.returnedDate = item.returnedDate || previous('returnedDate') || today;
+    item.returnedAt = item.returnedAt || previous('returnedAt') || timestamp(item.returnedDate);
+    item.returnedBy = item.returnedBy || previous('returnedBy') || user;
+    item.returnedReason = item.returnedReason || previous('returnedReason') || 'Devolvido na importação';
+    item.installedDate = item.installedAt = item.installedBy = '';
+    item.rejectedDate = item.rejectedAt = item.rejectedBy = item.rejectedReason = '';
+  } else {
+    item.receivedDate = item.receivedAt = item.receivedBy = '';
+    item.installedDate = item.installedAt = item.installedBy = '';
+    item.rejectedDate = item.rejectedAt = item.rejectedBy = item.rejectedReason = '';
+    item.returnedDate = item.returnedAt = item.returnedBy = item.returnedReason = '';
+  }
+  return item;
+}
+
 function spoolConfirmImport(importedSpools) {
-  const list = importedSpools || window._pendingImportSpools;
-  if (!Array.isArray(list) || !list.length) {
+  const importedList = importedSpools || window._pendingImportSpools;
+  if (!Array.isArray(importedList) || !importedList.length) {
     return toast('Nenhum spool para importar.', true);
   }
 
   const mode = document.querySelector('input[name="spoolImportMode"]:checked')?.value || 'merge';
   const defaultDh = normalizeDh(document.getElementById('spoolImportDefaultDh')?.value || 'DH 04');
   const previousSpools = spoolDb.map(item => ({ ...item }));
+  const previousByKey = new Map(previousSpools.map(item => [spoolRecordKey(item), item]));
+  const list = importedList.map(item => spoolPrepareImportedRecord(item, previousByKey.get(spoolRecordKey(item))));
 
   if (mode === 'replace_all') {
     spoolDb = list;
@@ -6842,6 +7063,9 @@ window.spoolSetAuxSearch = spoolSetAuxSearch;
 window.spoolSetAuxStatusFilter = spoolSetAuxStatusFilter;
 window.spoolClearAuxFilters = spoolClearAuxFilters;
 window.spoolForceSyncNow = spoolForceSyncNow;
+window.spoolSetRenderPage = spoolSetRenderPage;
+window.spoolScheduleRemoteSync = spoolScheduleRemoteSync;
+window.spoolRecoverLegacyOfflineMutation = spoolRecoverLegacyOfflineMutation;
 window.spoolClearSupportsInCurrentLocation = spoolClearSupportsInCurrentLocation;
 window.spoolConfirmProtectedDelete = spoolConfirmProtectedDelete;
 window.spoolCancelProtectedDelete = spoolCancelProtectedDelete;

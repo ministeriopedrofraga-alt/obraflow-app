@@ -1817,6 +1817,11 @@ let activeReconnectSync = null;
 async function synchronizeAfterReconnect({ notify = false } = {}) {
   if (activeReconnectSync) return activeReconnectSync;
   activeReconnectSync = (async () => {
+    // Converte primeiro a fila antiga de spools para a fila leve propria do
+    // modulo. Assim o reconector nao tenta reenviar repetidamente varios MB.
+    if (typeof window.spoolRecoverLegacyOfflineMutation === 'function') {
+      await window.spoolRecoverLegacyOfflineMutation();
+    }
     if (navigator.onLine === false) {
       await window.ObraflowOfflineSync?.refresh();
       if (notify) toast('Sem internet. O trabalho continua salvo neste aparelho.', true);
@@ -7376,6 +7381,9 @@ document.getElementById('globalSearch').addEventListener('keydown',e=>{if(e.key=
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();document.getElementById('globalSearch').focus();}});
 window.addEventListener('hashchange',render);
 window.ObraflowOfflineSync?.subscribe(updateOfflineSyncStatus);
+window.spoolRecoverLegacyOfflineMutation?.().catch(error => {
+  console.warn('Nao foi possivel converter a fila antiga de spools:', error);
+});
 window.addEventListener('focus',()=>{
   if (navigator.onLine !== false) synchronizeAfterReconnect();
 });
