@@ -1798,6 +1798,62 @@ function formatSpoolDateShort(d) {
   return d;
 }
 
+// A busca e os filtros tecnicos precisam ter a mesma leitura na lista e no
+// mapa de progresso. Status e data ficam fora do denominador do mapa: filtrar
+// apenas "Instalado" nao pode transformar um setor incompleto em 100%.
+function spoolMatchesSearchTerm(spool, rawTerm = spoolSearchTerm) {
+  const q = String(rawTerm || '').toLowerCase().trim();
+  if (!q) return true;
+
+  return [
+    spool.number,
+    spool.part || spool.seq,
+    spool.subArea,
+    spool.dh,
+    spoolSectorDisplayName(spool),
+    spool.diameter,
+    spool.notes,
+    spool.rejectedReason,
+    spool.returnedReason
+  ].some(value => String(value || '').toLowerCase().includes(q));
+}
+
+function spoolProgressTypeFilters() {
+  return [
+    spoolTypeFilter !== 'all' ? spoolTypeFilter : '',
+    ['straight', 'valve', 'branch'].includes(spoolListFilter) ? spoolListFilter : ''
+  ].filter(Boolean);
+}
+
+function spoolFilterProgressScope(sourceList) {
+  const typeFilters = spoolProgressTypeFilters();
+  return (Array.isArray(sourceList) ? sourceList : []).filter(spool => {
+    if (spoolActiveDh !== 'ALL' && normalizeDh(spool.dh) !== normalizeDh(spoolActiveDh)) return false;
+    if (spoolActiveSubArea !== 'all') {
+      const itemSubArea = spoolCanonicalSubArea(spool.subArea, spool.area);
+      const targetSubArea = spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector);
+      if (itemSubArea !== targetSubArea) return false;
+    }
+    if (typeFilters.some(type => spool.type !== type)) return false;
+    if (spoolDiameterFilter !== 'all' && spool.diameter !== spoolDiameterFilter) return false;
+    return spoolMatchesSearchTerm(spool);
+  });
+}
+
+function spoolProgressScopeLabel() {
+  const labels = [];
+  const typeLabels = { straight: 'Trechos retos', valve: 'Válvulas', branch: 'Derivações' };
+  const typeFilters = [...new Set(spoolProgressTypeFilters())];
+  if (typeFilters.length === 1) labels.push(typeLabels[typeFilters[0]] || typeFilters[0]);
+  else if (typeFilters.length > 1) labels.push('Classificações combinadas');
+  if (spoolDiameterFilter !== 'all') labels.push(`Ø ${spoolDiameterFilter}`);
+  if (spoolActiveSubArea !== 'all') {
+    labels.push(spoolSubAreaDisplayName(spoolActiveSubArea, spoolDb, spoolActiveSector));
+  }
+  if (spoolSearchTerm.trim()) labels.push(`Busca: "${spoolSearchTerm.trim()}"`);
+  return labels.length ? labels.join(' · ') : 'Todos os tipos';
+}
+
 /* ==========================================================================
    FUNÇÃO CENTRAL DE FILTRAGEM (spoolFilterList)
    ========================================================================== */
@@ -1895,21 +1951,7 @@ function spoolFilterList(sourceList) {
     }
 
     // 8. Busca Textual por Tag, Parte, DH, Setor, Subárea, Diâmetro ou Observações
-    if (spoolSearchTerm) {
-      const q = spoolSearchTerm.toLowerCase().trim();
-      const matchTag = (s.number || '').toLowerCase().includes(q);
-      const matchPart = (s.part || s.seq || '').toLowerCase().includes(q);
-      const matchSub = (s.subArea || '').toLowerCase().includes(q);
-      const matchDh = (s.dh || '').toLowerCase().includes(q);
-      const secName = spoolSectorDisplayName(s).toLowerCase();
-      const matchSec = secName.includes(q);
-      const matchDia = (s.diameter || '').toLowerCase().includes(q);
-      const matchNotes = (s.notes || '').toLowerCase().includes(q);
-      const matchException = `${s.rejectedReason || ''} ${s.returnedReason || ''}`.toLowerCase().includes(q);
-      if (!matchTag && !matchPart && !matchSub && !matchDh && !matchSec && !matchDia && !matchNotes && !matchException) {
-        return false;
-      }
-    }
+    if (!spoolMatchesSearchTerm(s)) return false;
 
     return true;
   });
@@ -2884,10 +2926,8 @@ function renderSpools() {
 }
 
 function spoolRenderSectorMap(items, sectors) {
-  const dhItems = items.filter(item =>
-    spoolActiveDh === 'ALL' || normalizeDh(item.dh) === normalizeDh(spoolActiveDh)
-  );
-  if (!dhItems.length || !sectors.length) return '';
+  const progressItems = spoolFilterProgressScope(items);
+  if (!progressItems.length || !sectors.length) return '';
 
   const statusTotals = (list) => ({
     installed: list.filter(item => item.status === 'installed').length,
@@ -2924,7 +2964,7 @@ function spoolRenderSectorMap(items, sectors) {
 
   const sectorCards = sectors.map(sector => ({
     sector,
-    items: dhItems.filter(item => item.area === sector.id)
+    items: progressItems.filter(item => item.area === sector.id)
   })).filter(entry => entry.items.length);
 
   return `
@@ -2934,13 +2974,14 @@ function spoolRenderSectorMap(items, sectors) {
           <span class="spool-map-eyebrow">VISÃO DA OBRA</span>
           <h3 id="spoolVisualMapTitle">Mapa visual por setor</h3>
         </div>
-        <span class="spool-map-scope">${spoolActiveDh === 'ALL' ? 'Todos os Data Halls' : esc(spoolActiveDh)} · ${dhItems.length} spools</span>
+        <span class="spool-map-scope">${spoolActiveDh === 'ALL' ? 'Todos os Data Halls' : esc(spoolActiveDh)} · ${progressItems.length} spools</span>
       </div>
+      <div class="spool-map-context"><strong>Avanço calculado em:</strong> ${esc(spoolProgressScopeLabel())}</div>
       <div class="spool-map-grid">
-        ${cardMarkup({ id: 'all', name: 'Visão geral', icon: '🌐' }, dhItems, true)}
+        ${cardMarkup({ id: 'all', name: 'Visão geral', icon: '🌐' }, progressItems, true)}
         ${sectorCards.map(entry => cardMarkup(entry.sector, entry.items)).join('')}
       </div>
-      <p class="spool-map-help">Toque em um setor para filtrar a relação abaixo.</p>
+      <p class="spool-map-help">Toque em um setor para filtrar a relação abaixo. Filtros de status e data não alteram o percentual geral.</p>
     </section>
   `;
 }

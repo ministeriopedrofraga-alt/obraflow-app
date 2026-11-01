@@ -81,6 +81,60 @@ async function run() {
     throw new Error(`Falha na paginacao: ${JSON.stringify(result)}`);
   }
 
+  // Reproduz o caso real do Corredor FW A: 64 trechos retos instalados e
+  // 276 ramais ainda nao instalados. O mapa geral deve mostrar 19%, enquanto
+  // o recorte "Trecho reto" precisa mostrar 100% (64/64).
+  const fwAFixture = [
+    ...Array.from({ length: 64 }, (_, index) => ({
+      id: `fw-a-straight-${index}`,
+      number: `R${index + 1}`,
+      dh: 'DH 04',
+      area: 'fw-a',
+      sectorName: 'Corredor FW A',
+      type: 'straight',
+      diameter: '10"',
+      status: 'installed'
+    })),
+    ...Array.from({ length: 276 }, (_, index) => ({
+      id: `fw-a-branch-${index}`,
+      number: `D${index + 1}`,
+      dh: 'DH 04',
+      area: 'fw-a',
+      sectorName: 'Corredor FW A',
+      type: 'branch',
+      diameter: '2.1/2"',
+      status: 'not-started'
+    }))
+  ];
+  const fwASectors = [{ id: 'fw-a', name: 'Corredor FW A', icon: 'FW' }];
+
+  vm.runInContext("spoolActiveDh='DH 04'; spoolActiveSector='fw-a'; spoolActiveSubArea='all'; spoolTypeFilter='all'; spoolDiameterFilter='all'; spoolListFilter='all'; spoolStatusFilter='all'; spoolDateFilterMode='all'; spoolSearchTerm='';", context);
+  const generalMap = context.window.spoolRenderSectorMap(fwAFixture, fwASectors);
+  result.generalProgressPreserved = generalMap.includes('64/340') && generalMap.includes('19% instalado');
+
+  vm.runInContext("spoolTypeFilter='straight';", context);
+  const straightMap = context.window.spoolRenderSectorMap(fwAFixture, fwASectors);
+  result.straightProgressCorrect = straightMap.includes('64/64')
+    && straightMap.includes('100% instalado')
+    && straightMap.includes('Trechos retos');
+
+  // Status e data filtram a relacao operacional, mas nao o denominador fisico.
+  vm.runInContext("spoolTypeFilter='all'; spoolStatusFilter='installed'; spoolDateFilterMode='installed';", context);
+  const statusMap = context.window.spoolRenderSectorMap(fwAFixture, fwASectors);
+  result.statusDoesNotFakeProgress = statusMap.includes('64/340') && statusMap.includes('19% instalado');
+
+  // O card rapido de classificacao usa spoolListFilter, entao deve produzir o
+  // mesmo recorte do select avancado.
+  vm.runInContext("spoolStatusFilter='all'; spoolDateFilterMode='all'; spoolListFilter='straight';", context);
+  const quickStraightMap = context.window.spoolRenderSectorMap(fwAFixture, fwASectors);
+  result.quickTypeProgressCorrect = quickStraightMap.includes('64/64') && quickStraightMap.includes('100% instalado');
+
+  if (!result.generalProgressPreserved || !result.straightProgressCorrect || !result.statusDoesNotFakeProgress || !result.quickTypeProgressCorrect) {
+    throw new Error(`Falha no escopo do mapa de progresso: ${JSON.stringify(result)}`);
+  }
+
+  vm.runInContext("spoolActiveDh='ALL'; spoolActiveSector='all'; spoolTypeFilter='all'; spoolListFilter='all'; spoolStatusFilter='all'; spoolDateFilterMode='all';", context);
+
   context.window.spoolSetItemStatus('spool-300', 'installed');
   context.window.spoolSetItemStatus('spool-301', 'installed');
   context.window.spoolSetItemStatus('spool-302', 'installed');
