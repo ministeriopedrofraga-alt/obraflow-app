@@ -1,6 +1,7 @@
 const fs = require('fs');
 const vm = require('vm');
 const { performance } = require('perf_hooks');
+const ExcelJS = require('./exceljs.min.js');
 
 const store = new Map();
 const rows = Array.from({ length: 4484 }, (_, index) => ({
@@ -11,6 +12,7 @@ const rows = Array.from({ length: 4484 }, (_, index) => ({
   sectorName: 'SUPERCORE',
   type: 'straight',
   diameter: '10"',
+  lengthMeters: 1.25,
   status: index < 232 ? 'installed' : 'not-started',
   installedDate: index < 232 ? '2026-10-31' : '',
   installedAt: index < 232 ? '2026-10-31T12:00:00.000Z' : '',
@@ -54,6 +56,7 @@ const context = {
   closeModal: () => {},
   confirm: () => true
 };
+context.ExcelJS = ExcelJS;
 context.supabaseRestRequest = async (path, options = {}) => {
   requests.push({ path, options });
   return options.method === 'POST' ? null : [];
@@ -77,6 +80,29 @@ const result = {
 };
 
 async function run() {
+  result.lengthParsing = context.window.spoolParseLengthMeters('5,418') === 5.418
+    && context.window.spoolParseLengthMeters(5.418) === 5.418
+    && context.window.spoolParseLengthMeters('1.234,56 m') === 1234.56;
+  result.lengthTotals = context.window.spoolSumLength(JSON.parse(store.get('obraflow_spools_v5'))) === 5605;
+  result.lengthRendered = app.innerHTML.includes('5.605 m') && app.innerHTML.includes('Metragem filtrada');
+  if (!result.lengthParsing || !result.lengthTotals || !result.lengthRendered) {
+    throw new Error(`Falha no controle de metragem: ${JSON.stringify(result)}`);
+  }
+
+  const lengthWorkbook = new ExcelJS.Workbook();
+  context.window.addSpoolHelperListSheet(lengthWorkbook, rows.slice(0, 3));
+  const lengthSheet = lengthWorkbook.addWorksheet('Todos_os_Spools');
+  context.window.populateSpoolExcelSheet(lengthSheet, rows.slice(0, 3));
+  const summarySheet = context.window.addSpoolMeasurementSummarySheet(lengthWorkbook, rows.slice(0, 3));
+  const lengthBuffer = await lengthWorkbook.xlsx.writeBuffer();
+  result.lengthSpreadsheet = lengthSheet.getCell('O1').value === 'Comprimento (m)'
+    && lengthSheet.getCell('O2').value === 1.25
+    && summarySheet.getCell('C2').value === 3.75
+    && lengthBuffer.byteLength > 0;
+  if (!result.lengthSpreadsheet) {
+    throw new Error(`Falha na planilha de metragem: ${JSON.stringify(result)}`);
+  }
+
   if (result.renderedCards !== 80 || !result.pagination) {
     throw new Error(`Falha na paginacao: ${JSON.stringify(result)}`);
   }
@@ -157,15 +183,22 @@ async function run() {
   await new Promise(resolve => setTimeout(resolve, 1600));
 
   const posts = requests.filter(request => request.options.method === 'POST');
+  const itemPosts = posts.filter(request => Array.isArray(JSON.parse(request.options.body)));
+  const snapshotPosts = posts.filter(request => !Array.isArray(JSON.parse(request.options.body)));
   result.consolidatedPosts = posts.length;
-  result.genericQueueDisabled = posts[0]?.options.queueOffline === false;
-  result.postContainsAllChanges = posts.length === 1
+  result.genericQueueDisabled = posts.every(request => request.options.queueOffline === false);
+  result.itemPostContainsAllChanges = itemPosts.length === 1
     && ['spool-300', 'spool-301', 'spool-302'].every(id => {
-      const payload = JSON.parse(posts[0].options.body);
+      const payload = JSON.parse(itemPosts[0].options.body);
+      return payload.some(entry => entry.value?.record?.id === id && entry.value.record.status === 'installed');
+    });
+  result.postContainsAllChanges = snapshotPosts.length === 1
+    && ['spool-300', 'spool-301', 'spool-302'].every(id => {
+      const payload = JSON.parse(snapshotPosts[0].options.body);
       return payload.value.spools.some(item => item.id === id && item.status === 'installed');
     });
 
-  if (result.consolidatedPosts !== 1 || !result.genericQueueDisabled || !result.postContainsAllChanges) {
+  if (result.consolidatedPosts !== 2 || !result.genericQueueDisabled || !result.itemPostContainsAllChanges || !result.postContainsAllChanges) {
     throw new Error(`Falha na consolidacao: ${JSON.stringify(result)}`);
   }
 

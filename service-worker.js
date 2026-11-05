@@ -1,19 +1,20 @@
 const CACHE_PREFIX = 'datacenter-omnia-';
-const SHELL_CACHE = `${CACHE_PREFIX}shell-20261101-spool-map-actions-v4`;
-const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-20261101-spool-map-actions-v4`;
+const APP_VERSION = '20261104_spool_length_v1';
+const SHELL_CACHE = `${CACHE_PREFIX}shell-${APP_VERSION}`;
+const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-${APP_VERSION}`;
 
 const APP_SHELL = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
-  '/styles.css?v=20261101_spool_map_actions_v4',
-  '/offline-sync.js?v=20261101_spool_queue_fix_v1',
-  '/inventory.js?v=20261017_4',
-  '/cautelas.js?v=20261021_offline_sync_v1',
-  '/radios.js?v=20261023_workforce_source_v1',
-  '/spools.js?v=20261101_spool_map_actions_v4',
-  '/qr-scanner.js?v=20261017_1',
-  '/app.js?v=20261101_spool_queue_fix_v1',
+  `/styles.css?v=${APP_VERSION}`,
+  `/offline-sync.js?v=${APP_VERSION}`,
+  `/inventory.js?v=${APP_VERSION}`,
+  `/cautelas.js?v=${APP_VERSION}`,
+  `/radios.js?v=${APP_VERSION}`,
+  `/spools.js?v=${APP_VERSION}`,
+  `/qr-scanner.js?v=${APP_VERSION}`,
+  `/app.js?v=${APP_VERSION}`,
   '/exceljs.min.js',
   '/assets/workforce-seed.json',
   '/assets/heating-cooling-logo.png',
@@ -57,7 +58,9 @@ self.addEventListener('activate', event => {
 async function networkFirst(request, fallbackUrl = '') {
   const cache = await caches.open(RUNTIME_CACHE);
   try {
-    const response = await fetch(request);
+    // Ignora o cache HTTP do navegador nos arquivos essenciais. A copia do
+    // Cache Storage abaixo continua garantindo o funcionamento offline.
+    const response = await fetch(request, { cache: 'no-store' });
     if (response && (response.ok || response.type === 'opaque')) {
       cache.put(request, response.clone()).catch(() => {});
     }
@@ -97,7 +100,13 @@ self.addEventListener('fetch', event => {
   }
 
   if (url.origin === self.location.origin) {
-    event.respondWith(cacheFirst(request));
+    // Scripts e estilos precisam consultar a rede para que o aplicativo PWA
+    // instalado receba o deploy atual mesmo quando a chave ?v for esquecida.
+    if (['script', 'style', 'worker'].includes(request.destination)) {
+      event.respondWith(networkFirst(request));
+    } else {
+      event.respondWith(cacheFirst(request));
+    }
     return;
   }
 

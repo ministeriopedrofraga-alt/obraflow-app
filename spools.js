@@ -8,6 +8,8 @@ const SPOOL_STORE_KEY = 'obraflow_spools_v5';
 const SPOOL_SUPPORT_STORE_KEY = 'obraflow_spool_supports_v1';
 const SPOOL_ISO_STORE_KEY = 'obraflow_spool_isometrics_v1';
 const SPOOL_SYNC_STATE_KEY = 'obraflow_spool_sync_state_v1';
+const SPOOL_ITEM_SYNC_QUEUE_KEY = 'obraflow_spool_item_sync_queue_v1';
+const SPOOL_ITEM_SYNC_PREFIX = 'spool_item_v1.';
 const SPOOL_DELETED_STORE_KEY = 'obraflow_spool_deleted_v1';
 const SPOOL_BACKUP_STORE_KEY = 'obraflow_spool_backups_v1';
 const SPOOL_MASS_DELETE_MINIMUM = 25;
@@ -47,6 +49,49 @@ function spoolNormalizeDiameter(rawDiameter) {
     .trim();
   if (!value.endsWith('"') && /\d/.test(value)) value += '"';
   return value;
+}
+
+// Comprimento fisico do spool, sempre armazenado em metros como numero.
+// Aceita tanto o formato brasileiro (5,418) quanto valores numericos do Excel.
+function spoolParseLengthMeters(rawLength) {
+  if (rawLength === null || rawLength === undefined || rawLength === '') return null;
+  if (typeof rawLength === 'number') return Number.isFinite(rawLength) && rawLength >= 0 ? rawLength : null;
+
+  let value = String(rawLength).trim().replace(/\s*(?:m|metro|metros)\s*$/i, '').replace(/\s+/g, '');
+  if (!value) return null;
+  if (value.includes(',') && value.includes('.')) {
+    value = value.lastIndexOf(',') > value.lastIndexOf('.')
+      ? value.replace(/\./g, '').replace(',', '.')
+      : value.replace(/,/g, '');
+  } else if (value.includes(',')) {
+    value = value.replace(',', '.');
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function spoolLengthMeters(spool) {
+  return spoolParseLengthMeters(spool?.lengthMeters ?? spool?.length ?? spool?.comprimento);
+}
+
+function spoolSumLength(items) {
+  return (Array.isArray(items) ? items : []).reduce((total, item) => total + (spoolLengthMeters(item) || 0), 0);
+}
+
+function spoolKnownLengthCount(items) {
+  return (Array.isArray(items) ? items : []).filter(item => spoolLengthMeters(item) !== null).length;
+}
+
+function formatSpoolMeters(value, emptyValue = '—') {
+  const parsed = spoolParseLengthMeters(value);
+  if (parsed === null) return emptyValue;
+  return `${parsed.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} m`;
+}
+
+function spoolLengthText(spool, prefix = 'Comprimento: ') {
+  const length = spoolLengthMeters(spool);
+  return length === null ? '' : `${prefix}${formatSpoolMeters(length)}`;
 }
 
 // Normalização inteligente de setores (reconhece variações de digitação na planilha)
@@ -333,6 +378,161 @@ function spoolComparableRecord(item) {
   return JSON.stringify(copy);
 }
 
+// O registro completo de spools passa de 3 MB. Em celulares, depender apenas
+// desse upload fazia uma marcacao ficar somente no aparelho quando o app era
+// fechado ou a conexao oscilava. Cada alteracao operacional tambem e enviada
+// em uma linha pequena e independente no app_metadata.
+function spoolOperationalFingerprint(item) {
+  const fields = [
+    'lengthMeters',
+    'status',
+    'receivedDate', 'receivedAt', 'receivedBy',
+    'installedDate', 'installedAt', 'installedBy',
+    'rejectedDate', 'rejectedAt', 'rejectedBy', 'rejectedReason',
+    'returnedDate', 'returnedAt', 'returnedBy', 'returnedReason'
+  ];
+  return JSON.stringify(fields.map(field => item?.[field] || ''));
+}
+
+function spoolSmallHash(value) {
+  let hash = 2166136261;
+  const text = String(value || '');
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function spoolItemSyncKey(item) {
+  const recordKey = spoolRecordKey(item);
+  const readableNumber = spoolTextKey(item?.number).slice(0, 28) || 'item';
+  return `${SPOOL_ITEM_SYNC_PREFIX}${spoolSmallHash(recordKey)}.${readableNumber}`;
+}
+
+function spoolLoadPendingItemEvents() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SPOOL_ITEM_SYNC_QUEUE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter(entry => entry?.key && entry?.value?.record) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function spoolStorePendingItemEvents() {
+  try {
+    localStorage.setItem(SPOOL_ITEM_SYNC_QUEUE_KEY, JSON.stringify(spoolPendingItemEvents));
+    window.ObraflowOfflineSync?.refresh?.();
+  } catch (error) {
+    console.warn('Nao foi possivel guardar a fila rapida de spools:', error);
+  }
+}
+
+function spoolPendingSyncCount() {
+  if (spoolPendingItemEvents.length) return spoolPendingItemEvents.length;
+  return spoolHasPendingSync() ? 1 : 0;
+}
+
+function spoolQueueItemRecords(records) {
+  const byKey = new Map(spoolPendingItemEvents.map(entry => [entry.key, entry]));
+  (Array.isArray(records) ? records : []).forEach(record => {
+    if (!record?.number) return;
+    const key = spoolItemSyncKey(record);
+    byKey.set(key, {
+      key,
+      value: {
+        record: JSON.parse(JSON.stringify(record)),
+        recordedAt: record.updatedAt || new Date().toISOString(),
+        recordedBy: window.currentUser?.name || 'Operador'
+      }
+    });
+  });
+  spoolPendingItemEvents = Array.from(byKey.values());
+  spoolStorePendingItemEvents();
+}
+
+function spoolQueueChangedOperationalRecords(previousItems, currentItems) {
+  const previousByKey = new Map((Array.isArray(previousItems) ? previousItems : []).map(item => [spoolRecordKey(item), item]));
+  const changed = (Array.isArray(currentItems) ? currentItems : []).filter(item => {
+    const previous = previousByKey.get(spoolRecordKey(item));
+    return previous && spoolOperationalFingerprint(previous) !== spoolOperationalFingerprint(item);
+  });
+  if (changed.length) spoolQueueItemRecords(changed);
+  return changed.length;
+}
+
+function spoolQueueNewerItemRecords(localItems, remoteItems) {
+  const remoteByKey = new Map((Array.isArray(remoteItems) ? remoteItems : []).map(item => [spoolRecordKey(item), item]));
+  const newer = (Array.isArray(localItems) ? localItems : []).filter(item => {
+    const remote = remoteByKey.get(spoolRecordKey(item));
+    return remote && spoolRecordTimestamp(item) > spoolRecordTimestamp(remote)
+      && spoolOperationalFingerprint(item) !== spoolOperationalFingerprint(remote);
+  });
+  if (newer.length) spoolQueueItemRecords(newer);
+  return newer.length;
+}
+
+async function spoolFlushPendingItemEvents() {
+  if (!spoolPendingItemEvents.length) return true;
+  if (navigator.onLine === false || typeof supabaseRestRequest !== 'function') return false;
+
+  const batch = spoolPendingItemEvents.slice(0, 250);
+  const sentVersions = new Map(batch.map(entry => [entry.key, entry.value?.recordedAt || '']));
+  try {
+    await supabaseRestRequest('app_metadata?on_conflict=key', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify(batch),
+      queueOffline: false,
+      timeoutMs: 20000
+    });
+    spoolPendingItemEvents = spoolPendingItemEvents.filter(entry => {
+      if (!sentVersions.has(entry.key)) return true;
+      return (entry.value?.recordedAt || '') !== sentVersions.get(entry.key);
+    });
+    spoolStorePendingItemEvents();
+    if (spoolPendingItemEvents.length) return spoolFlushPendingItemEvents();
+    return true;
+  } catch (error) {
+    console.warn('Falha no envio rapido dos apontamentos de spools:', error);
+    return false;
+  }
+}
+
+async function spoolFetchRemoteItemRecords() {
+  if (typeof supabaseRestRequest !== 'function') return [];
+  const records = [];
+  const pageSize = 1000;
+  for (let offset = 0; offset < 10000; offset += pageSize) {
+    const rows = await supabaseRestRequest(
+      `app_metadata?key=like.${SPOOL_ITEM_SYNC_PREFIX}%25&select=value&limit=${pageSize}&offset=${offset}`,
+      { flushPending: false, timeoutMs: 30000 }
+    );
+    const page = Array.isArray(rows) ? rows : [];
+    page.forEach(row => {
+      if (row?.value?.record?.number) records.push(row.value.record);
+    });
+    if (page.length < pageSize) break;
+  }
+  return records;
+}
+
+// Em celulares, trocar de aplicativo pode suspender o JavaScript antes do
+// debounce do snapshot completo. A fila pequena ja esta persistida; aqui damos
+// a ela uma chance imediata de envio antes de a pagina ser congelada.
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && spoolPendingItemEvents.length) {
+      spoolFlushPendingItemEvents().catch(() => false);
+    }
+  });
+}
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('online', () => {
+    if (spoolPendingItemEvents.length) spoolScheduleRemoteSync(0);
+  });
+}
+
 function spoolReadStoredList(storeKey) {
   try {
     const parsed = JSON.parse(localStorage.getItem(storeKey) || '[]');
@@ -443,6 +643,7 @@ function spoolMarkSyncPending() {
     localStorage.setItem(SPOOL_SYNC_STATE_KEY, JSON.stringify({ pending: true, updatedAt: new Date().toISOString() }));
   } catch (error) {}
   spoolUpdateSyncIndicator(false);
+  window.ObraflowOfflineSync?.refresh?.();
   return spoolDataRevision;
 }
 
@@ -458,6 +659,7 @@ function spoolClearPendingSync() {
   try {
     localStorage.setItem(SPOOL_SYNC_STATE_KEY, JSON.stringify({ pending: false, syncedAt: new Date().toISOString() }));
   } catch (error) {}
+  window.ObraflowOfflineSync?.refresh?.();
 }
 
 async function spoolForceSyncNow() {
@@ -1335,6 +1537,8 @@ function spoolLoadAll() {
           s.dh = normalizeDh(s.dh);
           s.area = normalizeSector(s.area);
           s.number = String(s.number || '').trim();
+          const normalizedLength = spoolLengthMeters(s);
+          if (normalizedLength !== null) s.lengthMeters = normalizedLength;
           if (s.part || s.seq) s.part = spoolNormalizePart(s.part || s.seq);
           const inferredCircuit = spoolResolveCircuit(s);
           if (inferredCircuit) s.circuit = inferredCircuit;
@@ -1381,6 +1585,7 @@ function spoolSaveAll(spools, options = {}) {
       spoolPendingRecoverySnapshot = spoolStoreRecoveryBackup(previousSpools, options.reason || 'reducao-em-massa');
     }
     spoolDb = spoolStampChangedRecords(nextSpools, previousSpools);
+    spoolQueueChangedOperationalRecords(previousSpools, spoolDb);
     spoolTrackDeletedRecords('spools', previousSpools, spoolDb);
     localStorage.setItem(SPOOL_STORE_KEY, JSON.stringify(spoolDb));
     const navCount = document.getElementById('navSpoolCount');
@@ -1462,6 +1667,9 @@ function spoolSyncRemote(spools) {
   const save = async () => {
     try {
       if (typeof supabaseRestRequest !== 'function') return false;
+      // Primeiro envia os apontamentos pequenos. Mesmo se o snapshot completo
+      // falhar depois, os outros aparelhos conseguem recuperar cada alteracao.
+      await spoolFlushPendingItemEvents();
       let remoteValue = null;
       try {
         const rows = await supabaseRestRequest('app_metadata?key=eq.spool_registry&select=value', {
@@ -1476,13 +1684,26 @@ function spoolSyncRemote(spools) {
 
       // Mescla item por item antes do envio. Assim, uma reprovação feita no
       // tablet não é apagada por uma lista antiga ainda aberta no computador.
+      const remoteItemRecords = await spoolFetchRemoteItemRecords();
+      const remoteSpools = spoolDeduplicateList(spoolMergeRecordCollections(
+        remoteItemRecords,
+        remoteValue?.spools || [],
+        { includeLocalOnly: true }
+      ));
+
+      // Recupera tambem apontamentos feitos por uma versao anterior deste app:
+      // eles ja possuem updatedAt local mais novo, mas ainda nao tinham entrado
+      // na fila pequena por item.
+      spoolQueueNewerItemRecords(localSpools, remoteSpools);
+      await spoolFlushPendingItemEvents();
+
       const mergedDeletedState = {
         spools: spoolMergeTombstones(localDeletedState.spools, remoteValue?.deletedSpools),
         supports: spoolMergeTombstones(localDeletedState.supports, remoteValue?.deletedSupports),
         isometrics: spoolMergeTombstones(localDeletedState.isometrics, remoteValue?.deletedIsometrics)
       };
       const mergedSpools = remoteValue?.spools
-        ? spoolDeduplicateList(spoolMergeRecordCollections(localSpools, remoteValue.spools, { includeLocalOnly: true, deletedRecords: mergedDeletedState.spools }))
+        ? spoolDeduplicateList(spoolMergeRecordCollections(localSpools, remoteSpools, { includeLocalOnly: true, deletedRecords: mergedDeletedState.spools }))
         : spoolDeduplicateList(localSpools);
       const mergedSupports = spoolMergeRecordCollections(localSupports, remoteValue?.supports, { includeLocalOnly: true, kind: 'support', deletedRecords: mergedDeletedState.supports });
       const mergedIsometrics = spoolMergeRecordCollections(localIsometrics, remoteValue?.isometrics, { includeLocalOnly: true, kind: 'iso', deletedRecords: mergedDeletedState.isometrics });
@@ -1550,8 +1771,14 @@ async function syncSpoolsFromSupabase(options = {}) {
     });
     const remoteValue = Array.isArray(rows) ? rows[0]?.value : null;
     if (remoteValue && Array.isArray(remoteValue.spools)) {
+      const remoteItemRecords = await spoolFetchRemoteItemRecords();
+      const remoteSpools = spoolDeduplicateList(spoolMergeRecordCollections(
+        remoteItemRecords,
+        remoteValue.spools,
+        { includeLocalOnly: true }
+      ));
       const pendingLocal = spoolHasPendingSync();
-      const localHasNewerSpool = spoolHasNewerLocalRecords(spoolDb, remoteValue.spools);
+      const localHasNewerSpool = spoolHasNewerLocalRecords(spoolDb, remoteSpools);
       const localHasNewerSupport = spoolHasNewerLocalRecords(spoolSupportDb, remoteValue.supports);
       const localHasNewerIso = spoolHasNewerLocalRecords(spoolIsoDb, remoteValue.isometrics);
       spoolDeletedState = {
@@ -1559,10 +1786,14 @@ async function syncSpoolsFromSupabase(options = {}) {
         supports: spoolMergeTombstones(spoolDeletedState.supports, remoteValue.deletedSupports),
         isometrics: spoolMergeTombstones(spoolDeletedState.isometrics, remoteValue.deletedIsometrics)
       };
-      const localHasMissingRemoteSpool = spoolHasLocalOnlyRecords(spoolDb, remoteValue.spools, spoolDeletedState.spools);
+      const localHasMissingRemoteSpool = spoolHasLocalOnlyRecords(spoolDb, remoteSpools, spoolDeletedState.spools);
       const localHasMissingRemoteSupport = spoolHasLocalOnlyRecords(spoolSupportDb, remoteValue.supports, spoolDeletedState.supports);
       const localHasMissingRemoteIso = spoolHasLocalOnlyRecords(spoolIsoDb, remoteValue.isometrics, spoolDeletedState.isometrics);
-      spoolDb = spoolDeduplicateList(spoolMergeRecordCollections(spoolDb, remoteValue.spools, { includeLocalOnly: true, deletedRecords: spoolDeletedState.spools }));
+      if (localHasNewerSpool) {
+        spoolQueueNewerItemRecords(spoolDb, remoteSpools);
+        await spoolFlushPendingItemEvents();
+      }
+      spoolDb = spoolDeduplicateList(spoolMergeRecordCollections(spoolDb, remoteSpools, { includeLocalOnly: true, deletedRecords: spoolDeletedState.spools }));
       if (Array.isArray(remoteValue.supports)) {
         spoolSupportDb = spoolMergeRecordCollections(spoolSupportDb, remoteValue.supports, { includeLocalOnly: true, kind: 'support', deletedRecords: spoolDeletedState.supports });
       }
@@ -1595,6 +1826,7 @@ async function syncSpoolsFromSupabase(options = {}) {
 }
 window.syncSpoolsFromSupabase = syncSpoolsFromSupabase;
 window.syncSpoolProjectsFromSupabase = syncSpoolsFromSupabase;
+window.spoolPendingSyncCount = spoolPendingSyncCount;
 
 // Versoes anteriores colocavam o JSON completo de spools na fila generica.
 // Recupera esse ultimo retrato antes de remover a mutacao antiga, evitando que
@@ -1746,6 +1978,7 @@ let spoolRemoteSaveChain = Promise.resolve(true);
 let spoolRemoteSaveTimer = null;
 let spoolRemoteSaveRequested = false;
 let spoolPendingRecoverySnapshot = null;
+let spoolPendingItemEvents = spoolLoadPendingItemEvents();
 
 // Auto-salvar apenas os dados sanitizados. Não reinsere setores ou spools que
 // tenham sido removidos/substituídos por uma planilha importada.
@@ -1812,6 +2045,7 @@ function spoolMatchesSearchTerm(spool, rawTerm = spoolSearchTerm) {
     spool.dh,
     spoolSectorDisplayName(spool),
     spool.diameter,
+    spool.lengthMeters,
     spool.notes,
     spool.rejectedReason,
     spool.returnedReason
@@ -2499,6 +2733,8 @@ function renderSpools() {
 
   // Lista com todos os filtros aplicados
   const filteredSpools = spoolFilterList(spoolDb);
+  const filteredLength = spoolSumLength(filteredSpools);
+  const filteredLengthCount = spoolKnownLengthCount(filteredSpools);
   const pageSize = window.innerWidth <= 768 ? SPOOL_MOBILE_PAGE_SIZE : SPOOL_DESKTOP_PAGE_SIZE;
   const totalRenderPages = Math.max(1, Math.ceil(filteredSpools.length / pageSize));
   spoolRenderPage = Math.min(Math.max(1, spoolRenderPage), totalRenderPages);
@@ -2542,6 +2778,13 @@ function renderSpools() {
   const returnedToday = baseSectorSpools.filter(s => s.status === 'returned' && (s.returnedDate === filterDate || (s.returnedAt && formatSpoolLocalDate(s.returnedAt) === filterDate)));
   const totalPending = baseSectorSpools.filter(s => s.status === 'not-started').length;
   const totalInstalled = baseSectorSpools.filter(s => s.status === 'installed').length;
+  const totalLength = spoolSumLength(baseSectorSpools);
+  const installedLength = spoolSumLength(baseSectorSpools.filter(s => s.status === 'installed'));
+  const pendingLength = spoolSumLength(baseSectorSpools.filter(s => s.status === 'not-started'));
+  const remainingLength = spoolSumLength(baseSectorSpools.filter(s => s.status !== 'installed'));
+  const installedTodayLength = spoolSumLength(installedToday);
+  const receivedTodayLength = spoolSumLength(receivedToday);
+  const knownLengthCount = spoolKnownLengthCount(baseSectorSpools);
 
   const sectorMeta = spoolGetSectorMeta(spoolActiveSector, spoolDb);
 
@@ -2596,13 +2839,13 @@ function renderSpools() {
     <section class="spool-daily-close">
       <div class="spool-kpi-card tone-installed ${spoolListFilter === 'installed_today' ? 'is-active-tab' : ''}" onclick="spoolSetFilter('installed_today')" title="Clique para ver os tubos instalados no dia">
         <span class="spool-kpi-label">INSTALADOS NO DIA <span class="spool-kpi-badge badge-good">VER LISTA 🟢</span></span>
-        <div class="spool-kpi-val">+${installedToday.length}</div>
+        <div class="spool-kpi-val">+${installedToday.length} <small style="font-size:15px; color:#047857;">· ${formatSpoolMeters(installedTodayLength, '0 m')}</small></div>
         <div class="spool-kpi-sub">${filterDate === todayStr ? 'Montados Hoje' : `Montados em ${new Date(filterDate + 'T12:00:00').toLocaleDateString('pt-BR')}`} · Clique p/ listar</div>
       </div>
 
       <div class="spool-kpi-card tone-received ${spoolListFilter === 'received_today' ? 'is-active-tab' : ''}" onclick="spoolSetFilter('received_today')" title="Clique para ver os tubos recebidos no dia">
         <span class="spool-kpi-label">RECEBIDOS NO DIA <span class="spool-kpi-badge badge-good">VER LISTA 🟡</span></span>
-        <div class="spool-kpi-val">+${receivedToday.length}</div>
+        <div class="spool-kpi-val">+${receivedToday.length} <small style="font-size:15px; color:#0369a1;">· ${formatSpoolMeters(receivedTodayLength, '0 m')}</small></div>
         <div class="spool-kpi-sub">Descarregados e conferidos · Clique p/ listar</div>
       </div>
 
@@ -2620,8 +2863,8 @@ function renderSpools() {
 
       <div class="spool-kpi-card ${spoolListFilter === 'pending' ? 'is-active-tab' : ''}" onclick="spoolSetFilter('pending')" title="Clique para ver os tubos pendentes">
         <span class="spool-kpi-label">RESTANTE NO RECORTE</span>
-        <div class="spool-kpi-val">${totalPending} <small style="font-size:14px; font-weight:700; color:#94a3b8;">pendentes</small></div>
-        <div class="spool-kpi-sub">Total de ${baseSectorSpools.length} spools (${totalInstalled} montados)</div>
+        <div class="spool-kpi-val">${totalPending} <small style="font-size:14px; font-weight:700; color:#94a3b8;">· ${formatSpoolMeters(pendingLength, '0 m')} pendentes</small></div>
+        <div class="spool-kpi-sub">${formatSpoolMeters(remainingLength, '0 m')} a instalar · ${formatSpoolMeters(installedLength, '0 m')} instalados · Total: ${formatSpoolMeters(totalLength, '0 m')} (${knownLengthCount}/${baseSectorSpools.length} medidos)</div>
       </div>
 
       <div class="spool-kpi-card tone-rejected ${spoolListFilter === 'rejected' ? 'is-active-tab' : ''}" onclick="spoolSetFilter('rejected')" title="Clique para ver os tubos reprovados / em quarentena" style="border-left: 4px solid #ef4444; background: ${spoolListFilter === 'rejected' ? '#fee2e2' : '#fff5f5'};">
@@ -2787,7 +3030,7 @@ function renderSpools() {
     ${spoolRenderSectorMap(spoolDb, availableSectors)}
 
     <div class="spool-results-summary" aria-live="polite">
-      Mostrando <strong id="spoolVisibleCount">${filteredSpools.length}</strong> de <strong>${spoolDb.length}</strong> spools cadastrados
+      Mostrando <strong id="spoolVisibleCount">${filteredSpools.length}</strong> de <strong>${spoolDb.length}</strong> spools cadastrados · Metragem filtrada: <strong>${formatSpoolMeters(filteredLength, '0 m')}</strong> (${filteredLengthCount}/${filteredSpools.length} medidos)
     </div>
 
     <!-- BANNER SE A ABA DE INSTALADOS HOJE ESTIVER ATIVA -->
@@ -2798,7 +3041,7 @@ function renderSpools() {
             <div style="display:flex; align-items:center; gap:8px;">
               <span class="spool-pulse-beacon"></span>
               <h3 style="margin:0; font-size:16px; font-weight:800; color:#10b981;">
-                🟢 TUBOS INSTALADOS NO DIA (${installedToday.length} tubos)
+                🟢 TUBOS INSTALADOS NO DIA (${installedToday.length} tubos · ${formatSpoolMeters(installedTodayLength, '0 m')})
               </h3>
             </div>
             <p style="margin:4px 0 0; font-size:12px; color:#94a3b8;">
@@ -2834,7 +3077,7 @@ function renderSpools() {
             <div style="display:flex; align-items:center; gap:8px;">
               <span class="spool-pulse-beacon" style="background:#eab308; box-shadow:0 0 0 0 rgba(234,179,8,0.7);"></span>
               <h3 style="margin:0; font-size:16px; font-weight:800; color:#854d0e;">
-                🟡 TUBOS RECEBIDOS NO DIA (${receivedToday.length} peças)
+                🟡 TUBOS RECEBIDOS NO DIA (${receivedToday.length} peças · ${formatSpoolMeters(receivedTodayLength, '0 m')})
               </h3>
             </div>
             <p style="margin:4px 0 0; font-size:12px; color:#854d0e;">
@@ -2934,7 +3177,10 @@ function spoolRenderSectorMap(items, sectors) {
     received: list.filter(item => item.status === 'received').length,
     pending: list.filter(item => item.status === 'not-started').length,
     rejected: list.filter(item => item.status === 'rejected').length,
-    returned: list.filter(item => item.status === 'returned').length
+    returned: list.filter(item => item.status === 'returned').length,
+    installedLength: spoolSumLength(list.filter(item => item.status === 'installed')),
+    pendingLength: spoolSumLength(list.filter(item => item.status === 'not-started')),
+    totalLength: spoolSumLength(list)
   });
   const cardMarkup = (sector, list, isOverview = false) => {
     const stats = statusTotals(list);
@@ -2969,6 +3215,7 @@ function spoolRenderSectorMap(items, sectors) {
           </span>
           <span class="spool-map-progress" aria-label="${progress}% instalado"><i style="width:${progress}%"></i></span>
           <span class="spool-map-progress-label">${progress}% instalado</span>
+          <span class="spool-map-progress-label">${formatSpoolMeters(stats.installedLength, '0 m')} instalados · ${formatSpoolMeters(stats.pendingLength, '0 m')} pendentes · ${formatSpoolMeters(stats.totalLength, '0 m')} total</span>
         </button>
         <div class="spool-map-statuses" aria-label="Abrir peças por status">
           ${statusButton('installed', stats.installed, 'instalados', 'installed')}
@@ -3098,7 +3345,7 @@ function spoolRenderTubeSquares(list, filterDate) {
 
         const isSelected = spoolSelectedIds.has(spool.id);
         return `
-          <div class="spool-tube-card ${typeClass} ${statusClass}${isSelected ? ' is-selected' : ''}" data-spool-id="${esc(spool.id)}" onclick="spoolHandleTubeTap('${spool.id}', event)" title="Spool ${esc(spoolDisplayNumber(spool))} (${esc(spool.dh || '')})${cardRecInfo}${cardInstInfo}${cardRejInfo}${cardReturnInfo}\nClique para ${spoolMultiSelectMode ? 'marcar/desmarcar' : (spoolSafeTapMode ? 'abrir menu de ações' : 'alternar status')} ou no 📅 para ver/editar datas">
+          <div class="spool-tube-card ${typeClass} ${statusClass}${isSelected ? ' is-selected' : ''}" data-spool-id="${esc(spool.id)}" onclick="spoolHandleTubeTap('${spool.id}', event)" title="Spool ${esc(spoolDisplayNumber(spool))} (${esc(spool.dh || '')})${spoolLengthText(spool, '\n• Comprimento: ')}${cardRecInfo}${cardInstInfo}${cardRejInfo}${cardReturnInfo}\nClique para ${spoolMultiSelectMode ? 'marcar/desmarcar' : (spoolSafeTapMode ? 'abrir menu de ações' : 'alternar status')} ou no 📅 para ver/editar datas">
             ${spoolMultiSelectMode ? `<input type="checkbox" class="spool-card-select-check" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); spoolToggleCardSelection('${spool.id}')" aria-label="Selecionar spool ${esc(spoolDisplayNumber(spool))}">` : ''}
             <div class="tube-header">
               <span style="font-size:10px; font-weight:800; padding:2px 6px; border-radius:4px; ${isValve ? 'background:#fef3c7; color:#b45309;' : (isStraight ? 'background:#f3e8ff; color:#7e22ce;' : 'background:#e0f2fe; color:#0369a1;')}">
@@ -3106,6 +3353,7 @@ function spoolRenderTubeSquares(list, filterDate) {
               </span>
               <div style="display:flex; align-items:center; gap:6px;">
                 <span style="font-size:11px; font-weight:800; color:#64748b;">${esc(spool.diameter || '')}</span>
+                ${spoolLengthMeters(spool) !== null ? `<span style="font-size:10px; font-weight:900; color:#166534; background:#dcfce7; padding:1px 4px; border-radius:4px;">${formatSpoolMeters(spoolLengthMeters(spool))}</span>` : ''}
                 <button type="button" onclick="event.stopPropagation(); spoolOpenTrackingModal('${spool.id}')" title="Ver datas exatas de recebimento e montagem" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:4px; cursor:pointer; font-size:10px; padding:2px 4px; line-height:1; display:flex; align-items:center;">
                   📅
                 </button>
@@ -3236,6 +3484,7 @@ function spoolRenderTubeTable(list, filterDate) {
               <th style="width:160px; padding:12px 14px; font-weight:800; color:#1e293b;">SETOR</th>
               <th style="width:160px; padding:12px 14px; font-weight:800; color:#1e293b;">CLASSIFICAÇÃO</th>
               <th style="width:90px; padding:12px 14px; font-weight:800; color:#1e293b;">DIÂMETRO</th>
+              <th style="width:110px; padding:12px 14px; font-weight:800; color:#166534;">COMPRIMENTO</th>
               <th style="width:110px; padding:12px 14px; font-weight:800; color:#1e293b;">STATUS</th>
               <th style="min-width:240px; text-align:center; padding:12px 14px; font-weight:800; color:#1e293b;">MUDAR STATUS (1 CLIQUE)</th>
               <th style="min-width:130px; padding:12px 14px; font-weight:800; color:#0369a1;">🟡 RECEBIDO EM</th>
@@ -3286,6 +3535,9 @@ function spoolRenderTubeTable(list, filterDate) {
                   </td>
                   <td style="padding:10px 14px;">
                     <strong style="font-size:13px; font-weight:800; color:#0f172a;">${esc(s.diameter || '—')}</strong>
+                  </td>
+                  <td style="padding:10px 14px;">
+                    <strong style="font-size:13px; font-weight:900; color:#166534;">${formatSpoolMeters(spoolLengthMeters(s))}</strong>
                   </td>
                   <td style="padding:10px 14px;">
                     ${isInstalled
@@ -3363,7 +3615,7 @@ function spoolRenderTubeTable(list, filterDate) {
               `;
             }).join('') : `
               <tr>
-                <td colspan="10" style="text-align:center; padding:36px 16px; color:#64748b; font-size:13px; font-weight:700;">
+                <td colspan="11" style="text-align:center; padding:36px 16px; color:#64748b; font-size:13px; font-weight:700;">
                   Nenhum spool encontrado com estes filtros. <button type="button" class="button button-green compact" onclick="spoolShowAllMySpools()" style="margin-left:8px;">Ver Todos os ${spoolDb.length} Spools</button>
                 </td>
               </tr>
@@ -3693,7 +3945,7 @@ function spoolOpenQuickActionModal(spoolId) {
             ${spool.subArea ? `<span class="spool-subarea-badge">${esc(spool.subArea)}</span>` : ''}
           </div>
           <small style="color:#64748b; font-weight:700; font-size:12px;">
-            ${esc(normalizeDh(spool.dh))} · ${esc(sector.name)} · Ø ${esc(spool.diameter || '—')}
+            ${esc(normalizeDh(spool.dh))} · ${esc(sector.name)} · Ø ${esc(spool.diameter || '—')} · 📏 ${formatSpoolMeters(spoolLengthMeters(spool))}
           </small>
         </div>
         <button type="button" class="icon-button" onclick="closeModal()" title="Fechar" style="color:#64748b;">
@@ -4009,6 +4261,8 @@ function spoolOpenExportModal() {
   const totalCount = spoolDb.length;
   const filteredList = spoolFilterList(spoolDb);
   const filteredCount = filteredList.length;
+  const totalLength = spoolSumLength(spoolDb);
+  const filteredLength = spoolSumLength(filteredList);
 
   const hasActiveFilters = (
     spoolStatusFilter !== 'all' ||
@@ -4024,6 +4278,7 @@ function spoolOpenExportModal() {
   const targetDate = spoolSelectedDate || getLocalDateStr();
   const formattedDate = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
   const installedTodayCount = spoolDb.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate))).length;
+  const installedTodayLength = spoolSumLength(spoolDb.filter(s => s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate))));
 
   const activeSectorName = spoolGetSectorMeta(spoolActiveSector, spoolDb).name;
 
@@ -4054,9 +4309,9 @@ function spoolOpenExportModal() {
               ${spoolStatusFilter !== 'all' ? ` · <strong>Status:</strong> ${spoolStatusFilter}` : ''}
               ${spoolTypeFilter !== 'all' ? ` · <strong>Tipo:</strong> ${spoolTypeFilter}` : ''}
               ${spoolSearchTerm ? ` · <strong>Busca:</strong> "${esc(spoolSearchTerm)}"` : ''}
-              <br><span style="color:#0284c7; font-weight:800;">👉 Exibindo ${filteredCount} de ${totalCount} spools na tela agora.</span>
+              <br><span style="color:#0284c7; font-weight:800;">👉 Exibindo ${filteredCount} de ${totalCount} spools · ${formatSpoolMeters(filteredLength, '0 m')} no filtro.</span>
             ` : `
-              • Todos os <strong>${totalCount} spools</strong> da obra estão sendo exibidos (nenhum filtro ativo).
+              • Todos os <strong>${totalCount} spools</strong> da obra estão sendo exibidos · <strong>${formatSpoolMeters(totalLength, '0 m')}</strong> cadastrados.
             `}
           </div>
         </div>
@@ -4096,7 +4351,7 @@ function spoolOpenExportModal() {
               </div>
             </div>
             <p style="margin:6px 0 0 28px; font-size:12px; color:#065f46; line-height:1.4;">
-              Baixa <strong>todos os ${totalCount} spools</strong> de toda a obra, independente dos filtros da tela. Inclui aba consolidada + abas individuais para cada Data Hall (DH 01 a DH 10).
+              Baixa <strong>todos os ${totalCount} spools · ${formatSpoolMeters(totalLength, '0 m')}</strong> de toda a obra, independente dos filtros da tela.
             </p>
           </div>
           <button type="button" class="button button-green" onclick="closeModal(); spoolExportUpdatedSpreadsheet('all');" style="font-weight:800; padding:10px 18px; white-space:nowrap;">
@@ -4115,7 +4370,7 @@ function spoolOpenExportModal() {
               </div>
             </div>
             <p style="margin:6px 0 0 28px; font-size:12px; color:#475569; line-height:1.4;">
-              Exporta somente os <strong>${filteredCount} spools</strong> que atendem ao filtro atual (${spoolActiveDh} · ${activeSectorName}).
+              Exporta somente os <strong>${filteredCount} spools · ${formatSpoolMeters(filteredLength, '0 m')}</strong> que atendem ao filtro atual (${spoolActiveDh} · ${activeSectorName}).
             </p>
           </div>
           <button type="button" class="button button-outline" onclick="closeModal(); spoolExportUpdatedSpreadsheet('filtered');" style="font-weight:800; padding:10px 18px; white-space:nowrap; border-color:#3b82f6; color:#1e40af;" ${filteredCount === 0 ? 'disabled' : ''}>
@@ -4134,7 +4389,7 @@ function spoolOpenExportModal() {
               </div>
             </div>
             <p style="margin:6px 0 0 28px; font-size:12px; color:#475569; line-height:1.4;">
-              Exporta os <strong>${installedTodayCount} spools instalados</strong> no dia para medição de equipe e comprovação.
+              Exporta os <strong>${installedTodayCount} spools instalados · ${formatSpoolMeters(installedTodayLength, '0 m')}</strong> no dia para medição de equipe e comprovação.
             </p>
           </div>
           <button type="button" class="button button-outline" onclick="closeModal(); spoolExportUpdatedSpreadsheet('daily');" style="font-weight:700; padding:10px 18px; white-space:nowrap;" ${installedTodayCount === 0 ? 'disabled' : ''}>
@@ -4299,7 +4554,8 @@ function populateSpoolExcelSheet(sheet, items, validationItems = items) {
     { header: 'Data de Reprovação', key: 'rejData', width: 18 },
     { header: 'Data de Devolução', key: 'returnData', width: 18 },
     { header: 'Responsável', key: 'resp', width: 22 },
-    { header: 'Observações', key: 'obs', width: 32 }
+    { header: 'Observações', key: 'obs', width: 32 },
+    { header: 'Comprimento (m)', key: 'lengthMeters', width: 16 }
   ];
 
   // Estilização do cabeçalho
@@ -4342,7 +4598,8 @@ function populateSpoolExcelSheet(sheet, items, validationItems = items) {
       rejData: s.rejectedDate || '',
       returnData: s.returnedDate || '',
       resp: s.installedBy || s.rejectedBy || s.returnedBy || '',
-      obs: obsContent
+      obs: obsContent,
+      lengthMeters: spoolLengthMeters(s) ?? ''
     });
 
     row.height = 20;
@@ -4356,6 +4613,8 @@ function populateSpoolExcelSheet(sheet, items, validationItems = items) {
     row.getCell(10).alignment = { vertical: 'middle', horizontal: 'center' };
     row.getCell(11).alignment = { vertical: 'middle', horizontal: 'center' };
     row.getCell(12).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(15).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(15).numFmt = '0.000';
 
     if (s.status === 'rejected') {
       row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
@@ -4367,7 +4626,7 @@ function populateSpoolExcelSheet(sheet, items, validationItems = items) {
   });
 
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
-  sheet.autoFilter = { from: 'A1', to: `N${Math.max(2, sheet.rowCount)}` };
+  sheet.autoFilter = { from: 'A1', to: `O${Math.max(2, sheet.rowCount)}` };
 
   const maxValidRow = Math.max(2500, items.length + 500);
   applySpoolExcelDataValidations(
@@ -4376,6 +4635,45 @@ function populateSpoolExcelSheet(sheet, items, validationItems = items) {
     spoolGetAvailableSectors(validationItems).length,
     spoolGetAvailableSubAreas(validationItems).length
   );
+}
+
+function spoolMeasurementSummaryRows(items) {
+  const source = Array.isArray(items) ? items : [];
+  const statusRows = [
+    ['Instalado', source.filter(item => item.status === 'installed')],
+    ['Recebido', source.filter(item => item.status === 'received')],
+    ['Pendente', source.filter(item => item.status === 'not-started')],
+    ['Reprovado', source.filter(item => item.status === 'rejected')],
+    ['Devolvido', source.filter(item => item.status === 'returned')]
+  ];
+  return [
+    ['Medição', 'Quantidade de Spools', 'Comprimento (m)', 'Sem metragem'],
+    ['Total do recorte', source.length, spoolSumLength(source), source.length - spoolKnownLengthCount(source)],
+    ...statusRows.map(([label, list]) => [label, list.length, spoolSumLength(list), list.length - spoolKnownLengthCount(list)]),
+    ['Restante a instalar', source.filter(item => item.status !== 'installed').length, spoolSumLength(source.filter(item => item.status !== 'installed')), source.filter(item => item.status !== 'installed').length - spoolKnownLengthCount(source.filter(item => item.status !== 'installed'))]
+  ];
+}
+
+function addSpoolMeasurementSummarySheet(workbook, items) {
+  const sheet = workbook.addWorksheet('Resumo_Metragem');
+  sheet.columns = [{ width: 24 }, { width: 22 }, { width: 20 }, { width: 18 }];
+  spoolMeasurementSummaryRows(items).forEach((row, rowIndex) => {
+    row.forEach((value, columnIndex) => {
+      sheet.getCell(rowIndex + 1, columnIndex + 1).value = value;
+    });
+  });
+  sheet.getRow(1).eachCell(cell => {
+    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B2447' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+  });
+  for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber += 1) {
+    sheet.getCell(rowNumber, 2).numFmt = '0';
+    sheet.getCell(rowNumber, 3).numFmt = '0.000';
+    sheet.getCell(rowNumber, 4).numFmt = '0';
+  }
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+  return sheet;
 }
 
 async function downloadExcelJsWorkbook(workbook, filename) {
@@ -4443,6 +4741,7 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
     const sheetTitle = scope === 'daily' ? 'Fechamento_Dia' : (scope === 'filtered' ? 'Spools_Filtrados' : 'Todos_os_Spools');
     const mainWs = workbook.addWorksheet(sheetTitle);
     populateSpoolExcelSheet(mainWs, listToExport);
+    addSpoolMeasurementSummarySheet(workbook, listToExport);
 
     // Exporta uma única aba mestre com todos os spools e validações ativas, garantindo edição sem duplicidade
     await downloadExcelJsWorkbook(workbook, filename);
@@ -4453,7 +4752,7 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
   // Fallback caso ExcelJS não esteja disponível
   if (!window.XLSX) return toast('Biblioteca Excel carregando...', true);
 
-  const header = ['TAG / Spool', 'Parte / Sequência', 'Data Hall (DH)', 'Setor', 'Subárea', 'Classificação', 'Diâmetro', 'Status', 'Data de Recebimento', 'Data de Instalação', 'Data de Reprovação', 'Data de Devolução', 'Responsável', 'Observações'];
+  const header = ['TAG / Spool', 'Parte / Sequência', 'Data Hall (DH)', 'Setor', 'Subárea', 'Classificação', 'Diâmetro', 'Status', 'Data de Recebimento', 'Data de Instalação', 'Data de Reprovação', 'Data de Devolução', 'Responsável', 'Observações', 'Comprimento (m)'];
   const rows = [header];
   listToExport.forEach(s => {
     const secName = spoolSectorDisplayName(s);
@@ -4464,12 +4763,13 @@ async function spoolExportUpdatedSpreadsheet(scope = 'all') {
     const obsVal = s.status === 'rejected' && s.rejectedReason
       ? `[REPROVADO: ${s.rejectedReason}] ${s.notes || ''}`
       : (s.status === 'returned' && s.returnedReason ? `[DEVOLVIDO: ${s.returnedReason}] ${s.notes || ''}` : (s.notes || ''));
-    rows.push([s.number, s.part || s.seq || '', normalizeDh(s.dh), secName, s.subArea || '', typeName, s.diameter || '', statusName, s.receivedDate || '', s.installedDate || '', s.rejectedDate || '', s.returnedDate || '', s.installedBy || s.rejectedBy || s.returnedBy || '', obsVal]);
+    rows.push([s.number, s.part || s.seq || '', normalizeDh(s.dh), secName, s.subArea || '', typeName, s.diameter || '', statusName, s.receivedDate || '', s.installedDate || '', s.rejectedDate || '', s.returnedDate || '', s.installedBy || s.rejectedBy || s.returnedBy || '', obsVal, spoolLengthMeters(s) ?? '']);
   });
 
   const wb = XLSX.utils.book_new();
   const mainWs = XLSX.utils.aoa_to_sheet(rows);
   XLSX.utils.book_append_sheet(wb, mainWs, 'Todos_os_Spools');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(spoolMeasurementSummaryRows(listToExport)), 'Resumo_Metragem');
   XLSX.writeFile(wb, filename);
   toast(toastMsg);
 }
@@ -4500,6 +4800,7 @@ async function spoolDownloadSupercoreSpreadsheet() {
     addSpoolHelperListSheet(workbook, exportItems);
     const sheet = workbook.addWorksheet('SUPERCORE_DH04');
     populateSpoolExcelSheet(sheet, exportItems);
+    addSpoolMeasurementSummarySheet(workbook, exportItems);
     await downloadExcelJsWorkbook(workbook, 'Planilha_Spools_SUPERCORE_DH04.xlsx');
     toast('Planilha SUPERCORE DH 04 com listas suspensas baixada com sucesso!');
     return;
@@ -4533,7 +4834,7 @@ async function spoolDownloadSampleSpreadsheet() {
 
   // Fallback sem lista fixa: gera um modelo vazio em vez de servir setores antigos.
   if (window.XLSX) {
-    const header = ['TAG / Spool', 'Parte / Sequência', 'Data Hall (DH)', 'Setor', 'Subárea', 'Classificação', 'Diâmetro', 'Status', 'Data de Recebimento', 'Data de Instalação', 'Data de Reprovação', 'Data de Devolução', 'Responsável', 'Observações'];
+    const header = ['TAG / Spool', 'Parte / Sequência', 'Data Hall (DH)', 'Setor', 'Subárea', 'Classificação', 'Diâmetro', 'Status', 'Data de Recebimento', 'Data de Instalação', 'Data de Reprovação', 'Data de Devolução', 'Responsável', 'Observações', 'Comprimento (m)'];
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.aoa_to_sheet([header]);
     XLSX.utils.book_append_sheet(workbook, sheet, 'Modelo_Spools');
@@ -4738,6 +5039,7 @@ async function spoolHandleExcelUpload(event) {
       let notesIdx = -1;
       let partIdx = -1;
       let subAreaIdx = -1;
+      let lengthIdx = -1;
 
       for (let r = 0; r < Math.min(rows.length, 20); r++) {
         const rowStr = rows[r].map(c => String(c || '').trim().toLowerCase());
@@ -4761,6 +5063,7 @@ async function spoolHandleExcelUpload(event) {
           partIdx = rowStr.findIndex(h => /^(?:parte|parte\s*\/\s*sequ[eê]ncia|seq\.?|sequ[eê]ncia|sub.*pe[cç]a|divis[aã]o|conjunto)$/i.test(h));
           if (partIdx === tagIdx) partIdx = -1;
           subAreaIdx = rowStr.findIndex(h => /sub.*[aá]rea|sub.*tipo|sub.*setor|subsistema|sistema/i.test(h));
+          lengthIdx = rowStr.findIndex(h => /comprimento|metragem|extens[aã]o|length/i.test(h));
           break;
         }
       }
@@ -4874,6 +5177,7 @@ async function spoolHandleExcelUpload(event) {
         const notesVal = notesIdx !== -1 && row[notesIdx] ? String(row[notesIdx]).trim() : '';
         const partColVal = partIdx !== -1 && row[partIdx] ? String(row[partIdx]).trim() : '';
         const subAreaColVal = subAreaIdx !== -1 && row[subAreaIdx] ? String(row[subAreaIdx]).trim() : '';
+        const lengthMetersVal = lengthIdx !== -1 ? spoolParseLengthMeters(row[lengthIdx]) : null;
 
         extractedTags.forEach(rawTag => {
           let tagVal = rawTag;
@@ -4954,6 +5258,7 @@ async function spoolHandleExcelUpload(event) {
             sectorName: sectorNameVal,
             type: finalType,
             diameter: diaVal,
+            lengthMeters: lengthMetersVal,
             status: statusVal,
             installedDate: instDate,
             installedAt: instAt,
@@ -5024,6 +5329,13 @@ async function spoolHandleExcelUpload(event) {
       </span>
     `).join('');
 
+    const importedLengthCount = spoolKnownLengthCount(parsedSpools);
+    const importedLengthTotal = spoolSumLength(parsedSpools);
+    const lengthSummaryHtml = `
+      <span style="display:inline-flex; align-items:center; gap:6px; background:#ecfdf5; color:#065f46; padding:4px 10px; border-radius:6px; font-weight:800; font-size:12px; border:1px solid #86efac;">
+        📏 <strong>Metragem:</strong> ${formatSpoolMeters(importedLengthTotal, '0 m')} em ${importedLengthCount} spools
+      </span>`;
+
     const sectorSummaryHtml = spoolGetAvailableSectors(parsedSpools).map(sector => {
       const count = parsedSpools.filter(spool => spool.area === sector.id).length;
       return `
@@ -5057,6 +5369,7 @@ async function spoolHandleExcelUpload(event) {
                 ${dhSummaryHtml}
                 ${sectorSummaryHtml}
                 ${subAreaSummaryHtml}
+                ${lengthSummaryHtml}
               </div>
             </div>
             <button type="button" class="button button-green" onclick="spoolConfirmImport()" style="font-weight:800; padding:10px 18px;">
@@ -5072,6 +5385,7 @@ async function spoolHandleExcelUpload(event) {
                   <th>SETOR</th>
                   <th>CLASSIFICAÇÃO</th>
                   <th>DIÂMETRO</th>
+                  <th>COMPRIMENTO</th>
                   <th>STATUS</th>
                 </tr>
               </thead>
@@ -5101,6 +5415,7 @@ async function spoolHandleExcelUpload(event) {
                           : '<span class="badge-branch">📐 Derivação</span>')}
                     </td>
                     <td><strong style="color:#0f172a; font-size:13px;">${esc(s.diameter)}</strong></td>
+                    <td><strong style="color:#166534; font-size:13px;">${formatSpoolMeters(spoolLengthMeters(s))}</strong></td>
                     <td>
                       <span style="font-weight:800; font-size:12px; color:${s.status === 'installed' ? '#059669' : (s.status === 'received' ? '#0284c7' : (s.status === 'rejected' ? '#dc2626' : (s.status === 'returned' ? '#ea580c' : '#64748b')))};">
                         ${s.status === 'installed' ? '🟢 Instalado' : (s.status === 'received' ? '🟡 Recebido' : (s.status === 'rejected' ? '🔴 Reprovado' : (s.status === 'returned' ? '↩️ Devolvido' : '⚪ Pendente')))}
@@ -5108,7 +5423,7 @@ async function spoolHandleExcelUpload(event) {
                     </td>
                   </tr>
                 `).join('')}
-                ${parsedSpools.length > 30 ? `<tr><td colspan="6" style="text-align:center; font-weight:700; color:#475569; padding:10px;">... e mais ${parsedSpools.length - 30} spools na planilha</td></tr>` : ''}
+                ${parsedSpools.length > 30 ? `<tr><td colspan="7" style="text-align:center; font-weight:700; color:#475569; padding:10px;">... e mais ${parsedSpools.length - 30} spools na planilha</td></tr>` : ''}
               </tbody>
             </table>
           </div>
@@ -5124,6 +5439,9 @@ async function spoolHandleExcelUpload(event) {
 
 function spoolPrepareImportedRecord(imported, existing = null) {
   const item = { ...imported };
+  const importedLength = spoolParseLengthMeters(item.lengthMeters);
+  const existingLength = spoolLengthMeters(existing);
+  item.lengthMeters = importedLength !== null ? importedLength : (existingLength ?? null);
   const sameStatus = existing?.status === item.status;
   const today = getLocalDateStr();
   const now = new Date().toISOString();
@@ -5217,6 +5535,7 @@ function spoolConfirmImport(importedSpools) {
       if (existing) {
         existing.type = imp.type;
         existing.diameter = imp.diameter;
+        if (spoolParseLengthMeters(imp.lengthMeters) !== null) existing.lengthMeters = spoolParseLengthMeters(imp.lengthMeters);
         existing.status = imp.status;
         if (imp.sectorName) existing.sectorName = imp.sectorName;
         if (imp.part) existing.part = imp.part;
@@ -5486,6 +5805,8 @@ function spoolOpenBulkEdit() {
     return values.length === 1 ? values[0] : '';
   };
   const commonDiameter = commonValue('diameter');
+  const selectedLengths = [...new Set(selectedItems.map(item => spoolLengthMeters(item)).filter(value => value !== null))];
+  const commonLength = selectedLengths.length === 1 ? selectedLengths[0] : '';
   const commonDh = commonValue('dh');
   const commonSector = commonValue('area');
   const commonType = commonValue('type');
@@ -5520,6 +5841,15 @@ function spoolOpenBulkEdit() {
               <input id="spoolBulkDiameter" list="spoolBulkDiameterOptions" required value="${esc(commonDiameter)}" placeholder="Ex.: 10, 10 pol ou 10\"" style="${controlStyle}">
               <datalist id="spoolBulkDiameterOptions">${availableDiameters.map(value => `<option value="${esc(value)}"></option>`).join('')}</datalist>
               <small style="display:block; margin-top:4px; color:#64748b;">Você pode digitar <strong>10</strong>; o sistema salvará como <strong>10&quot;</strong>.</small>
+            </span>
+          </div>
+
+          <div class="spool-bulk-edit-row" style="${fieldStyle} border-color:#86efac; background:#f0fdf4;">
+            <input type="checkbox" id="spoolBulkUseLength" onchange="document.getElementById('spoolBulkLength').disabled = !this.checked" style="width:18px; height:18px; cursor:pointer;">
+            <span><strong style="display:block; font-size:12px; color:#166534;">COMPRIMENTO (m)</strong><small style="color:#64748b;">Metragem opcional</small></span>
+            <span>
+              <input id="spoolBulkLength" type="number" min="0" step="0.001" inputmode="decimal" disabled value="${esc(commonLength)}" placeholder="Ex.: 5,418" style="${controlStyle}">
+              <small style="display:block; margin-top:4px; color:#64748b;">Aplicará a mesma metragem aos spools selecionados.</small>
             </span>
           </div>
 
@@ -5581,6 +5911,12 @@ function spoolConfirmBulkEdit(event) {
     if (!diameter) return toast('Informe o novo diâmetro.', true);
     changes.diameter = diameter;
     summary.push(`Diâmetro: ${diameter}`);
+  }
+  if (document.getElementById('spoolBulkUseLength')?.checked) {
+    const lengthMeters = spoolParseLengthMeters(document.getElementById('spoolBulkLength')?.value);
+    if (lengthMeters === null) return toast('Informe um comprimento válido em metros.', true);
+    changes.lengthMeters = lengthMeters;
+    summary.push(`Comprimento: ${formatSpoolMeters(lengthMeters)}`);
   }
   if (document.getElementById('spoolBulkUseDh')?.checked) {
     const dh = normalizeDh(document.getElementById('spoolBulkDh')?.value);
@@ -5868,7 +6204,7 @@ function spoolOpenManualEntryModal() {
           </label>
         </div>
 
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px;">
           <label>
             <span style="font-weight:800; font-size:12px; color:#0f172a; display:block; margin-bottom:4px;">DATA HALL (DH) *</span>
             <select name="dh" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid #cbd5e1; background:#ffffff; color:#0f172a; font-weight:700;">
@@ -5882,6 +6218,11 @@ function spoolOpenManualEntryModal() {
           <label>
             <span style="font-weight:800; font-size:12px; color:#0f172a; display:block; margin-bottom:4px;">DIÂMETRO (Ex.: 8", 2.1/2", 10", 6")</span>
             <input name="diameter" placeholder="Ex.: 8\"" value="8\"" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid #cbd5e1; background:#ffffff; color:#0f172a; font-weight:700;">
+          </label>
+
+          <label>
+            <span style="font-weight:800; font-size:12px; color:#166534; display:block; margin-bottom:4px;">COMPRIMENTO (m)</span>
+            <input name="lengthMeters" inputmode="decimal" min="0" step="0.001" type="number" placeholder="Ex.: 5,418" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid #86efac; background:#f0fdf4; color:#0f172a; font-weight:800;">
           </label>
         </div>
 
@@ -5956,6 +6297,7 @@ function spoolSaveManualBatch(event) {
   const type = form.elements.type.value;
   const dh = normalizeDh(form.elements.dh.value.trim() || 'DH 04');
   const diameter = form.elements.diameter.value.trim() || (type === 'straight' ? '8"' : '2.1/2"');
+  const lengthMeters = spoolParseLengthMeters(form.elements.lengthMeters?.value);
   const subArea = (form.elements.subArea?.value || '').trim();
   const notes = (form.elements.notes?.value || '').trim();
   const partCurrent = Math.max(1, parseInt(form.elements.partCurrent?.value, 10) || 1);
@@ -6005,6 +6347,7 @@ function spoolSaveManualBatch(event) {
       sectorName,
       type,
       diameter,
+      lengthMeters,
       status: 'not-started',
       installedDate: '',
       installedAt: '',
@@ -6076,6 +6419,9 @@ function spoolOpenReportPDF(scope = 'daily') {
   const straightCount = items.filter(s => s.type === 'straight').length;
   const branchCount = items.filter(s => s.type === 'branch').length;
   const percInstalled = totalItems ? Math.round((installedCount / totalItems) * 100) : 0;
+  const reportTotalLength = spoolSumLength(items);
+  const reportInstalledLength = spoolSumLength(items.filter(s => s.status === 'installed'));
+  const reportPendingLength = spoolSumLength(items.filter(s => s.status === 'not-started'));
 
   const tableRows = items.map(s => {
     const secName = spoolSectorDisplayName(s) || '—';
@@ -6116,6 +6462,7 @@ function spoolOpenReportPDF(scope = 'daily') {
         <td style="padding:6px 8px; border:1px solid #cbd5e1;">${esc(secName)}${s.subArea ? `<small style="display:block; color:#92400e;">${esc(s.subArea)}</small>` : ''}</td>
         <td style="font-weight:700; padding:6px 8px; border:1px solid #cbd5e1;">${typeLabel}</td>
         <td style="text-align:center; font-weight:800; padding:6px 8px; border:1px solid #cbd5e1;">${esc(s.diameter || '—')}</td>
+        <td style="text-align:center; font-weight:900; color:#166534; padding:6px 8px; border:1px solid #cbd5e1;">${formatSpoolMeters(spoolLengthMeters(s))}</td>
         <td style="text-align:center; padding:6px 8px; border:1px solid #cbd5e1;">${statusBadge}</td>
         <td style="text-align:center; font-size:10px; padding:6px 8px; border:1px solid #cbd5e1;">${recInfo}</td>
         <td style="text-align:center; font-size:10px; font-weight:700; color:${s.status === 'rejected' ? '#b91c1c' : (s.status === 'returned' ? '#9a3412' : '#15803d')}; padding:6px 8px; border:1px solid #cbd5e1;">${instInfo}</td>
@@ -6179,11 +6526,11 @@ function spoolOpenReportPDF(scope = 'daily') {
       <div class="report-summary" style="display:grid; grid-template-columns:repeat(7, 1fr); margin-bottom:16px; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; background:#f8fafc;">
         <span style="padding:10px 14px; border-right:1px solid #e2e8f0; display:grid; gap:2px;">
           <b style="font-size:18px; color:#0f172a; font-weight:900;">${totalItems}</b>
-          <small style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">Total de Peças</small>
+          <small style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">Total · ${formatSpoolMeters(reportTotalLength, '0 m')}</small>
         </span>
         <span style="padding:10px 14px; border-right:1px solid #e2e8f0; display:grid; gap:2px; background:#f0fdf4;">
           <b style="font-size:18px; color:#15803d; font-weight:900;">${installedCount}</b>
-          <small style="font-size:10px; font-weight:800; color:#15803d; text-transform:uppercase;">Instalados (${percInstalled}%)</small>
+          <small style="font-size:10px; font-weight:800; color:#15803d; text-transform:uppercase;">Instalados (${percInstalled}%) · ${formatSpoolMeters(reportInstalledLength, '0 m')}</small>
         </span>
         <span style="padding:10px 14px; border-right:1px solid #e2e8f0; display:grid; gap:2px; background:#fefce8;">
           <b style="font-size:18px; color:#a16207; font-weight:900;">${receivedCount}</b>
@@ -6199,7 +6546,7 @@ function spoolOpenReportPDF(scope = 'daily') {
         </span>
         <span style="padding:10px 14px; border-right:1px solid #e2e8f0; display:grid; gap:2px;">
           <b style="font-size:18px; color:#64748b; font-weight:900;">${pendingCount}</b>
-          <small style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">Pendentes</small>
+          <small style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">Pendentes · ${formatSpoolMeters(reportPendingLength, '0 m')}</small>
         </span>
         <span style="padding:10px 14px; display:grid; gap:2px;">
           <b style="font-size:18px; color:#0284c7; font-weight:900;">${straightCount}R / ${branchCount}D</b>
@@ -6226,6 +6573,7 @@ function spoolOpenReportPDF(scope = 'daily') {
                 <th style="padding:7px 8px; border:1px solid #475569;">SETOR</th>
                 <th style="padding:7px 8px; border:1px solid #475569;">CLASSIFICAÇÃO</th>
                 <th style="padding:7px 8px; text-align:center; border:1px solid #475569;">DIÂM.</th>
+                <th style="padding:7px 8px; text-align:center; border:1px solid #475569;">COMPR. (m)</th>
                 <th style="padding:7px 8px; text-align:center; border:1px solid #475569;">STATUS</th>
                 <th style="padding:7px 8px; text-align:center; border:1px solid #475569;">RECEBIMENTO</th>
                 <th style="padding:7px 8px; text-align:center; border:1px solid #475569;">INSTALAÇÃO</th>
@@ -6327,6 +6675,7 @@ function spoolCopyFilteredReport(customList = null) {
     const name = spoolGetSectorMeta(spool.area, spoolDb).name;
     return name ? ` · Setor: ${name}` : '';
   };
+  const itemLengthLabel = spool => spoolLengthMeters(spool) === null ? '' : ` · ${formatSpoolMeters(spoolLengthMeters(spool))}`;
 
   // Contexto dos filtros ativos
   const filterDesc = [];
@@ -6387,13 +6736,15 @@ function spoolCopyFilteredReport(customList = null) {
   text += `📅 *Gerado em:* ${new Date().toLocaleDateString('pt-BR')} às ${getLocalTimeStr()}\n`;
   text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   text += `📊 *RESUMO DA SELEÇÃO:* ${list.length} spools\n`;
-  text += `🟢 *Instalados:* ${installed.length}\n`;
-  text += `🟡 *Recebidos:* ${received.length}\n`;
+  text += `🟢 *Instalados:* ${installed.length} spools · ${formatSpoolMeters(spoolSumLength(installed), '0 m')}\n`;
+  text += `🟡 *Recebidos:* ${received.length} spools · ${formatSpoolMeters(spoolSumLength(received), '0 m')}\n`;
   if (rejected.length > 0) {
-    text += `🔴 *Reprovados / Quarentena:* ${rejected.length}\n`;
+    text += `🔴 *Reprovados / Quarentena:* ${rejected.length} spools · ${formatSpoolMeters(spoolSumLength(rejected), '0 m')}\n`;
   }
-  if (returned.length > 0) text += `↩️ *Devolvidos:* ${returned.length}\n`;
-  text += `⚪ *Pendentes:* ${pending.length}\n`;
+  if (returned.length > 0) text += `↩️ *Devolvidos:* ${returned.length} spools · ${formatSpoolMeters(spoolSumLength(returned), '0 m')}\n`;
+  text += `⚪ *Pendentes:* ${pending.length} spools · ${formatSpoolMeters(spoolSumLength(pending), '0 m')}\n`;
+  text += `📏 *Metragem total do recorte:* ${formatSpoolMeters(spoolSumLength(list), '0 m')}\n`;
+  if (spoolKnownLengthCount(list) < list.length) text += `ℹ️ Metragem informada em ${spoolKnownLengthCount(list)} de ${list.length} spools.\n`;
   if (straight.length || branches.length || valves.length) {
     text += `📏 Retos: ${straight.length} · 📐 Derivações: ${branches.length}${valves.length ? ` · 🔘 Válvulas: ${valves.length}` : ''}\n`;
   }
@@ -6406,7 +6757,7 @@ function spoolCopyFilteredReport(customList = null) {
         const dia = s.diameter ? ` (${s.diameter})` : '';
         const dh = s.dh ? ` · ${s.dh}` : '';
         const dt = s.installedDate ? ` — ${formatSpoolDateShort(s.installedDate)}${s.installedAt ? ` às ${formatSpoolTime(s.installedAt)}` : ''}` : '';
-        return `• Tubo ${spoolDisplayNumber(s)}${dia}${dh}${itemSectorLabel(s)}${dt}`;
+        return `• Tubo ${spoolDisplayNumber(s)}${dia}${itemLengthLabel(s)}${dh}${itemSectorLabel(s)}${dt}`;
       }).join('\n') + `\n`;
     }
 
@@ -6416,7 +6767,7 @@ function spoolCopyFilteredReport(customList = null) {
         const dia = s.diameter ? ` (${s.diameter})` : '';
         const dh = s.dh ? ` · ${s.dh}` : '';
         const dt = s.receivedDate ? ` — ${formatSpoolDateShort(s.receivedDate)}${s.receivedAt ? ` às ${formatSpoolTime(s.receivedAt)}` : ''}` : '';
-        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${itemSectorLabel(s)}${dt}`;
+        return `• Spool ${spoolDisplayNumber(s)}${dia}${itemLengthLabel(s)}${dh}${itemSectorLabel(s)}${dt}`;
       }).join('\n') + `\n`;
     }
 
@@ -6427,7 +6778,7 @@ function spoolCopyFilteredReport(customList = null) {
         const dh = s.dh ? ` · ${s.dh}` : '';
         const rsn = s.rejectedReason ? ` [Motivo: ${s.rejectedReason}]` : '';
         const dt = s.rejectedDate ? ` — ${formatSpoolDateShort(s.rejectedDate)}${s.rejectedAt ? ` às ${formatSpoolTime(s.rejectedAt)}` : ''}` : '';
-        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${itemSectorLabel(s)}${rsn}${dt}`;
+        return `• Spool ${spoolDisplayNumber(s)}${dia}${itemLengthLabel(s)}${dh}${itemSectorLabel(s)}${rsn}${dt}`;
       }).join('\n') + `\n`;
     }
 
@@ -6438,7 +6789,7 @@ function spoolCopyFilteredReport(customList = null) {
         const dh = s.dh ? ` · ${s.dh}` : '';
         const reason = s.returnedReason ? ` [Motivo: ${s.returnedReason}]` : '';
         const date = s.returnedDate ? ` — ${formatSpoolDateShort(s.returnedDate)}${s.returnedAt ? ` às ${formatSpoolTime(s.returnedAt)}` : ''}` : '';
-        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${itemSectorLabel(s)}${reason}${date}`;
+        return `• Spool ${spoolDisplayNumber(s)}${dia}${itemLengthLabel(s)}${dh}${itemSectorLabel(s)}${reason}${date}`;
       }).join('\n') + `\n`;
     }
 
@@ -6447,13 +6798,13 @@ function spoolCopyFilteredReport(customList = null) {
       text += pending.map(s => {
         const dia = s.diameter ? ` (${s.diameter})` : '';
         const dh = s.dh ? ` · ${s.dh}` : '';
-        return `• Spool ${spoolDisplayNumber(s)}${dia}${dh}${itemSectorLabel(s)}`;
+        return `• Spool ${spoolDisplayNumber(s)}${dia}${itemLengthLabel(s)}${dh}${itemSectorLabel(s)}`;
       }).join('\n') + `\n`;
     }
   } else {
     text += `\n📋 *PRIMEIRAS 60 TAGS (de ${list.length} itens):*\n`;
     const sample = list.slice(0, 60);
-    text += sample.map(s => `• ${spoolDisplayNumber(s)} (${s.dh || 'DH'} · ${spoolGetSectorMeta(s.area, spoolDb).name} · ${s.status === 'installed' ? '🟢' : (s.status === 'received' ? '🟡' : (s.status === 'rejected' ? '🔴' : (s.status === 'returned' ? '↩️' : '⚪')))})`).join('\n');
+    text += sample.map(s => `• ${spoolDisplayNumber(s)} (${s.dh || 'DH'} · ${spoolGetSectorMeta(s.area, spoolDb).name} · ${formatSpoolMeters(spoolLengthMeters(s))} · ${s.status === 'installed' ? '🟢' : (s.status === 'received' ? '🟡' : (s.status === 'rejected' ? '🔴' : (s.status === 'returned' ? '↩️' : '⚪')))})`).join('\n');
     text += `\n\n_(+ ${list.length - 60} spools não detalhados na mensagem. Baixe a planilha Excel para a relação completa.)_\n`;
   }
 
@@ -6487,6 +6838,10 @@ function spoolCopyDailyReport(dateStr = '') {
   const allStraight = sectorSpools.filter(s => s.type === 'straight');
   const straightInstalledTotal = allStraight.filter(s => s.status === 'installed').length;
   const totalPending = sectorSpools.filter(s => s.status === 'not-started').length;
+  const installedDayLength = spoolSumLength(installed);
+  const installedAccumulatedLength = spoolSumLength(sectorSpools.filter(s => s.status === 'installed'));
+  const pendingAccumulatedLength = spoolSumLength(sectorSpools.filter(s => s.status === 'not-started'));
+  const remainingAccumulatedLength = spoolSumLength(sectorSpools.filter(s => s.status !== 'installed'));
 
   const dateFormatted = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
 
@@ -6494,27 +6849,29 @@ function spoolCopyDailyReport(dateStr = '') {
   text += `📍 *Data Center Omnia (DC01)* · *${sectorMeta.name}* · *${spoolActiveDh}*\n`;
   text += `📅 *Data:* ${dateFormatted}\n`;
   text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  text += `🟢 *TOTAL INSTALADO NO DIA:* ${installed.length} itens\n\n`;
+  text += `🟢 *TOTAL INSTALADO NO DIA:* ${installed.length} itens · ${formatSpoolMeters(installedDayLength, '0 m')}\n\n`;
 
   text += `📏 *TRECHOS RETOS:* ${straight.length} tubos\n`;
-  text += `${straight.length ? straight.map(s => `• Tubo ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhum trecho reto hoje'}\n\n`;
+  text += `${straight.length ? straight.map(s => `• Tubo ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${spoolLengthText(s, ' · ')}${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhum trecho reto hoje'}\n\n`;
 
   text += `📐 *DERIVAÇÕES (Ramais):* ${branches.length} tubos\n`;
-  text += `${branches.length ? branches.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '2.1/2"'})${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhuma derivação hoje'}\n`;
+  text += `${branches.length ? branches.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '2.1/2"'})${spoolLengthText(s, ' · ')}${s.installedAt ? ` — ${formatSpoolTime(s.installedAt)}` : ''}`).join('\n') : '• Nenhuma derivação hoje'}\n`;
 
   if (rejectedOnDay.length > 0) {
     text += `\n🔴 *REPROVADOS NO DIA:* ${rejectedOnDay.length} tubos\n`;
-    text += `${rejectedOnDay.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${s.rejectedReason ? ` [${s.rejectedReason}]` : ''}`).join('\n')}\n`;
+    text += `${rejectedOnDay.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${spoolLengthText(s, ' · ')}${s.rejectedReason ? ` [${s.rejectedReason}]` : ''}`).join('\n')}\n`;
   }
   if (returnedOnDay.length > 0) {
     text += `\n↩️ *DEVOLVIDOS NO DIA:* ${returnedOnDay.length} tubos\n`;
-    text += `${returnedOnDay.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${s.returnedReason ? ` [${s.returnedReason}]` : ''}`).join('\n')}\n`;
+    text += `${returnedOnDay.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${spoolLengthText(s, ' · ')}${s.returnedReason ? ` [${s.returnedReason}]` : ''}`).join('\n')}\n`;
   }
 
   text += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   text += `📊 *STATUS ACUMULADO:*\n`;
   text += `• Linha Reta: ${straightInstalledTotal} de ${allStraight.length} concluídos (${allStraight.length ? Math.round((straightInstalledTotal / allStraight.length) * 100) : 0}%)\n`;
-  text += `• Restante no Setor: ${totalPending} itens pendentes\n`;
+  text += `• Metragem instalada acumulada: ${formatSpoolMeters(installedAccumulatedLength, '0 m')}\n`;
+  text += `• Pendentes: ${totalPending} itens · ${formatSpoolMeters(pendingAccumulatedLength, '0 m')}\n`;
+  text += `• Restante total a instalar: ${formatSpoolMeters(remainingAccumulatedLength, '0 m')}\n`;
   text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   text += `_Heating Cooling & Afonso França Engenharia_`;
 
@@ -6540,6 +6897,7 @@ function spoolCopyReceivedDailyReport(dateStr = '') {
   const straight = received.filter(s => s.type === 'straight');
   const branches = received.filter(s => s.type === 'branch');
   const valves = received.filter(s => s.type === 'valve');
+  const receivedDayLength = spoolSumLength(received);
 
   const dateFormatted = new Date(targetDate + 'T12:00:00').toLocaleDateString('pt-BR');
 
@@ -6547,16 +6905,16 @@ function spoolCopyReceivedDailyReport(dateStr = '') {
   text += `📍 *Data Center Omnia (DC01)* · *${sectorMeta.name}* · *${spoolActiveDh}*\n`;
   text += `📅 *Data de Descarga:* ${dateFormatted}\n`;
   text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  text += `🟡 *TOTAL RECEBIDO NO DIA:* ${received.length} peças\n\n`;
+  text += `🟡 *TOTAL RECEBIDO NO DIA:* ${received.length} peças · ${formatSpoolMeters(receivedDayLength, '0 m')}\n\n`;
 
   text += `📏 *TRECHOS RETOS RECEBIDOS:* ${straight.length} tubos\n`;
-  text += `${straight.length ? straight.map(s => `• Tubo ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${s.receivedAt ? ` — ${formatSpoolTime(s.receivedAt)}` : ''}`).join('\n') : '• Nenhum trecho reto recebido hoje'}\n\n`;
+  text += `${straight.length ? straight.map(s => `• Tubo ${spoolDisplayNumber(s)} (${s.diameter || '8"'})${spoolLengthText(s, ' · ')}${s.receivedAt ? ` — ${formatSpoolTime(s.receivedAt)}` : ''}`).join('\n') : '• Nenhum trecho reto recebido hoje'}\n\n`;
 
   text += `📐 *DERIVAÇÕES (Ramais) RECEBIDAS:* ${branches.length} tubos\n`;
-  text += `${branches.length ? branches.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '2.1/2"'})${s.receivedAt ? ` — ${formatSpoolTime(s.receivedAt)}` : ''}`).join('\n') : '• Nenhuma derivação recebida hoje'}\n`;
+  text += `${branches.length ? branches.map(s => `• Spool ${spoolDisplayNumber(s)} (${s.diameter || '2.1/2"'})${spoolLengthText(s, ' · ')}${s.receivedAt ? ` — ${formatSpoolTime(s.receivedAt)}` : ''}`).join('\n') : '• Nenhuma derivação recebida hoje'}\n`;
 
   if (valves.length > 0) {
-    text += `\n🔘 *VÁLVULAS RECEBIDAS:* ${valves.length}\n${valves.map(s => `• Válvula ${spoolDisplayNumber(s)}`).join('\n')}\n`;
+    text += `\n🔘 *VÁLVULAS RECEBIDAS:* ${valves.length}\n${valves.map(s => `• Válvula ${spoolDisplayNumber(s)}${spoolLengthText(s, ' · ')}`).join('\n')}\n`;
   }
 
   text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -6735,7 +7093,7 @@ function spoolOpenTrackingModal(spoolId) {
               ${esc(spool.number)}
             </span>
             <span style="font-size:12px; color:#475569; font-weight:700;">
-              ${spool.type === 'straight' ? '📏 Trecho Reto' : (spool.type === 'branch' ? '📐 Derivação' : '🔘 Válvula')} · Ø ${esc(spool.diameter || '—')} · ${esc(spool.dh)}
+              ${spool.type === 'straight' ? '📏 Trecho Reto' : (spool.type === 'branch' ? '📐 Derivação' : '🔘 Válvula')} · Ø ${esc(spool.diameter || '—')} · ${formatSpoolMeters(spoolLengthMeters(spool))} · ${esc(spool.dh)}
             </span>
           </div>
           <div>
@@ -6836,7 +7194,7 @@ function spoolOpenTrackingModal(spoolId) {
             <strong style="font-size:13px; color:#6d28d9; display:flex; align-items:center; gap:6px; margin-bottom:10px;">
               <span>📦</span> 5. Identificação / Sequência do Spool
             </strong>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px; margin-bottom:10px;">
               <div>
                 <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Parte / Sequência (Ex.: 1 de 2, 2 de 2):</label>
                 <input type="text" id="spoolModalPart" placeholder="Ex.: 1 de 2" value="${esc(spool.part || '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #d8b4fe; font-weight:700;">
@@ -6844,6 +7202,10 @@ function spoolOpenTrackingModal(spoolId) {
               <div>
                 <label style="font-size:11px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Sub-área / Local Específico:</label>
                 <input type="text" id="spoolModalSubArea" placeholder="Ex.: Chillers, Bombas Primárias..." value="${esc(spool.subArea || '')}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #d8b4fe; font-weight:700;">
+              </div>
+              <div>
+                <label style="font-size:11px; font-weight:700; color:#166534; display:block; margin-bottom:4px;">Comprimento da tubulação (m):</label>
+                <input type="number" min="0" step="0.001" inputmode="decimal" id="spoolModalLength" placeholder="Ex.: 5,418" value="${spoolLengthMeters(spool) ?? ''}" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid #86efac; background:#f0fdf4; font-weight:800;">
               </div>
             </div>
             <div>
@@ -6910,11 +7272,15 @@ function spoolSaveModalDates(spoolId) {
   const partVal = (document.getElementById('spoolModalPart')?.value || '').trim();
   const subAreaVal = (document.getElementById('spoolModalSubArea')?.value || '').trim();
   const notesVal = (document.getElementById('spoolModalNotes')?.value || '').trim();
+  const lengthRaw = (document.getElementById('spoolModalLength')?.value || '').trim();
+  const lengthVal = spoolParseLengthMeters(lengthRaw);
+  if (lengthRaw && lengthVal === null) return toast('Informe um comprimento válido em metros.', true);
 
   // Salvar Parte, Subárea e Observações
   if (partVal !== undefined) item.part = partVal;
   if (subAreaVal !== undefined) item.subArea = subAreaVal;
   if (notesVal !== undefined) item.notes = notesVal;
+  item.lengthMeters = lengthVal;
 
   item.receivedDate = recDate;
   item.receivedAt = recDate ? buildIsoFromLocalDateAndTime(recDate, recTime) : '';
