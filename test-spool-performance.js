@@ -171,7 +171,23 @@ async function run() {
   vm.runInContext("spoolListFilter='straight'; spoolOpenSectorMapStatus('supercore', 'not-started');", context);
   result.mapActionPreservesTechnicalType = vm.runInContext("spoolListFilter === 'straight' && spoolStatusFilter === 'not-started'", context);
 
-  if (!result.generalProgressPreserved || !result.straightProgressCorrect || !result.statusDoesNotFakeProgress || !result.quickTypeProgressCorrect || !result.mapStatusActionsRendered || !result.mapStatusActionCorrect || !result.mapActionPreservesTechnicalType) {
+  // Reproduz o caso do CAG: depois de abrir o card de pendentes, selecionar
+  // "Todos os Status" deve remover o recorte rapido e trazer os instalados.
+  context.cagFixture = [
+    { id: 'cag-installed', number: 'CAG-I', dh: 'DH 04', area: 'cag', type: 'straight', diameter: '10"', status: 'installed' },
+    { id: 'cag-pending', number: 'CAG-P', dh: 'DH 04', area: 'cag', type: 'straight', diameter: '10"', status: 'not-started' }
+  ];
+  vm.runInContext("spoolActiveDh='ALL'; spoolActiveSector='cag'; spoolActiveSubArea='all'; spoolTypeFilter='all'; spoolDiameterFilter='all'; spoolListFilter='all'; spoolStatusFilter='all'; spoolDateFilterMode='installed'; spoolSearchTerm=''; spoolSetFilter('pending');", context);
+  result.pendingCardSyncsStatus = vm.runInContext("spoolListFilter === 'pending' && spoolStatusFilter === 'not-started' && spoolDateFilterMode === 'all'", context);
+  vm.runInContext("spoolSetStatusFilter('all');", context);
+  result.allStatusesClearsQuickStatus = vm.runInContext("spoolListFilter === 'all' && spoolStatusFilter === 'all' && spoolFilterList(cagFixture).length === 2 && spoolFilterList(cagFixture).some(item => item.status === 'installed')", context);
+  result.statusAndDateFiltersSeparated = !app.innerHTML.includes('value="installed_on_date"')
+    && !app.innerHTML.includes('value="received_on_date"')
+    && !app.innerHTML.includes('value="rejected_on_date"')
+    && !app.innerHTML.includes('value="activity_on_date"')
+    && app.innerHTML.includes('Movimentação por dia:');
+
+  if (!result.generalProgressPreserved || !result.straightProgressCorrect || !result.statusDoesNotFakeProgress || !result.quickTypeProgressCorrect || !result.mapStatusActionsRendered || !result.mapStatusActionCorrect || !result.mapActionPreservesTechnicalType || !result.pendingCardSyncsStatus || !result.allStatusesClearsQuickStatus || !result.statusAndDateFiltersSeparated) {
     throw new Error(`Falha no escopo do mapa de progresso: ${JSON.stringify(result)}`);
   }
 

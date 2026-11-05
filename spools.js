@@ -2130,7 +2130,8 @@ function spoolFilterList(sourceList) {
       if (spoolDateFilterMode === 'activity' && !isInstOnDate && !isRecOnDate && !isRejOnDate && !isReturnedOnDate) return false;
     }
 
-    // 4. Filtro por Status e por Data do Apontamento
+    // 4. Filtro pela situacao atual. O recorte por dia fica exclusivamente no
+    // bloco "Movimentacao por dia", evitando duas maneiras de fazer a mesma coisa.
     if (spoolStatusFilter !== 'all') {
       if (spoolStatusFilter === 'pending' || spoolStatusFilter === 'not-started') {
         if (s.status !== 'not-started') return false;
@@ -2138,21 +2139,6 @@ function spoolFilterList(sourceList) {
         if (s.status !== 'rejected') return false;
       } else if (spoolStatusFilter === 'returned') {
         if (s.status !== 'returned') return false;
-      } else if (spoolStatusFilter === 'installed_on_date') {
-        const isInst = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
-        if (!isInst) return false;
-      } else if (spoolStatusFilter === 'received_on_date') {
-        const isRec = (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate));
-        if (!isRec) return false;
-      } else if (spoolStatusFilter === 'rejected_on_date') {
-        const isRej = s.status === 'rejected' && (s.rejectedDate === targetDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === targetDate));
-        if (!isRej) return false;
-      } else if (spoolStatusFilter === 'activity_on_date') {
-        const isInst = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
-        const isRec = (s.status === 'received' || s.status === 'installed') && (s.receivedDate === targetDate || (s.receivedAt && formatSpoolLocalDate(s.receivedAt) === targetDate));
-        const isRej = s.status === 'rejected' && (s.rejectedDate === targetDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === targetDate));
-        const isReturned = s.status === 'returned' && (s.returnedDate === targetDate || (s.returnedAt && formatSpoolLocalDate(s.returnedAt) === targetDate));
-        if (!isInst && !isRec && !isRej && !isReturned) return false;
       } else if (s.status !== spoolStatusFilter) {
         return false;
       }
@@ -2918,20 +2904,16 @@ function renderSpools() {
         </div>
       ` : ''}
 
-      <!-- Filtro Status -->
+      <!-- Situacao atual da peca; datas sao filtradas somente no bloco abaixo -->
       <div class="spool-filter-group">
-        <label class="spool-filter-label" for="spoolFilterStatusSelect">📊 Status:</label>
+        <label class="spool-filter-label" for="spoolFilterStatusSelect">📊 Situação atual:</label>
         <select id="spoolFilterStatusSelect" class="spool-filter-select" onchange="spoolSetStatusFilter(this.value)">
           <option value="all" ${spoolStatusFilter === 'all' ? 'selected' : ''}>Todos os Status</option>
           <option value="not-started" ${spoolStatusFilter === 'not-started' ? 'selected' : ''}>⚪ Pendente</option>
-          <option value="received" ${spoolStatusFilter === 'received' ? 'selected' : ''}>🟡 Recebido (Geral)</option>
-          <option value="installed" ${spoolStatusFilter === 'installed' ? 'selected' : ''}>🟢 Instalado (Geral)</option>
+          <option value="received" ${spoolStatusFilter === 'received' ? 'selected' : ''}>🟡 Recebido</option>
+          <option value="installed" ${spoolStatusFilter === 'installed' ? 'selected' : ''}>🟢 Instalado</option>
           <option value="rejected" ${spoolStatusFilter === 'rejected' ? 'selected' : ''}>🔴 Reprovado (Quarentena)</option>
           <option value="returned" ${spoolStatusFilter === 'returned' ? 'selected' : ''}>↩️ Devolvido</option>
-          <option value="installed_on_date" ${spoolStatusFilter === 'installed_on_date' ? 'selected' : ''}>🟢 Instalados no Dia (${formatSpoolDateShort(filterDate)})</option>
-          <option value="received_on_date" ${spoolStatusFilter === 'received_on_date' ? 'selected' : ''}>🟡 Recebidos no Dia (${formatSpoolDateShort(filterDate)})</option>
-          <option value="rejected_on_date" ${spoolStatusFilter === 'rejected_on_date' ? 'selected' : ''}>🔴 Reprovados no Dia (${formatSpoolDateShort(filterDate)})</option>
-          <option value="activity_on_date" ${spoolStatusFilter === 'activity_on_date' ? 'selected' : ''}>⚡ Atividade no Dia (${formatSpoolDateShort(filterDate)})</option>
         </select>
       </div>
 
@@ -2959,10 +2941,16 @@ function renderSpools() {
       <!-- Filtro por Dia do Fechamento / Apontamento com Modo Ativo -->
       <div class="spool-filter-group" style="min-width:300px;">
         <label class="spool-filter-label" for="spoolMainDateFilter" style="display:flex; justify-content:space-between; align-items:center;">
-          <span>📅 Filtrar por Dia:</span>
+          <span>📅 Movimentação por dia:</span>
           ${spoolDateFilterMode !== 'all' ? `
             <span style="font-size:10px; background:#dcfce7; color:#15803d; padding:1px 6px; border-radius:4px; font-weight:800;">
-              ATIVO: ${spoolDateFilterMode === 'installed' ? 'Instalados' : (spoolDateFilterMode === 'received' ? 'Recebidos' : 'Atividade')}
+              ATIVO: ${({
+                activity: 'Atividade',
+                installed: 'Instalados',
+                received: 'Recebidos',
+                rejected: 'Reprovados',
+                returned: 'Devolvidos'
+              })[spoolDateFilterMode] || 'Atividade'}
             </span>
           ` : `
             <span style="font-size:10px; color:#64748b; font-weight:600;">(Todas as datas)</span>
@@ -2970,7 +2958,7 @@ function renderSpools() {
         </label>
         <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
           <select id="spoolDateModeSelect" class="spool-filter-select" onchange="spoolSetDateFilterMode(this.value)" style="height:36px; font-weight:700; width:125px; font-size:12px;" title="Modo do filtro de data">
-            <option value="all" ${spoolDateFilterMode === 'all' ? 'selected' : ''}>🌐 Todas</option>
+            <option value="all" ${spoolDateFilterMode === 'all' ? 'selected' : ''}>🌐 Todas as datas</option>
             <option value="activity" ${spoolDateFilterMode === 'activity' ? 'selected' : ''}>⚡ Atividade</option>
             <option value="installed" ${spoolDateFilterMode === 'installed' ? 'selected' : ''}>🟢 Instalados</option>
             <option value="received" ${spoolDateFilterMode === 'received' ? 'selected' : ''}>🟡 Recebidos</option>
@@ -3719,6 +3707,9 @@ function spoolSetFilter(filterKey) {
   } else if (filterKey === 'received_today') {
     spoolDateFilterMode = 'received';
     spoolStatusFilter = 'all';
+  } else if (filterKey === 'pending') {
+    spoolStatusFilter = 'not-started';
+    spoolDateFilterMode = 'all';
   } else if (filterKey === 'rejected') {
     spoolStatusFilter = 'rejected';
     spoolDateFilterMode = 'all';
@@ -3734,7 +3725,17 @@ function spoolSetFilter(filterKey) {
 }
 
 function spoolSetStatusFilter(statusVal) {
-  spoolStatusFilter = statusVal;
+  const validStatuses = ['all', 'not-started', 'received', 'installed', 'rejected', 'returned'];
+  spoolStatusFilter = validStatuses.includes(statusVal) ? statusVal : 'all';
+
+  // Os cards de fechamento tambem gravam um recorte de status em
+  // spoolListFilter. Ao usar o select principal, esse recorte antigo precisa
+  // sair; caso contrario "Todos os Status" continua mostrando, por exemplo,
+  // apenas os pendentes. Recortes tecnicos (trecho/valvula/ramal) permanecem.
+  if (['pending', 'rejected', 'returned', 'installed_today', 'received_today'].includes(spoolListFilter)) {
+    spoolListFilter = 'all';
+  }
+
   spoolKeepOnlyVisibleSelection();
   renderSpools();
 }
@@ -6701,11 +6702,7 @@ function spoolCopyFilteredReport(customList = null) {
       'received': 'Recebido',
       'installed': 'Instalado',
       'rejected': '🔴 Reprovado / Quarentena',
-      'returned': '↩️ Devolvido',
-      'installed_on_date': `Instalados no Dia (${dateFormatted})`,
-      'received_on_date': `Recebidos no Dia (${dateFormatted})`,
-      'rejected_on_date': `Reprovados no Dia (${dateFormatted})`,
-      'activity_on_date': `Atividade no Dia (${dateFormatted})`
+      'returned': '↩️ Devolvido'
     };
     filterDesc.push(`Status: *${statusMap[spoolStatusFilter] || spoolStatusFilter}*`);
   }
