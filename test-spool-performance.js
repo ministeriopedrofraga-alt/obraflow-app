@@ -186,12 +186,46 @@ async function run() {
     && !app.innerHTML.includes('value="rejected_on_date"')
     && !app.innerHTML.includes('value="activity_on_date"')
     && app.innerHTML.includes('Movimentação por dia:');
+  result.filtersCleanedAndUnified = !app.innerHTML.includes('id="spoolSortSelect"')
+    && !app.innerHTML.includes('id="spoolDateModeSelect"')
+    && app.innerHTML.includes('id="spoolFilterStatusSelect"')
+    && app.innerHTML.includes('id="spoolMainDateFilter"');
 
-  if (!result.generalProgressPreserved || !result.straightProgressCorrect || !result.statusDoesNotFakeProgress || !result.quickTypeProgressCorrect || !result.mapStatusActionsRendered || !result.mapStatusActionCorrect || !result.mapActionPreservesTechnicalType || !result.pendingCardSyncsStatus || !result.allStatusesClearsQuickStatus || !result.statusAndDateFiltersSeparated) {
+  if (!result.generalProgressPreserved || !result.straightProgressCorrect || !result.statusDoesNotFakeProgress || !result.quickTypeProgressCorrect || !result.mapStatusActionsRendered || !result.mapStatusActionCorrect || !result.mapActionPreservesTechnicalType || !result.pendingCardSyncsStatus || !result.allStatusesClearsQuickStatus || !result.statusAndDateFiltersSeparated || !result.filtersCleanedAndUnified) {
     throw new Error(`Falha no escopo do mapa de progresso: ${JSON.stringify(result)}`);
   }
 
-  vm.runInContext("spoolActiveDh='ALL'; spoolActiveSector='all'; spoolTypeFilter='all'; spoolListFilter='all'; spoolStatusFilter='all'; spoolDateFilterMode='all';", context);
+  // Uma lista separada por virgulas deve fazer correspondencia exata de tags,
+  // ignorar repeticoes e informar quais itens nao foram encontrados.
+  context.tagSearchFixture = [
+    { id: 'tag-1104', number: '1104', dh: 'DH 04', area: 'cag', type: 'straight', status: 'not-started' },
+    { id: 'tag-1104-part', number: '1104', part: '1 de 2', dh: 'DH 04', area: 'cag', type: 'straight', status: 'received' },
+    { id: 'tag-1108', number: '1108', dh: 'DH 04', area: 'cag', type: 'branch', status: 'installed' },
+    { id: 'tag-11040', number: '11040', dh: 'DH 04', area: 'cag', type: 'straight', status: 'not-started' }
+  ];
+  vm.runInContext("spoolActiveDh='ALL'; spoolActiveSector='all'; spoolActiveSubArea='all'; spoolTypeFilter='all'; spoolDiameterFilter='all'; spoolListFilter='all'; spoolStatusFilter='all'; spoolDateFilterMode='all'; spoolSearchTerm='1104, 1108, 9999, 1104,';", context);
+  const tagSearchIds = vm.runInContext("spoolFilterList(tagSearchFixture).map(item => item.id)", context);
+  const tagSearchSummary = context.window.spoolGetTagSearchSummary(
+    context.tagSearchFixture.filter(item => tagSearchIds.includes(item.id)),
+    '1104, 1108, 9999, 1104,'
+  );
+  result.multiTagSearchExact = tagSearchIds.length === 3
+    && tagSearchIds.includes('tag-1104')
+    && tagSearchIds.includes('tag-1104-part')
+    && tagSearchIds.includes('tag-1108')
+    && !tagSearchIds.includes('tag-11040');
+  result.multiTagSearchSummary = tagSearchSummary.terms.length === 3
+    && tagSearchSummary.foundTerms.length === 2
+    && tagSearchSummary.missingTerms.length === 1
+    && tagSearchSummary.missingTerms[0] === '9999';
+  result.multiTagSearchUi = vm.runInContext("spoolRenderTagSearchFeedback(spoolFilterList(tagSearchFixture))", context).includes('Selecionar os 3 encontrados');
+  context.window.spoolSelectTagSearchResults();
+  result.multiTagSelection = vm.runInContext("spoolMultiSelectMode && spoolSelectedIds.size === 2", context);
+  if (!result.multiTagSearchExact || !result.multiTagSearchSummary || !result.multiTagSearchUi || !result.multiTagSelection) {
+    throw new Error(`Falha na busca por multiplas tags: ${JSON.stringify(result)}`);
+  }
+
+  vm.runInContext("spoolActiveDh='ALL'; spoolActiveSector='all'; spoolTypeFilter='all'; spoolListFilter='all'; spoolStatusFilter='all'; spoolDateFilterMode='all'; spoolSearchTerm=''; spoolSelectedIds.clear(); spoolMultiSelectMode=false;", context);
 
   context.window.spoolSetItemStatus('spool-300', 'installed');
   context.window.spoolSetItemStatus('spool-301', 'installed');

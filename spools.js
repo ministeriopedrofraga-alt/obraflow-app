@@ -2010,6 +2010,13 @@ let spoolControlView = localStorage.getItem('obraflow_spool_control_view') === '
 let spoolAuxStatusFilter = 'all';
 let spoolAuxSearchTerm = '';
 let spoolPendingProtectedDelete = null;
+let spoolSortMode = localStorage.getItem('obraflow_spool_sort_mode') || 'tag_asc';
+if (spoolSortMode === 'status_first') {
+  spoolSortMode = 'tag_asc';
+  localStorage.setItem('obraflow_spool_sort_mode', 'tag_asc');
+}
+let spoolCustomPageSize = Number(localStorage.getItem('obraflow_spool_page_size')) || 0; // 0 = padrão (160 desktop / 80 mobile), ou 300, ou -1 (todos)
+const spoolCollator = (typeof Intl !== 'undefined' && Intl.Collator) ? new Intl.Collator('pt-BR', { numeric: true }) : { compare: (a, b) => String(a).localeCompare(String(b)) };
 
 if (spoolActiveSector === 'all') {
   spoolActiveSubArea = 'all';
@@ -2034,9 +2041,85 @@ function formatSpoolDateShort(d) {
 // A busca e os filtros tecnicos precisam ter a mesma leitura na lista e no
 // mapa de progresso. Status e data ficam fora do denominador do mapa: filtrar
 // apenas "Instalado" nao pode transformar um setor incompleto em 100%.
+function spoolParseSearchTerms(rawTerm = spoolSearchTerm) {
+  const seen = new Set();
+  return String(rawTerm || '')
+    .split(/[,;\n]+/)
+    .map(term => term.trim())
+    .filter(term => {
+      const key = term.toLocaleLowerCase('pt-BR');
+      if (!term || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function spoolIsTagListSearch(rawTerm = spoolSearchTerm) {
+  return /[,;\n]/.test(String(rawTerm || '')) && spoolParseSearchTerms(rawTerm).length > 0;
+}
+
+function spoolNormalizeTagSearchValue(value) {
+  return String(value || '')
+    .toLocaleLowerCase('pt-BR')
+    .trim()
+    .replace(/^(?:tag|spool|tubo)\s*[:#-]?\s*/i, '')
+    .replace(/[()[\]]/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
+function spoolMatchesTagToken(spool, rawToken) {
+  const token = spoolNormalizeTagSearchValue(rawToken);
+  if (!token) return false;
+
+  const number = spoolNormalizeTagSearchValue(spool?.number);
+  const part = spoolNormalizeTagSearchValue(spool?.part || spool?.seq);
+  const display = spoolNormalizeTagSearchValue(spoolDisplayNumber(spool));
+  const numberWithPart = [number, part].filter(Boolean).join(' ');
+
+  // In list mode tags are exact. This prevents "1104" from also returning
+  // "11040", while a tag without a part still returns all of its parts.
+  return token === number || token === display || token === numberWithPart;
+}
+
+function spoolGetTagSearchSummary(list, rawTerm = spoolSearchTerm) {
+  const terms = spoolParseSearchTerms(rawTerm);
+  const source = Array.isArray(list) ? list : [];
+  const foundTerms = terms.filter(term => source.some(spool => spoolMatchesTagToken(spool, term)));
+  const foundKeys = new Set(foundTerms.map(term => term.toLocaleLowerCase('pt-BR')));
+  return {
+    terms,
+    foundTerms,
+    missingTerms: terms.filter(term => !foundKeys.has(term.toLocaleLowerCase('pt-BR'))),
+    matchedSpools: source.length
+  };
+}
+
 function spoolMatchesSearchTerm(spool, rawTerm = spoolSearchTerm) {
+  if (spoolIsTagListSearch(rawTerm)) {
+    return spoolParseSearchTerms(rawTerm).some(term => spoolMatchesTagToken(spool, term));
+  }
+
   const q = String(rawTerm || '').toLowerCase().trim();
   if (!q) return true;
+
+  // Normalização de busca para DH (ex: 'dh4', 'dh 4', 'dh-04', 'dh04' -> match 'DH 04')
+  const normalizeForSearch = s => String(s || '').toLowerCase().replace(/[-\s]/g, '').replace(/dh0*(\d+)/, (m, g) => 'dh' + g);
+  const qNormDh = normalizeForSearch(q);
+  const spoolNormDh = normalizeForSearch(spool.dh);
+  const dhMatch = qNormDh && spoolNormDh && (qNormDh === spoolNormDh || spoolNormDh.includes(qNormDh));
+
+  // Mapeamento de termos de status em português
+  const statusLabels = {
+    'installed': ['instalado', 'instalados', 'instalada', 'instaladas', 'montado', 'montados'],
+    'received': ['recebido', 'recebidos', 'recebida', 'recebidas', 'entregue', 'chegou'],
+    'not-started': ['pendente', 'pendentes', 'a instalar', 'nao iniciado', 'não iniciado'],
+    'rejected': ['reprovado', 'reprovados', 'quarentena', 'bloqueado'],
+    'returned': ['devolvido', 'devolvidos', 'devolucao', 'devolução']
+  };
+  const statusTerms = statusLabels[spool.status] || [];
+  const statusMatch = statusTerms.some(term => term.includes(q) || q.includes(term));
+
+  if (dhMatch || statusMatch) return true;
 
   return [
     spool.number,
@@ -2050,6 +2133,53 @@ function spoolMatchesSearchTerm(spool, rawTerm = spoolSearchTerm) {
     spool.rejectedReason,
     spool.returnedReason
   ].some(value => String(value || '').toLowerCase().includes(q));
+}
+
+function spoolSortList(list, mode = spoolSortMode) {
+  if (!Array.isArray(list) || list.length <= 1) return list || [];
+  const copy = [...list];
+
+  if (mode === 'status_first') {
+    const statusWeight = {
+      'installed': 1,
+      'received': 2,
+      'rejected': 3,
+      'returned': 4,
+      'not-started': 5
+    };
+    return copy.sort((a, b) => {
+      const wa = statusWeight[a.status] || 5;
+      const wb = statusWeight[b.status] || 5;
+      if (wa !== wb) return wa - wb;
+      return spoolCollator.compare(String(a.number || ''), String(b.number || ''));
+    });
+  }
+
+  if (mode === 'tag_asc') {
+    return copy.sort((a, b) => spoolCollator.compare(String(a.number || ''), String(b.number || '')));
+  }
+
+  if (mode === 'tag_desc') {
+    return copy.sort((a, b) => spoolCollator.compare(String(b.number || ''), String(a.number || '')));
+  }
+
+  if (mode === 'status_last') {
+    const statusWeight = {
+      'not-started': 1,
+      'rejected': 2,
+      'returned': 3,
+      'received': 4,
+      'installed': 5
+    };
+    return copy.sort((a, b) => {
+      const wa = statusWeight[a.status] || 1;
+      const wb = statusWeight[b.status] || 1;
+      if (wa !== wb) return wa - wb;
+      return spoolCollator.compare(String(a.number || ''), String(b.number || ''));
+    });
+  }
+
+  return copy; // 'original'
 }
 
 function spoolProgressTypeFilters() {
@@ -2094,7 +2224,7 @@ function spoolProgressScopeLabel() {
 function spoolFilterList(sourceList) {
   const targetDate = spoolSelectedDate || getLocalDateStr();
 
-  return sourceList.filter(s => {
+  const filtered = sourceList.filter(s => {
     // 1. Filtro por Setor
     if (spoolActiveSector !== 'all' && s.area !== spoolActiveSector) {
       return false;
@@ -2123,11 +2253,19 @@ function spoolFilterList(sourceList) {
       const isRejOnDate = s.status === 'rejected' && (s.rejectedDate === targetDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === targetDate));
       const isReturnedOnDate = s.status === 'returned' && (s.returnedDate === targetDate || (s.returnedAt && formatSpoolLocalDate(s.returnedAt) === targetDate));
 
-      if (spoolDateFilterMode === 'installed' && !isInstOnDate) return false;
-      if (spoolDateFilterMode === 'received' && !isRecOnDate) return false;
-      if (spoolDateFilterMode === 'rejected' && !isRejOnDate) return false;
-      if (spoolDateFilterMode === 'returned' && !isReturnedOnDate) return false;
-      if (spoolDateFilterMode === 'activity' && !isInstOnDate && !isRecOnDate && !isRejOnDate && !isReturnedOnDate) return false;
+      if (spoolStatusFilter === 'installed' || spoolDateFilterMode === 'installed') {
+        if (!isInstOnDate) return false;
+      } else if (spoolStatusFilter === 'received' || spoolDateFilterMode === 'received') {
+        if (!isRecOnDate) return false;
+      } else if (spoolStatusFilter === 'rejected' || spoolDateFilterMode === 'rejected') {
+        if (!isRejOnDate) return false;
+      } else if (spoolStatusFilter === 'returned' || spoolDateFilterMode === 'returned') {
+        if (!isReturnedOnDate) return false;
+      } else if (spoolStatusFilter === 'pending' || spoolStatusFilter === 'not-started') {
+        return false;
+      } else {
+        if (!isInstOnDate && !isRecOnDate && !isRejOnDate && !isReturnedOnDate) return false;
+      }
     }
 
     // 4. Filtro pela situacao atual. O recorte por dia fica exclusivamente no
@@ -2175,6 +2313,8 @@ function spoolFilterList(sourceList) {
 
     return true;
   });
+
+  return spoolSortList(filtered);
 }
 
 // Ação rápida: se a tela estiver zerada por filtro, abre tudo para mostrar os spools
@@ -2681,6 +2821,32 @@ function spoolClearSupportsInCurrentLocation() {
   });
 }
 
+function spoolRenderTagSearchFeedback(filteredSpools = []) {
+  if (!spoolIsTagListSearch()) {
+    return '<span style="color:#64748b;">Digite uma ou mais tags; separe várias por vírgulas.</span>';
+  }
+
+  const summary = spoolGetTagSearchSummary(filteredSpools);
+  const missingPreview = summary.missingTerms.slice(0, 8).map(esc).join(', ');
+  const remainingMissing = Math.max(0, summary.missingTerms.length - 8);
+
+  return `
+    <span style="color:${summary.matchedSpools ? '#166534' : '#b91c1c'}; font-weight:800;">
+      ${summary.foundTerms.length} de ${summary.terms.length} tag(s) encontrada(s) no filtro atual · ${summary.matchedSpools} spool(s)
+    </span>
+    ${summary.missingTerms.length ? `
+      <span title="Tags não encontradas: ${esc(summary.missingTerms.join(', '))}" style="color:#b91c1c; font-weight:700;">
+        Não encontradas no filtro atual: ${missingPreview}${remainingMissing ? ` e mais ${remainingMissing}` : ''}
+      </span>
+    ` : ''}
+    ${summary.matchedSpools ? `
+      <button type="button" class="button compact" onclick="spoolSelectTagSearchResults()" style="height:28px; padding:2px 9px; background:#2563eb; color:#ffffff; border:none; font-size:11px; font-weight:800; white-space:nowrap;">
+        ✓ Selecionar os ${summary.matchedSpools} encontrados
+      </button>
+    ` : ''}
+  `;
+}
+
 /* ==========================================================================
    RENDERIZAÇÃO DA TELA PRINCIPAL (renderSpools)
    ========================================================================== */
@@ -2721,7 +2887,8 @@ function renderSpools() {
   const filteredSpools = spoolFilterList(spoolDb);
   const filteredLength = spoolSumLength(filteredSpools);
   const filteredLengthCount = spoolKnownLengthCount(filteredSpools);
-  const pageSize = window.innerWidth <= 768 ? SPOOL_MOBILE_PAGE_SIZE : SPOOL_DESKTOP_PAGE_SIZE;
+  const defaultPageSize = window.innerWidth <= 768 ? SPOOL_MOBILE_PAGE_SIZE : SPOOL_DESKTOP_PAGE_SIZE;
+  const pageSize = spoolCustomPageSize === -1 ? Math.max(1, filteredSpools.length) : (spoolCustomPageSize > 0 ? spoolCustomPageSize : defaultPageSize);
   const totalRenderPages = Math.max(1, Math.ceil(filteredSpools.length / pageSize));
   spoolRenderPage = Math.min(Math.max(1, spoolRenderPage), totalRenderPages);
   const renderStart = (spoolRenderPage - 1) * pageSize;
@@ -2938,38 +3105,24 @@ function renderSpools() {
         </select>
       </div>
 
-      <!-- Filtro por Dia do Fechamento / Apontamento com Modo Ativo -->
-      <div class="spool-filter-group" style="min-width:300px;">
+      <!-- Filtro por Dia de Movimentação -->
+      <div class="spool-filter-group" style="min-width:260px;">
         <label class="spool-filter-label" for="spoolMainDateFilter" style="display:flex; justify-content:space-between; align-items:center;">
           <span>📅 Movimentação por dia:</span>
           ${spoolDateFilterMode !== 'all' ? `
             <span style="font-size:10px; background:#dcfce7; color:#15803d; padding:1px 6px; border-radius:4px; font-weight:800;">
-              ATIVO: ${({
-                activity: 'Atividade',
-                installed: 'Instalados',
-                received: 'Recebidos',
-                rejected: 'Reprovados',
-                returned: 'Devolvidos'
-              })[spoolDateFilterMode] || 'Atividade'}
+              ATIVO: ${formatSpoolDateDisplay(filterDate)}
             </span>
           ` : `
             <span style="font-size:10px; color:#64748b; font-weight:600;">(Todas as datas)</span>
           `}
         </label>
         <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
-          <select id="spoolDateModeSelect" class="spool-filter-select" onchange="spoolSetDateFilterMode(this.value)" style="height:36px; font-weight:700; width:125px; font-size:12px;" title="Modo do filtro de data">
-            <option value="all" ${spoolDateFilterMode === 'all' ? 'selected' : ''}>🌐 Todas as datas</option>
-            <option value="activity" ${spoolDateFilterMode === 'activity' ? 'selected' : ''}>⚡ Atividade</option>
-            <option value="installed" ${spoolDateFilterMode === 'installed' ? 'selected' : ''}>🟢 Instalados</option>
-            <option value="received" ${spoolDateFilterMode === 'received' ? 'selected' : ''}>🟡 Recebidos</option>
-            <option value="rejected" ${spoolDateFilterMode === 'rejected' ? 'selected' : ''}>🔴 Reprovados</option>
-            <option value="returned" ${spoolDateFilterMode === 'returned' ? 'selected' : ''}>↩️ Devolvidos</option>
-          </select>
-          <input type="date" id="spoolMainDateFilter" class="spool-filter-input" value="${filterDate}" onchange="spoolSetSelectedDate(this.value, true)" style="height:36px; padding:0 6px; font-weight:700; background:#ffffff; border:1.5px solid #cbd5e1; border-radius:6px; cursor:pointer; width:125px; font-size:12px;" title="Clique para escolher a data">
+          <input type="date" id="spoolMainDateFilter" class="spool-filter-input" value="${spoolDateFilterMode !== 'all' ? filterDate : ''}" onchange="spoolSetSelectedDate(this.value, true)" style="height:36px; padding:0 8px; font-weight:700; background:#ffffff; border:1.5px solid ${spoolDateFilterMode !== 'all' ? '#16a34a' : '#cbd5e1'}; border-radius:6px; cursor:pointer; width:130px; font-size:12px;" title="Clique para escolher a data">
           <button type="button" class="button compact ${spoolDateFilterMode !== 'all' && filterDate === todayStr ? 'button-green' : 'button-outline'}" onclick="spoolQuickFilterDay('${todayStr}')" style="height:36px; padding:0 8px; font-size:11px; font-weight:800;" title="Ver movimentações de hoje">
             Hoje
           </button>
-          <button type="button" class="button compact button-outline" onclick="spoolQuickFilterDay('${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}')" style="height:36px; padding:0 8px; font-size:11px; font-weight:800;" title="Ver movimentações de ontem">
+          <button type="button" class="button compact ${spoolDateFilterMode !== 'all' && filterDate === new Date(Date.now() - 86400000).toISOString().slice(0, 10) ? 'button-green' : 'button-outline'}" onclick="spoolQuickFilterDay('${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}')" style="height:36px; padding:0 8px; font-size:11px; font-weight:800;" title="Ver movimentações de ontem">
             Ontem
           </button>
           ${spoolDateFilterMode !== 'all' ? `
@@ -2979,9 +3132,12 @@ function renderSpools() {
       </div>
 
       <!-- Campo de Busca Textual -->
-      <div class="spool-filter-group" style="flex:1; min-width:180px;">
-        <label class="spool-filter-label" for="spoolSearchInput">🔍 Buscar por Tag / DH:</label>
-        <input type="search" id="spoolSearchInput" class="spool-filter-input" placeholder="Buscar tag (ex: 1601), DH, setor..." value="${esc(spoolSearchTerm)}" oninput="spoolHandleSearchInput(this)" autocomplete="off" style="width:100%;">
+      <div class="spool-filter-group" style="flex:1; min-width:280px;">
+        <label class="spool-filter-label" for="spoolSearchInput">🔍 Buscar por TAG / DH:</label>
+        <input type="search" id="spoolSearchInput" class="spool-filter-input" placeholder="Ex.: 1104, 1108, 1109 (separe por vírgulas)" value="${esc(spoolSearchTerm)}" oninput="spoolHandleSearchInput(this)" autocomplete="off" style="width:100%;">
+        <div id="spoolTagSearchFeedback" aria-live="polite" style="display:flex; align-items:center; gap:7px; flex-wrap:wrap; min-height:18px; margin-top:4px; font-size:10px; line-height:1.3;">
+          ${spoolRenderTagSearchFeedback(filteredSpools)}
+        </div>
       </div>
 
       <!-- Botão Limpar Filtros -->
@@ -3139,6 +3295,12 @@ function renderSpools() {
         <button type="button" class="button compact" onclick="spoolBulkReject()" style="background:#b91c1c; color:#ffffff; font-weight:800; border:none; height:32px; padding:4px 12px; border-radius:6px; cursor:pointer;">
           🔴 Reprovar
         </button>
+        <button type="button" class="button compact" onclick="spoolBulkReturn()" style="background:#ea580c; color:#ffffff; font-weight:800; border:none; height:32px; padding:4px 12px; border-radius:6px; cursor:pointer;">
+          ↩️ Devolvido
+        </button>
+        <button type="button" class="button button-outline compact" onclick="spoolBulkSetStatus('not-started')" style="color:#ffffff; border-color:rgba(255,255,255,0.4);">
+          ⚪ Pendente
+        </button>
         <button type="button" class="button button-outline compact" onclick="spoolBulkSetStatus('received')" style="color:#ffffff; border-color:rgba(255,255,255,0.4);">
           🟡 Recebido
         </button>
@@ -3244,14 +3406,38 @@ function spoolRenderSectorMap(items, sectors) {
    RENDERIZAÇÃO DOS QUADRADOS DOS TUBOS
    ========================================================================== */
 function spoolRenderPagination(meta = {}) {
-  if (Number(meta.totalPages || 1) <= 1) return '';
   const page = Number(meta.page || 1);
   const totalPages = Number(meta.totalPages || 1);
+  const isShowingAll = spoolCustomPageSize === -1;
+  if (totalPages <= 1 && !isShowingAll) return '';
+
+  const pageButtons = [];
+  if (totalPages > 1 && totalPages <= 7) {
+    for (let p = 1; p <= totalPages; p++) {
+      pageButtons.push(`
+        <button type="button" class="button ${p === page ? 'button-green' : 'button-outline'} compact"
+          onclick="spoolSetRenderPage(${p})" style="min-width:32px; padding:0 8px; font-weight:800; font-size:11px;"
+          title="Ir para página ${p}">${p}</button>
+      `);
+    }
+  }
+
   return `
-    <nav class="spool-pagination" aria-label="Paginas da lista de spools" style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin:12px 0;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;">
-      <button type="button" class="button button-outline compact" onclick="spoolSetRenderPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>Anterior</button>
-      <strong style="font-size:12px;color:#334155;">${meta.start}-${meta.end} de ${meta.total} &middot; Pagina ${page}/${totalPages}</strong>
-      <button type="button" class="button button-outline compact" onclick="spoolSetRenderPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>Proxima</button>
+    <nav class="spool-pagination" aria-label="Paginas da lista de spools" style="display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;margin:12px 0;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;box-shadow:0 1px 4px rgba(0,0,0,0.03);">
+      ${!isShowingAll ? `
+        <button type="button" class="button button-outline compact" onclick="spoolSetRenderPage(${page - 1})" ${page <= 1 ? 'disabled' : ''} style="font-weight:700;">◀ Anterior</button>
+        ${pageButtons.join('')}
+        <strong style="font-size:12px;color:#334155;padding:0 6px;">${meta.start}-${meta.end} de ${meta.total} &middot; Pagina ${page}/${totalPages}</strong>
+        <button type="button" class="button button-outline compact" onclick="spoolSetRenderPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''} style="font-weight:700;">Próxima ▶</button>
+      ` : `
+        <strong style="font-size:12px;color:#166534;font-weight:800;padding:0 6px;">Exibindo todos os ${meta.total} spools nesta mesma tela &middot; Pagina 1/1</strong>
+      `}
+      <div style="margin-left:8px; display:inline-flex; align-items:center; gap:6px; border-left:1px solid #cbd5e1; padding-left:10px;">
+        <span style="font-size:11px;font-weight:700;color:#64748b;">Exibir:</span>
+        <button type="button" class="button compact ${!isShowingAll && (spoolCustomPageSize === 0 || spoolCustomPageSize === 160) ? 'button-green' : 'button-outline'}" onclick="spoolSetCustomPageSize(160)" style="font-size:11px;padding:2px 8px;font-weight:800;" title="Exibir 160 spools por página">160</button>
+        <button type="button" class="button compact ${spoolCustomPageSize === 300 ? 'button-green' : 'button-outline'}" onclick="spoolSetCustomPageSize(300)" style="font-size:11px;padding:2px 8px;font-weight:800;" title="Exibir 300 spools por página">300</button>
+        <button type="button" class="button compact ${isShowingAll ? 'button-green' : 'button-outline'}" onclick="spoolSetCustomPageSize(-1)" style="font-size:11px;padding:2px 8px;font-weight:800;" title="Exibir todos os spools filtrados em uma única página">👁️ Todos (${meta.total})</button>
+      </div>
     </nav>
   `;
 }
@@ -3450,6 +3636,9 @@ function spoolRenderTubeTable(list, filterDate) {
           </button>
           <button type="button" class="button compact" onclick="spoolBulkReturn()" style="background:#ea580c; color:#ffffff; font-weight:800; border:none; height:30px; padding:4px 12px; border-radius:6px; cursor:pointer; font-size:12px;">
             ↩️ Marcar Devolvido
+          </button>
+          <button type="button" class="button compact" onclick="spoolBulkSetStatus('not-started')" style="background:#475569; color:#ffffff; font-weight:700; border:none; height:30px; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:12px;">
+            ⚪ Marcar Pendente
           </button>
           <button type="button" class="button compact" onclick="spoolBulkSetStatus('received')" style="background:#0284c7; color:#ffffff; font-weight:700; border:none; height:30px; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:12px;">
             🟡 Marcar Recebido
@@ -3685,7 +3874,8 @@ function spoolHandleSearchInput(input) {
     if (!results || input !== document.getElementById('spoolSearchInput')) return;
     const filteredSpools = spoolFilterList(spoolDb);
     spoolRenderPage = 1;
-    const pageSize = window.innerWidth <= 768 ? SPOOL_MOBILE_PAGE_SIZE : SPOOL_DESKTOP_PAGE_SIZE;
+    const defaultPageSize = window.innerWidth <= 768 ? SPOOL_MOBILE_PAGE_SIZE : SPOOL_DESKTOP_PAGE_SIZE;
+    const pageSize = spoolCustomPageSize === -1 ? Math.max(1, filteredSpools.length) : (spoolCustomPageSize > 0 ? spoolCustomPageSize : defaultPageSize);
     const renderedSpools = filteredSpools.slice(0, pageSize);
     results.innerHTML = spoolRenderSearchResults(renderedSpools, spoolSelectedDate || getLocalDateStr(), {
       page: 1,
@@ -3696,17 +3886,34 @@ function spoolHandleSearchInput(input) {
     });
     const visibleCount = document.getElementById('spoolVisibleCount');
     if (visibleCount) visibleCount.textContent = filteredSpools.length;
+    const tagFeedback = document.getElementById('spoolTagSearchFeedback');
+    if (tagFeedback) tagFeedback.innerHTML = spoolRenderTagSearchFeedback(filteredSpools);
   }, 80);
+}
+
+function spoolSelectTagSearchResults() {
+  if (!spoolIsTagListSearch()) return toast('Digite as tags separadas por vírgulas.', true);
+
+  const matches = spoolFilterList(spoolDb);
+  if (!matches.length) return toast('Nenhum spool encontrado para selecionar.', true);
+
+  spoolMultiSelectMode = true;
+  spoolSelectedIds = new Set(matches.map(spool => spool.id));
+  renderSpools();
+  requestAnimationFrame(() => {
+    document.getElementById('spoolTableBatchBanner')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  toast(`✓ ${matches.length} spool(s) encontrados e selecionados. Escolha a ação desejada.`);
 }
 
 function spoolSetFilter(filterKey) {
   spoolListFilter = filterKey;
   if (filterKey === 'installed_today') {
     spoolDateFilterMode = 'installed';
-    spoolStatusFilter = 'all';
+    spoolStatusFilter = 'installed';
   } else if (filterKey === 'received_today') {
     spoolDateFilterMode = 'received';
-    spoolStatusFilter = 'all';
+    spoolStatusFilter = 'received';
   } else if (filterKey === 'pending') {
     spoolStatusFilter = 'not-started';
     spoolDateFilterMode = 'all';
@@ -3789,6 +3996,40 @@ function spoolClearDateFilter() {
   toast('Filtro de data desativado (mostrando todas as datas)');
 }
 
+function spoolSetSortMode(mode) {
+  spoolSortMode = mode || 'status_first';
+  localStorage.setItem('obraflow_spool_sort_mode', spoolSortMode);
+  spoolRenderPage = 1;
+  renderSpools();
+  const sortLabels = {
+    status_first: 'Instalados primeiro',
+    tag_asc: 'Tag crescente (1 → 9)',
+    tag_desc: 'Tag decrescente (9 → 1)',
+    status_last: 'Pendentes primeiro',
+    original: 'Ordem original da planilha'
+  };
+  toast(`Ordenação: ${sortLabels[spoolSortMode] || spoolSortMode}`);
+}
+
+function spoolSetCustomPageSize(size) {
+  spoolCustomPageSize = Number(size) || 0;
+  localStorage.setItem('obraflow_spool_page_size', String(spoolCustomPageSize));
+  spoolRenderPage = 1;
+  renderSpools();
+  if (spoolCustomPageSize === -1) {
+    toast('Exibindo todos os spools em uma única tela.');
+  } else {
+    toast(`Exibindo ${spoolCustomPageSize || (window.innerWidth <= 768 ? SPOOL_MOBILE_PAGE_SIZE : SPOOL_DESKTOP_PAGE_SIZE)} spools por página.`);
+  }
+}
+
+function spoolToggleShowAllPages() {
+  spoolCustomPageSize = spoolCustomPageSize === -1 ? 0 : -1;
+  localStorage.setItem('obraflow_spool_page_size', String(spoolCustomPageSize));
+  spoolRenderPage = 1;
+  renderSpools();
+}
+
 function spoolClearAllFilters() {
   spoolStatusFilter = 'all';
   spoolTypeFilter = 'all';
@@ -3800,9 +4041,12 @@ function spoolClearAllFilters() {
   spoolActiveSector = 'all';
   spoolActiveSubArea = 'all';
   spoolActiveDh = 'ALL';
+  spoolRenderPage = 1;
+  spoolCustomPageSize = 0;
   localStorage.setItem('obraflow_spool_active_sector', 'all');
   localStorage.setItem('obraflow_spool_active_subarea', 'all');
   localStorage.setItem('obraflow_spool_active_dh', 'ALL');
+  localStorage.setItem('obraflow_spool_page_size', '0');
   spoolKeepOnlyVisibleSelection();
   renderSpools();
   toast('Filtros redefinidos!');
@@ -4016,6 +4260,10 @@ function spoolSaveQuickNote(spoolId) {
 }
 
 function spoolSetSelectedDate(dateStr, autoActivate = false) {
+  if (!dateStr) {
+    spoolClearDateFilter();
+    return;
+  }
   spoolSelectedDate = dateStr;
   if (autoActivate && spoolDateFilterMode === 'all') {
     spoolDateFilterMode = 'activity';
@@ -7363,6 +7611,10 @@ window.spoolSetFilter = spoolSetFilter;
 window.spoolSetStatusFilter = spoolSetStatusFilter;
 window.spoolSetTypeFilter = spoolSetTypeFilter;
 window.spoolSetDiameterFilter = spoolSetDiameterFilter;
+window.spoolParseSearchTerms = spoolParseSearchTerms;
+window.spoolMatchesTagToken = spoolMatchesTagToken;
+window.spoolGetTagSearchSummary = spoolGetTagSearchSummary;
+window.spoolSelectTagSearchResults = spoolSelectTagSearchResults;
 window.spoolClearAllFilters = spoolClearAllFilters;
 window.spoolShowAllMySpools = spoolShowAllMySpools;
 window.spoolSetSelectedDate = spoolSetSelectedDate;
@@ -7437,3 +7689,6 @@ window.spoolRecoverLegacyOfflineMutation = spoolRecoverLegacyOfflineMutation;
 window.spoolClearSupportsInCurrentLocation = spoolClearSupportsInCurrentLocation;
 window.spoolConfirmProtectedDelete = spoolConfirmProtectedDelete;
 window.spoolCancelProtectedDelete = spoolCancelProtectedDelete;
+window.spoolSetSortMode = spoolSetSortMode;
+window.spoolSetCustomPageSize = spoolSetCustomPageSize;
+window.spoolToggleShowAllPages = spoolToggleShowAllPages;

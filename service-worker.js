@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'datacenter-omnia-';
-const APP_VERSION = '20261104_spool_length_v1';
+const APP_VERSION = '20261106_workforce_queue_recovery_v1';
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${APP_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-${APP_VERSION}`;
 

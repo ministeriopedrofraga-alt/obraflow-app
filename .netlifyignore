@@ -1,6 +1,8 @@
 .chrome-test-profile/
 .chrome-test-sync/
 .chrome-test-*/
+.chrome-recovery-*/
+_netlify-deploy-*/
 .git/
 .netlify/
 *.bak

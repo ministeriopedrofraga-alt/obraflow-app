@@ -207,6 +207,25 @@
     return true;
   }
 
+  // Remove todas as copias de uma entrada ja recuperada. A conclusao normal
+  // acima compara a revisao para nao apagar uma alteracao concorrente. Para
+  // filas antigas confirmadamente invalidas, porem, uma revisao obsoleta pode
+  // sobreviver no IndexedDB e reaparecer depois que a copia do localStorage e
+  // removida. Este descarte so deve ser usado depois que o dado atual tiver
+  // sido preservado no servidor por uma rotina de recuperacao especifica.
+  async function discardRecord(recordOrId) {
+    const id = String(recordOrId?.id || recordOrId || '');
+    if (!id) return false;
+
+    saveFallback(fallbackList().filter(item => item.id !== id));
+    if (useFallbackStorage) return true;
+
+    const database = await openDatabase();
+    if (!database || useFallbackStorage) return true;
+    await withStore('readwrite', store => store.delete(id));
+    return true;
+  }
+
   async function emit(extra = {}) {
     const records = await list();
     const state = {
@@ -313,6 +332,7 @@
     list,
     hasConflict,
     complete: removeRecord,
+    discard: discardRecord,
     subscribe,
     refresh: emit
   };

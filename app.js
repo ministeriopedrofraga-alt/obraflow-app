@@ -1725,7 +1725,11 @@ async function performSupabaseRestRequest(path, options = {}) {
         const parsed = JSON.parse(body);
         detail = parsed.message || parsed.details || parsed.hint || body;
       } catch(e) {}
-      throw new Error(`Supabase ${response.status}: ${detail || response.statusText}`);
+      const error = new Error(`Supabase ${response.status}: ${detail || response.statusText}`);
+      error.name = 'SupabaseHttpError';
+      error.status = response.status;
+      error.responseBody = body;
+      throw error;
     }
     return body ? JSON.parse(body) : null;
   } catch (error) {
@@ -1736,14 +1740,150 @@ async function performSupabaseRestRequest(path, options = {}) {
   }
 }
 
-async function sendQueuedSupabaseMutation(record) {
-  return performSupabaseRestRequest(record.path, {
-    method: record.method,
-    headers: record.headers || {},
-    body: record.body,
-    timeoutMs: 20000
+function isQueuedWorkforceUpsert(record) {
+  const table = String(record?.table || record?.path || '').split('?')[0];
+  const method = String(record?.method || '').toUpperCase();
+  return table === 'workforce'
+    && method === 'POST'
+    && String(record?.path || '').includes('on_conflict=id');
+}
+
+function createRecoveredWorkforceId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `recovered-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function repairQueuedWorkforcePayload(record) {
+  let parsed;
+  try {
+    parsed = typeof record?.body === 'string' ? JSON.parse(record.body) : record?.body;
+  } catch (error) {
+    return [];
+  }
+
+  const rows = Array.isArray(parsed) ? parsed : [parsed];
+  const latestByPerson = new Map();
+  rows.forEach(row => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return;
+    const candidate = { ...row, id: String(row.id || '').trim() || createRecoveredWorkforceId() };
+    const payload = workforceDatabasePayload(candidate);
+    if (!payload) return;
+    const personKey = workforcePersonKey(payload);
+    if (!personKey || personKey === '|') return;
+    latestByPerson.set(personKey, payload);
+  });
+
+  // Versoes antigas podiam guardar um lote com o mesmo id em duas pessoas.
+  // O Postgres rejeita esse upsert inteiro. Mantemos ambas e atribuímos um id
+  // novo somente para a colisao, sem apagar nenhuma alteracao local.
+  const usedIds = new Map();
+  return Array.from(latestByPerson.entries()).map(([personKey, payload]) => {
+    let id = String(payload.id || '').trim() || createRecoveredWorkforceId();
+    if (usedIds.has(id) && usedIds.get(id) !== personKey) id = createRecoveredWorkforceId();
+    usedIds.set(id, personKey);
+    return { ...payload, id };
   });
 }
+
+async function sendRepairedQueuedWorkforceMutation(record) {
+  if (!isQueuedWorkforceUpsert(record)) return null;
+  const payload = repairQueuedWorkforcePayload(record);
+  if (!payload.length) return null;
+
+  const options = {
+    method: 'POST',
+    headers: {
+      ...(record.headers || {}),
+      Prefer: 'resolution=merge-duplicates,return=minimal'
+    },
+    body: JSON.stringify(payload),
+    timeoutMs: 20000
+  };
+
+  try {
+    await performSupabaseRestRequest(record.path, options);
+  } catch (error) {
+    // Se um lote legado ainda for recusado, isola cada pessoa. Assim um item
+    // invalido nao impede que os demais sejam preservados no servidor.
+    if (Number(error?.status) !== 400 || payload.length === 1) throw error;
+    for (const person of payload) {
+      await performSupabaseRestRequest(record.path, {
+        ...options,
+        body: JSON.stringify(person)
+      });
+    }
+  }
+
+  console.warn(`${payload.length} registro(s) antigo(s) de workforce recuperado(s) da fila local.`);
+  return { recoveredVia: 'sanitized-workforce-upsert', rows: payload.length };
+}
+
+async function sendQueuedSupabaseMutation(record) {
+  const repairedWorkforceResult = await sendRepairedQueuedWorkforceMutation(record);
+  if (repairedWorkforceResult) return repairedWorkforceResult;
+
+  try {
+    return await performSupabaseRestRequest(record.path, {
+      method: record.method,
+      headers: record.headers || {},
+      body: record.body,
+      timeoutMs: 20000
+    });
+  } catch (error) {
+    // A tabela equipments e uma copia de consulta rapida. O snapshot completo
+    // em app_metadata e a fonte de recuperacao entre dispositivos. Versoes
+    // antigas enfileiravam tambem esta copia e um erro de validacao 400 ficava
+    // sendo repetido para sempre. So concluimos essa entrada antiga depois que
+    // o snapshot atual deste aparelho for aceito pelo servidor.
+    const table = String(record.table || record.path || '').split('?')[0];
+    const isPermanentEquipmentRequest = table === 'equipments'
+      && ['POST', 'PATCH'].includes(String(record.method || '').toUpperCase())
+      && Number(error?.status) >= 400
+      && Number(error?.status) < 500
+      && ![408, 429].includes(Number(error?.status));
+    if (isPermanentEquipmentRequest && typeof persistEquipmentSnapshotRemote === 'function') {
+      const recovered = await persistEquipmentSnapshotRemote();
+      if (recovered) {
+        console.warn('Fila antiga de equipments recuperada pelo snapshot em app_metadata:', error.message);
+        return { recoveredVia: 'app_metadata' };
+      }
+    }
+    throw error;
+  }
+}
+
+function isLegacyEquipmentBulkMutation(record) {
+  const table = String(record?.table || record?.path || '').split('?')[0];
+  const method = String(record?.method || '').toUpperCase();
+  const path = String(record?.path || '');
+  return table === 'equipments'
+    && method === 'POST'
+    && path.includes('on_conflict=id')
+    && path.includes('select=id,code,status,updatedAt');
+}
+
+async function recoverLegacyEquipmentOfflineMutations() {
+  const manager = window.ObraflowOfflineSync;
+  if (!manager?.list || !manager?.complete) return 0;
+  const records = (await manager.list()).filter(isLegacyEquipmentBulkMutation);
+  if (!records.length) return 0;
+
+  // Esses lotes eram apenas a copia de consulta da tabela equipments. Antes
+  // de descarta-los, salva o estado atual completo na fonte de recuperacao
+  // compartilhada. So remove a fila se o servidor confirmar esse snapshot.
+  const recovered = await persistEquipmentSnapshotRemote();
+  if (!recovered) return 0;
+
+  for (const record of records) {
+    if (typeof manager.discard === 'function') await manager.discard(record);
+    else await manager.complete(record);
+  }
+  await manager.refresh?.();
+  console.warn(`${records.length} lote(s) antigo(s) de equipments recuperado(s) pelo snapshot compartilhado.`);
+  return records.length;
+}
+
+window.recoverLegacyEquipmentOfflineMutations = recoverLegacyEquipmentOfflineMutations;
 
 async function flushOfflineMutations({ notify = false } = {}) {
   const manager = window.ObraflowOfflineSync;
@@ -1794,7 +1934,10 @@ function updateOfflineSyncStatus(state = {}) {
   const button = document.getElementById('offlineSyncStatus');
   const label = document.getElementById('offlineSyncText');
   if (!button || !label) return;
-  const pending = Number(state.pending || 0);
+  const spoolPending = typeof window.spoolPendingSyncCount === 'function'
+    ? Number(window.spoolPendingSyncCount() || 0)
+    : 0;
+  const pending = Number(state.pending || 0) + spoolPending;
   const online = state.online !== false;
   button.classList.toggle('offline', !online);
   button.classList.toggle('pending', pending > 0);
@@ -1822,6 +1965,7 @@ async function synchronizeAfterReconnect({ notify = false } = {}) {
     if (typeof window.spoolRecoverLegacyOfflineMutation === 'function') {
       await window.spoolRecoverLegacyOfflineMutation();
     }
+    await recoverLegacyEquipmentOfflineMutations();
     if (navigator.onLine === false) {
       await window.ObraflowOfflineSync?.refresh();
       if (notify) toast('Sem internet. O trabalho continua salvo neste aparelho.', true);
@@ -1899,7 +2043,7 @@ async function persistEquipmentSnapshotRemote() {
 async function persistEquipmentRecords(records, options = {}) {
   if (!records?.length) return;
   // Sincronização garantida via app_metadata (funciona entre todos os computadores)
-  persistEquipmentSnapshotRemote();
+  await persistEquipmentSnapshotRemote();
 
   // Tentativa direta na tabela public.equipments
   try {
@@ -1911,7 +2055,11 @@ async function persistEquipmentRecords(records, options = {}) {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify(payloads),
-      timeoutMs: 15000
+      timeoutMs: 15000,
+      // A fila duravel ja esta garantida pelo snapshot acima. Esta tabela e
+      // apenas uma copia de leitura e erros 4xx nela nao devem prender o
+      // indicador de sincronizacao para sempre.
+      queueOffline: false
     });
   } catch (error) {
     console.warn('Tentativa direta em public.equipments falhou (registro salvo via app_metadata):', error);
@@ -3036,7 +3184,10 @@ async function initializeApp() {
     await syncWorkforceFromSupabase();
     if (canSafelyAutoRender(['dashboard', 'equipamentos', 'empresas'])) render();
   });
-  setTimeout(() => syncFromSupabase(), 0);
+  setTimeout(async () => {
+    await recoverLegacyEquipmentOfflineMutations();
+    await syncFromSupabase();
+  }, 0);
   setTimeout(() => syncPackingSlipsFromSupabase(), 100);
   setTimeout(() => syncReceivingInspectionsFromSupabase(), 200);
   if (typeof syncRadiosFromSupabase === 'function') setTimeout(() => syncRadiosFromSupabase(), 250);
@@ -7324,18 +7475,39 @@ if (installAppButton) {
 if ('serviceWorker' in navigator) {
   const hadServiceWorkerController = Boolean(navigator.serviceWorker.controller);
   let reloadingForServiceWorker = false;
+  let serviceWorkerRegistration = null;
+
+  const checkForAppUpdate = () => {
+    if (!navigator.onLine || !serviceWorkerRegistration) return;
+    serviceWorkerRegistration.update().catch(error => {
+      console.warn('Falha ao verificar atualizacao do aplicativo:', error);
+    });
+  };
+
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadServiceWorkerController || reloadingForServiceWorker) return;
     reloadingForServiceWorker = true;
     location.reload();
   });
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
-      .then(registration => registration.update())
+      .then(registration => {
+        serviceWorkerRegistration = registration;
+        return registration.update();
+      })
       .catch(error => {
         console.warn('Falha ao registrar o aplicativo instalavel:', error);
       });
   });
+
+  // Aplicativos instalados podem permanecer abertos por varios dias. Ao
+  // voltar para a janela ou recuperar a internet, consulta o deploy atual.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForAppUpdate();
+  });
+  window.addEventListener('online', checkForAppUpdate);
+  window.setInterval(checkForAppUpdate, 15 * 60 * 1000);
 }
 
 const menuBtn = document.getElementById('menuButton');
