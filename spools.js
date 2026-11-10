@@ -1993,7 +1993,94 @@ if (spoolDb.length > 0) {
 let spoolActiveSector = localStorage.getItem('obraflow_spool_active_sector') || 'all';
 let spoolActiveSubArea = localStorage.getItem('obraflow_spool_active_subarea') || 'all';
 let spoolActiveDh = localStorage.getItem('obraflow_spool_active_dh') || 'ALL';
-let spoolStatusFilter = 'all'; // 'all', 'not-started', 'received', 'installed', 'rejected', 'returned'
+let spoolStatusFilter = [];
+const SPOOL_STATUS_OPTIONS = [
+  { value: 'not-started', label: '\u26aa Pendente' },
+  { value: 'received', label: '\ud83d\udfe1 Recebido' },
+  { value: 'installed', label: '\ud83d\udfe2 Instalado' },
+  { value: 'rejected', label: '\ud83d\udd34 Reprovado (Quarentena)' },
+  { value: 'returned', label: '\u21a9\ufe0f Devolvido' }
+];
+function spoolHasStatusFilter() { return spoolStatusFilter.length > 0; }
+function spoolMatchesStatus(status) {
+  return !spoolHasStatusFilter() || spoolStatusFilter.includes(status)
+    || (status === 'not-started' && spoolStatusFilter.includes('pending'));
+}
+let spoolMultiFilters = {
+  dh: spoolActiveDh === 'ALL' ? [] : [spoolActiveDh],
+  sector: spoolActiveSector === 'all' ? [] : [spoolActiveSector],
+  subarea: spoolActiveSubArea === 'all' ? [] : [spoolActiveSubArea],
+  type: [],
+  diameter: []
+};
+function spoolHasMultiFilters() {
+  return Object.values(spoolMultiFilters).some(values => values.length > 0);
+}
+function spoolMultiFilterSummaryParts() {
+  const typeLabels = { straight: 'Trecho Reto', branch: 'Deriva\u00e7\u00e3o', valve: 'V\u00e1lvula' };
+  const definitions = [
+    ['dh', 'DH', value => value],
+    ['sector', 'Setor', value => spoolGetSectorMeta(value, spoolDb).name || value],
+    ['subarea', 'Sub\u00e1rea', value => spoolSubAreaDisplayName(value, spoolDb, 'all') || value],
+    ['type', 'Classifica\u00e7\u00e3o', value => typeLabels[value] || value],
+    ['diameter', 'Di\u00e2metro', value => value]
+  ];
+  return definitions.filter(([key]) => spoolMultiFilters[key].length)
+    .map(([key, label, format]) => [label, spoolMultiFilters[key].map(value => format(value)).join(', ')]);
+}
+function spoolRenderMultiFilter(id, key, label, allLabel, options) {
+  const selected = spoolMultiFilters[key] || [];
+  const summary = selected.length === 1
+    ? options.find(option => option.value === selected[0])?.label || '1 selecionado'
+    : selected.length > 1 ? `${selected.length} selecionados` : allLabel;
+  return `<div class="spool-filter-group">
+    <label class="spool-filter-label" for="${id}">${label}</label>
+    <details id="${id}" class="spool-status-multiselect">
+      <summary><span>${summary}</span></summary>
+      <div class="spool-status-options">
+        <label><input type="checkbox" value="all" ${selected.length ? '' : 'checked'} onchange="spoolToggleMultiFilter('${key}', this.value, this.checked)"> ${allLabel}</label>
+        ${options.map(option => `<label><input type="checkbox" value="${esc(option.value)}" ${selected.includes(option.value) ? 'checked' : ''} onchange="spoolToggleMultiFilter('${key}', this.value, this.checked)"> ${option.label}</label>`).join('')}
+      </div>
+    </details>
+  </div>`;
+}
+function spoolToggleMultiFilter(key, value, checked) {
+  if (!Object.prototype.hasOwnProperty.call(spoolMultiFilters, key)) return;
+  if (value === 'all') {
+    spoolMultiFilters[key] = [];
+  } else {
+    const selected = new Set(spoolMultiFilters[key]);
+    if (checked) selected.add(value);
+    else selected.delete(value);
+    spoolMultiFilters[key] = [...selected];
+  }
+
+  // The main bar replaces any single-value scope selected from the map.
+  if (key === 'dh') {
+    spoolActiveDh = 'ALL';
+    localStorage.setItem('obraflow_spool_active_dh', 'ALL');
+  } else if (key === 'sector') {
+    spoolActiveSector = 'all';
+    spoolActiveSubArea = 'all';
+    spoolMultiFilters.subarea = [];
+    localStorage.setItem('obraflow_spool_active_sector', 'all');
+    localStorage.setItem('obraflow_spool_active_subarea', 'all');
+  } else if (key === 'subarea') {
+    spoolActiveSubArea = 'all';
+    localStorage.setItem('obraflow_spool_active_subarea', 'all');
+  } else if (key === 'type') {
+    spoolTypeFilter = 'all';
+    if (['straight', 'valve', 'branch'].includes(spoolListFilter)) spoolListFilter = 'all';
+  } else if (key === 'diameter') {
+    spoolDiameterFilter = 'all';
+  }
+  spoolRenderPage = 1;
+  spoolKeepOnlyVisibleSelection();
+  renderSpools();
+  const filterIds = { dh: 'spoolFilterDhSelect', sector: 'spoolFilterSectorSelect', subarea: 'spoolFilterSubAreaSelect', type: 'spoolFilterTypeSelect', diameter: 'spoolFilterDiaSelect' };
+  const filter = document.getElementById(filterIds[key]);
+  if (filter && value !== 'all') filter.open = true;
+}
 let spoolTypeFilter = 'all'; // 'all', 'straight', 'valve', 'branch'
 let spoolDiameterFilter = 'all';
 let spoolListFilter = 'all';
@@ -2185,6 +2272,7 @@ function spoolSortList(list, mode = spoolSortMode) {
 function spoolProgressTypeFilters() {
   return [
     spoolTypeFilter !== 'all' ? spoolTypeFilter : '',
+    ...spoolMultiFilters.type,
     ['straight', 'valve', 'branch'].includes(spoolListFilter) ? spoolListFilter : ''
   ].filter(Boolean);
 }
@@ -2193,13 +2281,19 @@ function spoolFilterProgressScope(sourceList) {
   const typeFilters = spoolProgressTypeFilters();
   return (Array.isArray(sourceList) ? sourceList : []).filter(spool => {
     if (spoolActiveDh !== 'ALL' && normalizeDh(spool.dh) !== normalizeDh(spoolActiveDh)) return false;
+    if (spoolMultiFilters.dh.length && !spoolMultiFilters.dh.some(dh => normalizeDh(spool.dh) === normalizeDh(dh))) return false;
+    if (spoolMultiFilters.sector.length && !spoolMultiFilters.sector.includes(spool.area)) return false;
     if (spoolActiveSubArea !== 'all') {
       const itemSubArea = spoolCanonicalSubArea(spool.subArea, spool.area);
       const targetSubArea = spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector);
       if (itemSubArea !== targetSubArea) return false;
     }
-    if (typeFilters.some(type => spool.type !== type)) return false;
+    if (spoolMultiFilters.subarea.length && !spoolMultiFilters.subarea.some(subarea =>
+      spoolCanonicalSubArea(spool.subArea, spool.area) === spoolCanonicalSubArea(subarea, spool.area)
+    )) return false;
+    if (typeFilters.length && !typeFilters.includes(spool.type)) return false;
     if (spoolDiameterFilter !== 'all' && spool.diameter !== spoolDiameterFilter) return false;
+    if (spoolMultiFilters.diameter.length && !spoolMultiFilters.diameter.includes(spool.diameter)) return false;
     return spoolMatchesSearchTerm(spool);
   });
 }
@@ -2246,6 +2340,14 @@ function spoolFilterList(sourceList) {
       }
     }
 
+    if (spoolMultiFilters.dh.length && !spoolMultiFilters.dh.some(dh => normalizeDh(s.dh) === normalizeDh(dh))) return false;
+    if (spoolMultiFilters.sector.length && !spoolMultiFilters.sector.includes(s.area)) return false;
+    if (spoolMultiFilters.subarea.length && !spoolMultiFilters.subarea.some(subarea =>
+      spoolCanonicalSubArea(s.subArea, s.area) === spoolCanonicalSubArea(subarea, s.area)
+    )) return false;
+    if (spoolMultiFilters.type.length && !spoolMultiFilters.type.includes(s.type)) return false;
+    if (spoolMultiFilters.diameter.length && !spoolMultiFilters.diameter.includes(s.diameter)) return false;
+
     // 3. Filtro Ativo por Data (permite filtrar qualquer dia selecionado)
     if (spoolDateFilterMode !== 'all') {
       const isInstOnDate = s.status === 'installed' && (s.installedDate === targetDate || (s.installedAt && formatSpoolLocalDate(s.installedAt) === targetDate));
@@ -2253,34 +2355,16 @@ function spoolFilterList(sourceList) {
       const isRejOnDate = s.status === 'rejected' && (s.rejectedDate === targetDate || (s.rejectedAt && formatSpoolLocalDate(s.rejectedAt) === targetDate));
       const isReturnedOnDate = s.status === 'returned' && (s.returnedDate === targetDate || (s.returnedAt && formatSpoolLocalDate(s.returnedAt) === targetDate));
 
-      if (spoolStatusFilter === 'installed' || spoolDateFilterMode === 'installed') {
-        if (!isInstOnDate) return false;
-      } else if (spoolStatusFilter === 'received' || spoolDateFilterMode === 'received') {
-        if (!isRecOnDate) return false;
-      } else if (spoolStatusFilter === 'rejected' || spoolDateFilterMode === 'rejected') {
-        if (!isRejOnDate) return false;
-      } else if (spoolStatusFilter === 'returned' || spoolDateFilterMode === 'returned') {
-        if (!isReturnedOnDate) return false;
-      } else if (spoolStatusFilter === 'pending' || spoolStatusFilter === 'not-started') {
-        return false;
-      } else {
-        if (!isInstOnDate && !isRecOnDate && !isRejOnDate && !isReturnedOnDate) return false;
-      }
+      if (spoolDateFilterMode === 'installed' && !isInstOnDate) return false;
+      if (spoolDateFilterMode === 'received' && !isRecOnDate) return false;
+      if (spoolDateFilterMode === 'rejected' && !isRejOnDate) return false;
+      if (spoolDateFilterMode === 'returned' && !isReturnedOnDate) return false;
+      if (spoolDateFilterMode === 'activity' && !isInstOnDate && !isRecOnDate && !isRejOnDate && !isReturnedOnDate) return false;
     }
 
     // 4. Filtro pela situacao atual. O recorte por dia fica exclusivamente no
     // bloco "Movimentacao por dia", evitando duas maneiras de fazer a mesma coisa.
-    if (spoolStatusFilter !== 'all') {
-      if (spoolStatusFilter === 'pending' || spoolStatusFilter === 'not-started') {
-        if (s.status !== 'not-started') return false;
-      } else if (spoolStatusFilter === 'rejected') {
-        if (s.status !== 'rejected') return false;
-      } else if (spoolStatusFilter === 'returned') {
-        if (s.status !== 'returned') return false;
-      } else if (s.status !== spoolStatusFilter) {
-        return false;
-      }
-    }
+    if (!spoolMatchesStatus(s.status)) return false;
 
     // 5. Filtro por Tipo / Classificação
     if (spoolTypeFilter !== 'all' && s.type !== spoolTypeFilter) {
@@ -2322,7 +2406,8 @@ function spoolShowAllMySpools() {
   spoolActiveSector = 'all';
   spoolActiveSubArea = 'all';
   spoolActiveDh = 'ALL';
-  spoolStatusFilter = 'all';
+  spoolStatusFilter = [];
+  spoolMultiFilters = { dh: [], sector: [], subarea: [], type: [], diameter: [] };
   spoolTypeFilter = 'all';
   spoolDiameterFilter = 'all';
   spoolListFilter = 'all';
@@ -2381,6 +2466,8 @@ function spoolRenderAuxiliaryControl(app, kind) {
   if (spoolActiveSector !== 'all' && !availableSectors.some(sector => sector.id === spoolActiveSector)) {
     spoolActiveSector = 'all';
     spoolActiveSubArea = 'all';
+    spoolMultiFilters.sector = [];
+    spoolMultiFilters.subarea = [];
     localStorage.setItem('obraflow_spool_active_sector', 'all');
     localStorage.setItem('obraflow_spool_active_subarea', 'all');
   }
@@ -2873,9 +2960,11 @@ function renderSpools() {
   }
 
   const availableSubAreas = spoolGetAvailableSubAreas(spoolGetAllControlItems(), spoolActiveSector);
+  const allAvailableSubAreas = spoolGetAvailableSubAreas(spoolGetAllControlItems(), 'all');
   const activeSubAreaKey = spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector);
   if (spoolActiveSubArea !== 'all' && !availableSubAreas.some(sub => sub.id === activeSubAreaKey)) {
     spoolActiveSubArea = 'all';
+    spoolMultiFilters.subarea = [];
     localStorage.setItem('obraflow_spool_active_subarea', 'all');
   }
 
@@ -3035,76 +3124,27 @@ function renderSpools() {
 
     <!-- 2. FILTROS PRINCIPAIS: substituem os antigos botões rápidos redundantes -->
     <div class="spool-filters-bar" aria-label="Filtros de Spools">
-      <!-- Filtro DH -->
-      <div class="spool-filter-group">
-        <label class="spool-filter-label" for="spoolFilterDhSelect">🏢 Data Hall (DH):</label>
-        <select id="spoolFilterDhSelect" class="spool-filter-select" onchange="spoolSelectDh(this.value)">
-          <option value="ALL" ${spoolActiveDh === 'ALL' ? 'selected' : ''}>Todos os DHs</option>
-          ${Array.from({ length: 10 }, (_, i) => {
-            const dh = `DH ${String(i + 1).padStart(2, '0')}`;
-            return `<option value="${dh}" ${normalizeDh(spoolActiveDh) === dh && spoolActiveDh !== 'ALL' ? 'selected' : ''}>${dh}</option>`;
-          }).join('')}
-        </select>
-      </div>
-
-      <!-- Filtro Setor: somente valores existentes nos dados da planilha -->
-      <div class="spool-filter-group">
-        <label class="spool-filter-label" for="spoolFilterSectorSelect">📍 Setor da Obra:</label>
-        <select id="spoolFilterSectorSelect" class="spool-filter-select" onchange="spoolSelectSector(this.value)">
-          <option value="all" ${spoolActiveSector === 'all' ? 'selected' : ''}>Todos os Setores</option>
-          ${availableSectors.map(sec => `
-            <option value="${esc(sec.id)}" ${spoolActiveSector === sec.id ? 'selected' : ''}>${sec.icon} ${esc(sec.name)}</option>
-          `).join('')}
-        </select>
-      </div>
-
-      <!-- Filtro Subárea: somente valores existentes nos dados da planilha -->
-      ${availableSubAreas.length ? `
-        <div class="spool-filter-group">
-          <label class="spool-filter-label" for="spoolFilterSubAreaSelect">🗂️ Subárea:</label>
-          <select id="spoolFilterSubAreaSelect" class="spool-filter-select" onchange="spoolSelectSubArea(this.value)">
-            <option value="all" ${spoolActiveSubArea === 'all' ? 'selected' : ''}>Todas as Subáreas</option>
-            ${availableSubAreas.map(sub => `
-              <option value="${esc(sub.id)}" ${spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector) === sub.id ? 'selected' : ''}>${esc(sub.name)}</option>
-            `).join('')}
-          </select>
-        </div>
-      ` : ''}
-
+      ${spoolRenderMultiFilter('spoolFilterDhSelect', 'dh', 'Data Hall (DH):', 'Todos os DHs', Array.from({ length: 10 }, (_, i) => { const dh = `DH ${String(i + 1).padStart(2, '0')}`; return { value: dh, label: dh }; }))}
+      ${spoolRenderMultiFilter('spoolFilterSectorSelect', 'sector', 'Setor da Obra:', 'Todos os Setores', availableSectors.map(sec => ({ value: sec.id, label: `${sec.icon} ${esc(sec.name)}` })))}
+      ${allAvailableSubAreas.length ? spoolRenderMultiFilter('spoolFilterSubAreaSelect', 'subarea', 'Sub\u00e1rea:', 'Todas as Sub\u00e1reas', allAvailableSubAreas.map(sub => ({ value: sub.id, label: esc(sub.name) }))) : ''}
       <!-- Situacao atual da peca; datas sao filtradas somente no bloco abaixo -->
       <div class="spool-filter-group">
-        <label class="spool-filter-label" for="spoolFilterStatusSelect">📊 Situação atual:</label>
-        <select id="spoolFilterStatusSelect" class="spool-filter-select" onchange="spoolSetStatusFilter(this.value)">
-          <option value="all" ${spoolStatusFilter === 'all' ? 'selected' : ''}>Todos os Status</option>
-          <option value="not-started" ${spoolStatusFilter === 'not-started' ? 'selected' : ''}>⚪ Pendente</option>
-          <option value="received" ${spoolStatusFilter === 'received' ? 'selected' : ''}>🟡 Recebido</option>
-          <option value="installed" ${spoolStatusFilter === 'installed' ? 'selected' : ''}>🟢 Instalado</option>
-          <option value="rejected" ${spoolStatusFilter === 'rejected' ? 'selected' : ''}>🔴 Reprovado (Quarentena)</option>
-          <option value="returned" ${spoolStatusFilter === 'returned' ? 'selected' : ''}>↩️ Devolvido</option>
-        </select>
+        <label class="spool-filter-label" for="spoolFilterStatusSelect">Situa\u00e7\u00e3o atual:</label>
+        <details id="spoolFilterStatusSelect" class="spool-status-multiselect">
+          <summary><span id="spoolStatusFilterSummary">${spoolHasStatusFilter() ? `${spoolStatusFilter.length} status selecionado(s)` : 'Todos os Status' }</span></summary>
+          <div class="spool-status-options">
+            <label><input type="checkbox" value="all" ${!spoolHasStatusFilter() ? 'checked' : ''} onchange="spoolToggleStatusFilter(this.value, this.checked)"> Todos os Status</label>
+            ${SPOOL_STATUS_OPTIONS.map(status => `<label><input type="checkbox" value="${status.value}" ${spoolStatusFilter.includes(status.value) ? 'checked' : ''} onchange="spoolToggleStatusFilter(this.value, this.checked)"> ${status.label}</label>`).join('')}
+          </div>
+        </details>
       </div>
 
-      <!-- Filtro Classificação (Apenas Trecho Reto e Derivação) -->
-      <div class="spool-filter-group">
-        <label class="spool-filter-label" for="spoolFilterTypeSelect">📐 Classificação:</label>
-        <select id="spoolFilterTypeSelect" class="spool-filter-select" onchange="spoolSetTypeFilter(this.value)">
-          <option value="all" ${spoolTypeFilter === 'all' ? 'selected' : ''}>Todas as Peças</option>
-          <option value="straight" ${spoolTypeFilter === 'straight' ? 'selected' : ''}>📏 Trecho Reto</option>
-          <option value="branch" ${spoolTypeFilter === 'branch' ? 'selected' : ''}>📐 Derivação (Ramal)</option>
-        </select>
-      </div>
-
-      <!-- Filtro Diâmetro -->
-      <div class="spool-filter-group">
-        <label class="spool-filter-label" for="spoolFilterDiaSelect">⭕ Diâmetro:</label>
-        <select id="spoolFilterDiaSelect" class="spool-filter-select" onchange="spoolSetDiameterFilter(this.value)">
-          <option value="all" ${spoolDiameterFilter === 'all' ? 'selected' : ''}>Todos os Diâmetros</option>
-          ${availableDiameters.map(d => `
-            <option value="${esc(d)}" ${spoolDiameterFilter === d ? 'selected' : ''}>${esc(d)}</option>
-          `).join('')}
-        </select>
-      </div>
-
+      ${spoolRenderMultiFilter('spoolFilterTypeSelect', 'type', 'Classifica\u00e7\u00e3o:', 'Todas as Pe\u00e7as', [
+        { value: 'straight', label: '\ud83d\udccf Trecho Reto' },
+        { value: 'branch', label: '\ud83d\udcd0 Deriva\u00e7\u00e3o (Ramal)' },
+        { value: 'valve', label: 'V\u00e1lvula' }
+      ])}
+      ${spoolRenderMultiFilter('spoolFilterDiaSelect', 'diameter', 'Di\u00e2metro:', 'Todos os Di\u00e2metros', availableDiameters.map(d => ({ value: d, label: esc(d) })))}
       <!-- Filtro por Dia de Movimentação -->
       <div class="spool-filter-group" style="min-width:260px;">
         <label class="spool-filter-label" for="spoolMainDateFilter" style="display:flex; justify-content:space-between; align-items:center;">
@@ -3141,7 +3181,7 @@ function renderSpools() {
       </div>
 
       <!-- Botão Limpar Filtros -->
-      ${(spoolStatusFilter !== 'all' || spoolDateFilterMode !== 'all' || spoolTypeFilter !== 'all' || spoolDiameterFilter !== 'all' || spoolListFilter !== 'all' || spoolSearchTerm || spoolActiveSector !== 'all' || spoolActiveDh !== 'ALL' || spoolActiveSubArea !== 'all') ? `
+      ${(spoolHasStatusFilter() || spoolHasMultiFilters() || spoolDateFilterMode !== 'all' || spoolTypeFilter !== 'all' || spoolDiameterFilter !== 'all' || spoolListFilter !== 'all' || spoolSearchTerm || spoolActiveSector !== 'all' || spoolActiveDh !== 'ALL' || spoolActiveSubArea !== 'all') ? `
         <div class="spool-filter-group">
           <button type="button" class="button button-outline compact" onclick="spoolClearAllFilters()" style="color:#ef4444; border-color:#fca5a5; font-weight:800; height:36px;">
             ✕ Limpar Filtros
@@ -3342,8 +3382,7 @@ function spoolRenderSectorMap(items, sectors) {
     const statusButton = (status, count, label, cssClass) => {
       const normalizedStatus = status === 'pending' ? 'not-started' : status;
       const isStatusActive = isActive && (
-        spoolStatusFilter === normalizedStatus ||
-        (normalizedStatus === 'not-started' && spoolStatusFilter === 'pending')
+        spoolStatusFilter.includes(normalizedStatus) || (normalizedStatus === 'not-started' && spoolStatusFilter.includes('pending'))
       );
       return `
         <button type="button" class="${cssClass}${isStatusActive ? ' is-active-status' : ''}"
@@ -3593,7 +3632,7 @@ function spoolRenderTubeTable(list, filterDate) {
           <button type="button" class="button button-green compact" onclick="spoolOpenExportModal()" style="font-weight:800;" title="Abrir opções de download da planilha">
             ${icon('download')} Baixar Planilha
           </button>
-          ${(spoolStatusFilter !== 'all' || spoolDateFilterMode !== 'all' || spoolTypeFilter !== 'all' || spoolDiameterFilter !== 'all' || spoolListFilter !== 'all' || Boolean(spoolSearchTerm) || spoolActiveSector !== 'all' || spoolActiveSubArea !== 'all' || spoolActiveDh !== 'ALL') ? `
+          ${(spoolHasStatusFilter() || spoolHasMultiFilters() || spoolDateFilterMode !== 'all' || spoolTypeFilter !== 'all' || spoolDiameterFilter !== 'all' || spoolListFilter !== 'all' || Boolean(spoolSearchTerm) || spoolActiveSector !== 'all' || spoolActiveSubArea !== 'all' || spoolActiveDh !== 'ALL') ? `
             <button type="button" class="button button-outline compact" onclick="spoolExportUpdatedSpreadsheet('filtered')" style="font-weight:800; color:#0f172a;" title="Baixar apenas os ${list.length} spools visíveis com os filtros atuais">
               ${icon('download')} Baixar Filtrados (${list.length})
             </button>
@@ -3809,6 +3848,8 @@ function spoolRenderTubeTable(list, filterDate) {
    ========================================================================== */
 
 function spoolSelectSector(sectorId) {
+  spoolMultiFilters.sector = !sectorId || sectorId === 'all' ? [] : [sectorId];
+  spoolMultiFilters.subarea = [];
   spoolActiveSector = sectorId;
   spoolActiveSubArea = 'all';
   localStorage.setItem('obraflow_spool_active_sector', sectorId);
@@ -3831,7 +3872,9 @@ function spoolOpenSectorMapStatus(sectorId, status = 'all') {
 
   spoolActiveSector = sectorId || 'all';
   spoolActiveSubArea = 'all';
-  spoolStatusFilter = nextStatus;
+  spoolMultiFilters.sector = !sectorId || sectorId === 'all' ? [] : [sectorId];
+  spoolMultiFilters.subarea = [];
+  spoolStatusFilter = nextStatus === 'all' ? [] : [nextStatus];
   spoolDateFilterMode = 'all';
   spoolRenderPage = 1;
 
@@ -3856,6 +3899,7 @@ function spoolOpenSectorMapStatus(sectorId, status = 'all') {
 }
 
 function spoolSelectDh(dhName) {
+  spoolMultiFilters.dh = !dhName || dhName === 'ALL' ? [] : [dhName];
   spoolActiveDh = dhName;
   localStorage.setItem('obraflow_spool_active_dh', dhName);
   spoolKeepOnlyVisibleSelection();
@@ -3908,32 +3952,33 @@ function spoolSelectTagSearchResults() {
 
 function spoolSetFilter(filterKey) {
   spoolListFilter = filterKey;
+  if (['straight', 'valve', 'branch'].includes(filterKey)) spoolMultiFilters.type = [];
   if (filterKey === 'installed_today') {
     spoolDateFilterMode = 'installed';
-    spoolStatusFilter = 'installed';
+    spoolStatusFilter = ['installed'];
   } else if (filterKey === 'received_today') {
     spoolDateFilterMode = 'received';
-    spoolStatusFilter = 'received';
+    spoolStatusFilter = ['received'];
   } else if (filterKey === 'pending') {
-    spoolStatusFilter = 'not-started';
+    spoolStatusFilter = ['not-started'];
     spoolDateFilterMode = 'all';
   } else if (filterKey === 'rejected') {
-    spoolStatusFilter = 'rejected';
+    spoolStatusFilter = ['rejected'];
     spoolDateFilterMode = 'all';
   } else if (filterKey === 'returned') {
-    spoolStatusFilter = 'returned';
+    spoolStatusFilter = ['returned'];
     spoolDateFilterMode = 'all';
   } else if (filterKey === 'all') {
     spoolDateFilterMode = 'all';
-    spoolStatusFilter = 'all';
+    spoolStatusFilter = [];
   }
   spoolKeepOnlyVisibleSelection();
   renderSpools();
 }
 
 function spoolSetStatusFilter(statusVal) {
-  const validStatuses = ['all', 'not-started', 'received', 'installed', 'rejected', 'returned'];
-  spoolStatusFilter = validStatuses.includes(statusVal) ? statusVal : 'all';
+  const validStatuses = SPOOL_STATUS_OPTIONS.map(status => status.value);
+  spoolStatusFilter = validStatuses.includes(statusVal) ? [statusVal] : [];
 
   // Os cards de fechamento tambem gravam um recorte de status em
   // spoolListFilter. Ao usar o select principal, esse recorte antigo precisa
@@ -3947,13 +3992,34 @@ function spoolSetStatusFilter(statusVal) {
   renderSpools();
 }
 
+function spoolToggleStatusFilter(statusVal, checked) {
+  const validStatuses = SPOOL_STATUS_OPTIONS.map(status => status.value);
+  if (statusVal === 'all') {
+    spoolStatusFilter = [];
+  } else if (validStatuses.includes(statusVal)) {
+    const selected = new Set(spoolStatusFilter);
+    if (checked) selected.add(statusVal);
+    else selected.delete(statusVal);
+    spoolStatusFilter = [...selected];
+  }
+  if (['pending', 'rejected', 'returned', 'installed_today', 'received_today'].includes(spoolListFilter)) {
+    spoolListFilter = 'all';
+  }
+  spoolKeepOnlyVisibleSelection();
+  renderSpools();
+  const statusFilter = document.getElementById('spoolFilterStatusSelect');
+  if (statusFilter && statusVal !== 'all') statusFilter.open = true;
+}
+
 function spoolSetTypeFilter(typeVal) {
+  spoolMultiFilters.type = [];
   spoolTypeFilter = typeVal;
   spoolKeepOnlyVisibleSelection();
   renderSpools();
 }
 
 function spoolSetDiameterFilter(diaVal) {
+  spoolMultiFilters.diameter = [];
   spoolDiameterFilter = diaVal;
   spoolKeepOnlyVisibleSelection();
   renderSpools();
@@ -4031,7 +4097,8 @@ function spoolToggleShowAllPages() {
 }
 
 function spoolClearAllFilters() {
-  spoolStatusFilter = 'all';
+  spoolStatusFilter = [];
+  spoolMultiFilters = { dh: [], sector: [], subarea: [], type: [], diameter: [] };
   spoolTypeFilter = 'all';
   spoolDiameterFilter = 'all';
   spoolListFilter = 'all';
@@ -4053,6 +4120,7 @@ function spoolClearAllFilters() {
 }
 
 function spoolSelectSubArea(subAreaId) {
+  spoolMultiFilters.subarea = !subAreaId || subAreaId === 'all' ? [] : [subAreaId];
   spoolActiveSubArea = subAreaId || 'all';
   localStorage.setItem('obraflow_spool_active_subarea', spoolActiveSubArea);
   spoolKeepOnlyVisibleSelection();
@@ -4514,7 +4582,8 @@ function spoolOpenExportModal() {
   const filteredLength = spoolSumLength(filteredList);
 
   const hasActiveFilters = (
-    spoolStatusFilter !== 'all' ||
+    spoolHasStatusFilter() ||
+    spoolHasMultiFilters() ||
     spoolDateFilterMode !== 'all' ||
     spoolTypeFilter !== 'all' ||
     spoolDiameterFilter !== 'all' ||
@@ -4554,8 +4623,9 @@ function spoolOpenExportModal() {
             ${hasActiveFilters ? `
               • <strong>Data Hall:</strong> ${spoolActiveDh} · 
               <strong>Setor:</strong> ${activeSectorName}
+              ${spoolMultiFilterSummaryParts().map(([label, value]) => ` ? <strong>${label}:</strong> ${esc(value)}`).join('')}
               ${spoolDateFilterMode !== 'all' ? ` · <strong>Data:</strong> ${spoolDateFilterMode === 'installed' ? 'Instalados no Dia' : (spoolDateFilterMode === 'received' ? 'Recebidos no Dia' : 'Atividade no Dia')} (${formattedDate})` : ''}
-              ${spoolStatusFilter !== 'all' ? ` · <strong>Status:</strong> ${spoolStatusFilter}` : ''}
+              ${spoolHasStatusFilter() ? ` · <strong>Status:</strong> ${spoolStatusFilter.map(status => SPOOL_STATUS_OPTIONS.find(option => option.value === status)?.label || status).join(', ')}` : ''}
               ${spoolTypeFilter !== 'all' ? ` · <strong>Tipo:</strong> ${spoolTypeFilter}` : ''}
               ${spoolSearchTerm ? ` · <strong>Busca:</strong> "${esc(spoolSearchTerm)}"` : ''}
               <br><span style="color:#0284c7; font-weight:800;">👉 Exibindo ${filteredCount} de ${totalCount} spools · ${formatSpoolMeters(filteredLength, '0 m')} no filtro.</span>
@@ -6928,6 +6998,7 @@ function spoolCopyFilteredReport(customList = null) {
 
   // Contexto dos filtros ativos
   const filterDesc = [];
+  for (const [label, value] of spoolMultiFilterSummaryParts()) filterDesc.push(`${label}: *${value}*`);
   if (spoolActiveSector !== 'all') filterDesc.push(`Setor: *${sectorMeta.name}*`);
   if (spoolActiveSubArea !== 'all') {
     filterDesc.push(`Subárea: *${spoolSubAreaDisplayName(spoolActiveSubArea, spoolDb, spoolActiveSector)}*`);
@@ -6943,7 +7014,7 @@ function spoolCopyFilteredReport(customList = null) {
     };
     filterDesc.push(`Data: *${modeMap[spoolDateFilterMode] || dateFormatted}*`);
   }
-  if (spoolStatusFilter !== 'all') {
+  if (spoolHasStatusFilter()) {
     const statusMap = {
       'not-started': 'Pendente',
       'pending': 'Pendente',
@@ -6952,7 +7023,7 @@ function spoolCopyFilteredReport(customList = null) {
       'rejected': '🔴 Reprovado / Quarentena',
       'returned': '↩️ Devolvido'
     };
-    filterDesc.push(`Status: *${statusMap[spoolStatusFilter] || spoolStatusFilter}*`);
+    filterDesc.push(`Status: *${spoolStatusFilter.map(status => statusMap[status] || status).join(', ')}*`);
   }
   if (spoolTypeFilter !== 'all') {
     filterDesc.push(`Tipo: *${spoolTypeFilter === 'straight' ? 'Trecho Reto' : (spoolTypeFilter === 'valve' ? 'Válvula' : 'Derivação')}*`);
@@ -6968,8 +7039,13 @@ function spoolCopyFilteredReport(customList = null) {
     if (spoolActiveSector !== 'all' && s.area !== spoolActiveSector) return false;
     if (spoolActiveSubArea !== 'all' && spoolCanonicalSubArea(s.subArea, s.area) !== spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector)) return false;
     if (spoolActiveDh !== 'ALL' && normalizeDh(s.dh) !== normalizeDh(spoolActiveDh)) return false;
+    if (spoolMultiFilters.dh.length && !spoolMultiFilters.dh.some(dh => normalizeDh(s.dh) === normalizeDh(dh))) return false;
+    if (spoolMultiFilters.sector.length && !spoolMultiFilters.sector.includes(s.area)) return false;
+    if (spoolMultiFilters.subarea.length && !spoolMultiFilters.subarea.some(subarea => spoolCanonicalSubArea(s.subArea, s.area) === spoolCanonicalSubArea(subarea, s.area))) return false;
     if (spoolTypeFilter !== 'all' && s.type !== spoolTypeFilter) return false;
+    if (spoolMultiFilters.type.length && !spoolMultiFilters.type.includes(s.type)) return false;
     if (spoolDiameterFilter !== 'all' && s.diameter !== spoolDiameterFilter) return false;
+    if (spoolMultiFilters.diameter.length && !spoolMultiFilters.diameter.includes(s.diameter)) return false;
     if (!spoolMatchesSearchTerm(s)) return false;
     return true;
   });
@@ -6977,8 +7053,8 @@ function spoolCopyFilteredReport(customList = null) {
   const pending = reportScope.filter(s => s.status === 'not-started');
   const showPendingTags = Boolean(customList)
     || spoolListFilter === 'pending'
-    || spoolStatusFilter === 'pending'
-    || spoolStatusFilter === 'not-started';
+    || spoolStatusFilter.includes('pending')
+    || spoolStatusFilter.includes('not-started');
 
   const straight = list.filter(s => s.type === 'straight');
   const branches = list.filter(s => s.type === 'branch');

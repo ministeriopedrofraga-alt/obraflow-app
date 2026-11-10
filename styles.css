@@ -3758,6 +3758,17 @@ body.sidebar-collapsed .mobile-menu { display: inline-grid !important; }
   border-color: #0284c7;
   box-shadow: 0 0 0 3px rgba(2,132,199,0.15);
 }
+.spool-status-multiselect { position: relative; min-width: 175px; }
+.spool-status-multiselect summary { position: relative; min-width: 175px; padding: 8px 30px 8px 12px; border: 1.5px solid #cbd5e1; border-radius: 7px; background: #f8fafc; color: #0f172a; font-size: 12px; font-weight: 700; cursor: pointer; list-style: none; }
+.spool-status-multiselect summary span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spool-status-multiselect summary::-webkit-details-marker { display: none; }
+.spool-status-multiselect summary::after { position: absolute; top: 12px; right: 12px; width: 7px; height: 7px; border-right: 2px solid #475569; border-bottom: 2px solid #475569; content: ""; transform: rotate(45deg); }
+.spool-status-multiselect[open] { z-index: 30; }
+.spool-status-multiselect[open] summary::after { top: 15px; transform: rotate(225deg); }
+.spool-status-options { position: absolute; top: calc(100% + 4px); left: 0; display: grid; min-width: 240px; gap: 2px; padding: 7px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; box-shadow: 0 8px 24px rgb(15 23 42 / 18%); }
+.spool-status-options label { display: flex; min-height: 34px; align-items: center; gap: 9px; padding: 5px 8px; border-radius: 5px; color: #0f172a; font-size: 12px; font-weight: 650; cursor: pointer; }
+.spool-status-options label:hover { background: #f1f5f9; }
+.spool-status-options input { width: 15px; height: 15px; margin: 0; accent-color: #0284c7; }
 
 .badge-valve {
   font-size: 11px;
