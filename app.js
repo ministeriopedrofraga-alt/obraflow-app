@@ -1981,6 +1981,7 @@ async function synchronizeAfterReconnect({ notify = false } = {}) {
       syncPackingSlipsFromSupabase(),
       syncReceivingInspectionsFromSupabase(),
       syncWorkforceFromSupabase(),
+      typeof window.syncDailyWorkReportsFromSupabase === 'function' ? window.syncDailyWorkReportsFromSupabase() : Promise.resolve(),
       typeof syncRadiosFromSupabase === 'function' ? syncRadiosFromSupabase() : Promise.resolve(),
       typeof syncSpoolProjectsFromSupabase === 'function' ? syncSpoolProjectsFromSupabase({ force: true }) : Promise.resolve()
     ]);
@@ -3600,7 +3601,7 @@ function render() {
       currentPage = 'equipamentos';
       renderMovements();
     } else {
-      currentPage = ['dashboard','equipamentos','romaneios','formularios','empresas','relatorios','materiais','notas-entrada','movimentacoes-materiais','usuarios','cautelas','radios','spools'].includes(hash) ? hash : 'equipamentos';
+      currentPage = ['dashboard','equipamentos','romaneios','formularios','empresas','relatorios','materiais','notas-entrada','movimentacoes-materiais','usuarios','cautelas','radios','spools','checkin'].includes(hash) ? hash : 'equipamentos';
       const views = {
         dashboard: renderDashboard,
         equipamentos: renderEquipments,
@@ -3611,6 +3612,7 @@ function render() {
         cautelas: (typeof renderCautelas === 'function' ? renderCautelas : renderEquipments),
         radios: (typeof renderRadios === 'function' ? renderRadios : renderEquipments),
         spools: (typeof renderSpools === 'function' ? renderSpools : renderEquipments),
+        checkin: (typeof renderCheckIn === 'function' ? renderCheckIn : renderEquipments),
         materiais: typeof renderMaterials === 'function' ? renderMaterials : renderEquipments,
         'notas-entrada': typeof renderMaterialEntries === 'function' ? renderMaterialEntries : renderEquipments,
         'movimentacoes-materiais': typeof renderMaterialMovements === 'function' ? renderMaterialMovements : renderEquipments,

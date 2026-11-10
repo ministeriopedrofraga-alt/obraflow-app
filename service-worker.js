@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'datacenter-omnia-';
-const APP_VERSION = '20261106_workforce_queue_recovery_v1';
+const APP_VERSION = '20261110_daily_work_v1';
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${APP_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-${APP_VERSION}`;
 
@@ -13,6 +13,7 @@ const APP_SHELL = [
   `/cautelas.js?v=${APP_VERSION}`,
   `/radios.js?v=${APP_VERSION}`,
   `/spools.js?v=${APP_VERSION}`,
+  `/checkin.js?v=${APP_VERSION}`,
   `/qr-scanner.js?v=${APP_VERSION}`,
   `/app.js?v=${APP_VERSION}`,
   '/exceljs.min.js',
