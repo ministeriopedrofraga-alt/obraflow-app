@@ -6964,7 +6964,21 @@ function spoolCopyFilteredReport(customList = null) {
   const received = list.filter(s => s.status === 'received');
   const rejected = list.filter(s => s.status === 'rejected');
   const returned = list.filter(s => s.status === 'returned');
-  const pending = list.filter(s => s.status === 'not-started');
+  const reportScope = customList || spoolDb.filter(s => {
+    if (spoolActiveSector !== 'all' && s.area !== spoolActiveSector) return false;
+    if (spoolActiveSubArea !== 'all' && spoolCanonicalSubArea(s.subArea, s.area) !== spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector)) return false;
+    if (spoolActiveDh !== 'ALL' && normalizeDh(s.dh) !== normalizeDh(spoolActiveDh)) return false;
+    if (spoolTypeFilter !== 'all' && s.type !== spoolTypeFilter) return false;
+    if (spoolDiameterFilter !== 'all' && s.diameter !== spoolDiameterFilter) return false;
+    if (!spoolMatchesSearchTerm(s)) return false;
+    return true;
+  });
+  const receivedSummary = reportScope.filter(s => s.status === 'received');
+  const pending = reportScope.filter(s => s.status === 'not-started');
+  const showPendingTags = Boolean(customList)
+    || spoolListFilter === 'pending'
+    || spoolStatusFilter === 'pending'
+    || spoolStatusFilter === 'not-started';
 
   const straight = list.filter(s => s.type === 'straight');
   const branches = list.filter(s => s.type === 'branch');
@@ -6982,7 +6996,7 @@ function spoolCopyFilteredReport(customList = null) {
   text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   text += `📊 *RESUMO DA SELEÇÃO:* ${list.length} spools\n`;
   text += `🟢 *Instalados:* ${installed.length} spools · ${formatSpoolMeters(spoolSumLength(installed), '0 m')}\n`;
-  text += `🟡 *Recebidos:* ${received.length} spools · ${formatSpoolMeters(spoolSumLength(received), '0 m')}\n`;
+  text += `🟡 *Recebidos:* ${receivedSummary.length} spools · ${formatSpoolMeters(spoolSumLength(receivedSummary), '0 m')}\n`;
   if (rejected.length > 0) {
     text += `🔴 *Reprovados / Quarentena:* ${rejected.length} spools · ${formatSpoolMeters(spoolSumLength(rejected), '0 m')}\n`;
   }
@@ -7038,7 +7052,7 @@ function spoolCopyFilteredReport(customList = null) {
       }).join('\n') + `\n`;
     }
 
-    if (pending.length > 0) {
+    if (showPendingTags && pending.length > 0) {
       text += `\n⚪ *PENDENTES (${pending.length}):*\n`;
       text += pending.map(s => {
         const dia = s.diameter ? ` (${s.diameter})` : '';
