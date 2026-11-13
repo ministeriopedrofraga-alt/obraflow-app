@@ -2997,10 +2997,15 @@ function renderSpools() {
   // Spools para cálculo dos KPIs superiores
   const baseSectorSpools = spoolDb.filter(s => {
     const matchSec = spoolActiveSector === 'all' || s.area === spoolActiveSector;
+    const matchMultiSector = !spoolMultiFilters.sector.length || spoolMultiFilters.sector.includes(s.area);
     const matchSub = spoolActiveSubArea === 'all' ||
       spoolCanonicalSubArea(s.subArea, s.area) === spoolCanonicalSubArea(spoolActiveSubArea, spoolActiveSector);
+    const matchMultiSub = !spoolMultiFilters.subarea.length || spoolMultiFilters.subarea.some(subarea =>
+      spoolCanonicalSubArea(s.subArea, s.area) === spoolCanonicalSubArea(subarea, s.area)
+    );
     const matchDh = spoolActiveDh === 'ALL' || normalizeDh(s.dh) === normalizeDh(spoolActiveDh);
-    return matchSec && matchSub && matchDh;
+    const matchMultiDh = !spoolMultiFilters.dh.length || spoolMultiFilters.dh.some(dh => normalizeDh(s.dh) === normalizeDh(dh));
+    return matchSec && matchMultiSector && matchSub && matchMultiSub && matchDh && matchMultiDh;
   });
 
   // Métricas do Setor / DH Ativo

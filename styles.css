@@ -4100,7 +4100,10 @@ body.sidebar-collapsed .mobile-menu { display: inline-grid !important; }
 .checkin-activity-table td:nth-child(1) { min-width: 110px; }
 .checkin-activity-table td:nth-child(2) { min-width: 190px; }
 .checkin-activity-table td:nth-child(8) { min-width: 190px; }
-.checkin-activity-table td:nth-child(9) { min-width: 150px; }
+.checkin-activity-table td:nth-child(9) { min-width: 210px; }
+.checkin-activity-table td .checkin-note-input { display: block; width: 100%; min-width: 180px; min-height: 52px; height: 52px; padding: 6px 8px; border: 1px solid #d6e0da; border-radius: 5px; color: #293c30; background: #fffefa; font: inherit; font-size: 10px; line-height: 1.35; resize: vertical; box-sizing: border-box; white-space: pre-wrap; }
+.checkin-activity-table td:nth-child(10) { min-width: 170px; }
+.checkin-task-actions .button { width: 100%; margin-top: 4px; }
 .checkin-activity-table td strong, .checkin-activity-table td small { display: block; }
 .checkin-activity-table td small { margin-top: 3px; color: #748279; font-size: 9px; }
 .checkin-activity-table td input, .checkin-activity-table td select { width: 100%; min-width: 65px; height: 30px; padding: 0 6px; border: 1px solid #d6e0da; border-radius: 5px; color: #293c30; background: #fffefa; font: inherit; font-size: 10px; }
@@ -4141,13 +4144,13 @@ body.sidebar-collapsed .mobile-menu { display: inline-grid !important; }
 .checkin-chart-scroll { overflow-x: auto; padding: 10px 15px 4px; }
 .checkin-chart-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; }
 .checkin-chart-scroll svg line { stroke: #dce5df; stroke-width: 1; }
-.checkin-chart-scroll svg text { fill: #708077; font-family: inherit; font-size: 10px; }
+.checkin-chart-scroll svg text { fill: #78857d !important; font-family: Arial, sans-serif; font-size: 10px; font-weight: 400 !important; }
 .checkin-chart-scroll svg .curve-planned, .checkin-chart-scroll svg .curve-executed { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .checkin-chart-scroll svg .curve-planned { stroke: #2777c7; }
 .checkin-chart-scroll svg .curve-executed { stroke: #24a269; }
 .checkin-chart-scroll svg .point-planned { fill: #2777c7; }
 .checkin-chart-scroll svg .point-executed { fill: #24a269; }
-.checkin-chart-scroll svg .curve-date { font-size: 9px; }
+.checkin-chart-scroll svg .curve-date { fill: #78857d !important; font-size: 8px; font-weight: 400 !important; }
 .checkin-curve-empty { padding: 0 20px 18px; color: #728078; font-size: 11px; }
 @media (max-width: 760px) {
   .checkin-tabs { width: 100%; }

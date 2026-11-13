@@ -632,6 +632,26 @@ async function syncUserApprovalsFromSupabase() {
         return true;
       });
 
+      // As contas legadas autenticam pela tabela user_approvals, fora do
+      // Supabase Auth. Compare a senha da sessão com a versão compartilhada para
+      // encerrar sessões em outros aparelhos depois de uma troca de senha.
+      if (currentUser) {
+        const activeAccount = validRows.find(r =>
+          (currentUser.id && String(r.id) === String(currentUser.id)) ||
+          (r.email && r.email.toLowerCase() === String(currentUser.email || '').toLowerCase())
+        );
+        if (activeAccount?.password) {
+          const latestHash = await passwordSessionFingerprint(activeAccount.password);
+          if (!currentUser.authCredentialHash && latestHash) {
+            currentUser.authCredentialHash = latestHash;
+            localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
+          } else if (latestHash && latestHash !== currentUser.authCredentialHash) {
+            logoutUser('Sua senha foi alterada. Entre novamente com a nova senha.');
+            return;
+          }
+        }
+      }
+
       userApprovals = validRows;
       localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
       updateAppShellAccess();
@@ -641,6 +661,18 @@ async function syncUserApprovalsFromSupabase() {
     }
   } catch(e) {
     console.warn('Supabase user_approvals sync indisponível:', e);
+  }
+}
+
+async function passwordSessionFingerprint(password) {
+  try {
+    if (!window.crypto?.subtle || typeof TextEncoder === 'undefined') return null;
+    const bytes = new TextEncoder().encode(String(password));
+    const digest = await window.crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  } catch (error) {
+    console.warn('Não foi possível validar a versão da senha desta sessão:', error);
+    return null;
   }
 }
 
@@ -1332,7 +1364,8 @@ async function submitUserLogin(event) {
         name: match.name,
         role: isSystemAdminEmail(match.email) ? 'admin' : normalizeAccessRole(match.role || 'gestor'),
         company: match.company || 'Obra',
-        photo: match.photo || undefined
+        photo: match.photo || undefined,
+        authCredentialHash: await passwordSessionFingerprint(password)
       };
       localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
       closeModal();
@@ -1486,7 +1519,8 @@ async function submitInviteActivation(event) {
     name: match.name,
     role: isSystemAdminEmail(match.email) ? 'admin' : normalizeAccessRole(match.role || 'gestor'),
     company: match.company || 'Obra',
-    photo: match.photo || undefined
+    photo: match.photo || undefined,
+    authCredentialHash: await passwordSessionFingerprint(password)
   };
   localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
 
@@ -1497,13 +1531,13 @@ async function submitInviteActivation(event) {
   toast(`Convite ativado com sucesso! Bem-vindo(a), ${currentUser.name}. Acesso liberado.`);
 }
 
-function logoutUser() {
+function logoutUser(message = 'Sessão encerrada com sucesso.') {
   currentUser = null;
   localStorage.removeItem('obraflow_user');
   location.hash = '#login';
   updateAppShellAccess();
   render();
-  toast('Sessão encerrada com sucesso.');
+  toast(message);
 }
 
 function openUserProfileModal() {
@@ -1637,6 +1671,7 @@ async function saveUserProfile(event) {
 
   const previousRole = getEffectiveAccessRole();
   const emailChanged = newEmail !== oldEmail;
+  if (newPassword) currentUser.authCredentialHash = await passwordSessionFingerprint(newPassword);
   currentUser.name = newName;
   currentUser.email = newEmail;
   currentUser.company = newCompany;
@@ -1665,6 +1700,10 @@ async function saveUserProfile(event) {
       if (emailChanged) authChanges.email = newEmail;
       if (newPassword) authChanges.password = newPassword;
       const { error } = await client.auth.updateUser(authChanges);
+      if (!error && newPassword && typeof client.auth.signOut === 'function') {
+        const { error: signOutError } = await client.auth.signOut({ scope: 'others' });
+        if (signOutError) console.warn('Não foi possível encerrar as outras sessões do Supabase Auth:', signOutError);
+      }
       if (error && !/session/i.test(error.message || '')) {
         console.warn('Não foi possível atualizar as credenciais no provedor de autenticação:', error);
       }
