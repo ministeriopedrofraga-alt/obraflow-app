@@ -610,58 +610,152 @@ function renderCompanySelectHtml(opts = {}) {
   `;
 }
 
-async function syncUserApprovalsFromSupabase() {
-  try {
-    const rows = await supabaseRestRequest('user_approvals?select=*&order=created_at.desc');
-    if (Array.isArray(rows)) {
-      const deletedKeys = new Set(getDeletedUserKeys().map(k => String(k).trim().toLowerCase()));
+let activeUserApprovalsSync = null;
+let lastUserApprovalsSyncAt = 0;
+let activeSessionCheck = null;
+let lastSessionCheckAt = 0;
 
-      const validRows = rows.filter(r => {
-        if (!r) return false;
-        const emailKey = (r.email || '').trim().toLowerCase();
-        const idKey = (r.id || '').trim().toLowerCase();
-        const nameKey = (r.name || '').trim().toLowerCase();
-        if (deletedKeys.has(emailKey) || deletedKeys.has(idKey) || (nameKey && deletedKeys.has(nameKey))) {
-          if (r.id && isValidUUID(r.id)) {
-            supabaseRestRequest(`user_approvals?id=eq.${encodeURIComponent(r.id)}`, { method: 'DELETE' }).catch(() => {});
-          } else if (r.email) {
-            supabaseRestRequest(`user_approvals?email=eq.${encodeURIComponent(r.email)}`, { method: 'DELETE' }).catch(() => {});
-          }
+/**
+ * Validação leve e direcionada da sessão atual do usuário.
+ * Consulta APENAS a linha do usuário logado (id/email) e APENAS colunas essenciais,
+ * consumindo menos de 100 bytes e evitando requisições pesadas em lote na tabela inteira.
+ * Desloga o usuário se a senha foi alterada em outro aparelho ou se o acesso foi revogado/excluído.
+ */
+async function verifyCurrentUserSession({ force = false } = {}) {
+  if (!currentUser || navigator.onLine === false || typeof supabaseRestRequest !== 'function') return true;
+  const now = Date.now();
+  // Cooldown de 3 minutos para checagem em segundo plano, a menos que seja forçada
+  if (!force && now - lastSessionCheckAt < 180000) return true;
+  if (activeSessionCheck) return activeSessionCheck;
+
+  activeSessionCheck = (async () => {
+    try {
+      lastSessionCheckAt = Date.now();
+      const identifier = currentUser.id && isValidUUID(currentUser.id)
+        ? `id=eq.${encodeURIComponent(currentUser.id)}`
+        : `email=eq.${encodeURIComponent(String(currentUser.email || '').trim().toLowerCase())}`;
+
+      const rows = await supabaseRestRequest(
+        `user_approvals?${identifier}&select=id,name,email,role,company,status,password`,
+        { flushPending: false, timeoutMs: 15000 }
+      );
+
+      if (!Array.isArray(rows) || rows.length === 0) {
+        // Se a conta não existe mais no banco, foi excluída pelo gestor
+        logoutUser('Seu cadastro não foi encontrado ou foi removido. Entre novamente ou consulte o gestor.');
+        return false;
+      }
+
+      const account = rows[0];
+
+      // Se a conta foi revogada, desativada ou rejeitada
+      if (account.status && account.status !== 'approved') {
+        logoutUser('Seu acesso foi desativado pelo administrador.');
+        return false;
+      }
+
+      // Validação de senha: encerra a sessão se a senha foi alterada em outro aparelho
+      if (account.password) {
+        const latestHash = await passwordSessionFingerprint(account.password);
+        if (!currentUser.authCredentialHash && latestHash) {
+          currentUser.authCredentialHash = latestHash;
+          try { localStorage.setItem('obraflow_user', JSON.stringify(currentUser)); } catch (e) {}
+        } else if (latestHash && latestHash !== currentUser.authCredentialHash) {
+          logoutUser('Sua senha foi alterada. Entre novamente com a nova senha.');
           return false;
         }
-        return true;
-      });
+      }
 
-      // As contas legadas autenticam pela tabela user_approvals, fora do
-      // Supabase Auth. Compare a senha da sessão com a versão compartilhada para
-      // encerrar sessões em outros aparelhos depois de uma troca de senha.
-      if (currentUser) {
-        const activeAccount = validRows.find(r =>
-          (currentUser.id && String(r.id) === String(currentUser.id)) ||
-          (r.email && r.email.toLowerCase() === String(currentUser.email || '').toLowerCase())
-        );
-        if (activeAccount?.password) {
-          const latestHash = await passwordSessionFingerprint(activeAccount.password);
-          if (!currentUser.authCredentialHash && latestHash) {
-            currentUser.authCredentialHash = latestHash;
-            localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
-          } else if (latestHash && latestHash !== currentUser.authCredentialHash) {
-            logoutUser('Sua senha foi alterada. Entre novamente com a nova senha.');
-            return;
+      // Atualiza nome e papel em tempo real se o gestor alterou
+      let profileUpdated = false;
+      if (account.role && account.role !== currentUser.role && !isSystemAdminEmail(account.email)) {
+        currentUser.role = normalizeAccessRole(account.role);
+        profileUpdated = true;
+      }
+      if (account.name && account.name !== currentUser.name) {
+        currentUser.name = account.name;
+        profileUpdated = true;
+      }
+      if (profileUpdated) {
+        try { localStorage.setItem('obraflow_user', JSON.stringify(currentUser)); } catch (e) {}
+        updateAppShellAccess();
+      }
+
+      return true;
+    } catch (e) {
+      console.warn('Verificação de credenciais de sessão indisponível no momento:', e);
+      return true; // Falha de rede pontual não desloga o operador no meio do trabalho
+    } finally {
+      activeSessionCheck = null;
+    }
+  })();
+
+  return activeSessionCheck;
+}
+window.verifyCurrentUserSession = verifyCurrentUserSession;
+
+async function syncUserApprovalsFromSupabase({ force = false } = {}) {
+  if (activeUserApprovalsSync) return activeUserApprovalsSync;
+  if (typeof supabaseRestRequest !== 'function' || navigator.onLine === false) return false;
+
+  const now = Date.now();
+  // Se não for forçado, evita requisições completas de catálogo em intervalos menores que 45s
+  if (!force && now - lastUserApprovalsSyncAt < 45000) return true;
+  lastUserApprovalsSyncAt = now;
+
+  activeUserApprovalsSync = (async () => {
+    try {
+      const rows = await supabaseRestRequest('user_approvals?select=*&order=created_at.desc', {
+        flushPending: false,
+        timeoutMs: 25000
+      });
+      if (Array.isArray(rows)) {
+        const deletedKeys = new Set(getDeletedUserKeys().map(k => String(k).trim().toLowerCase()));
+
+        // Filtra usuários apagados sem disparar requisições DELETE redundantes em lote
+        const validRows = rows.filter(r => {
+          if (!r) return false;
+          const emailKey = (r.email || '').trim().toLowerCase();
+          const idKey = (r.id || '').trim().toLowerCase();
+          const nameKey = (r.name || '').trim().toLowerCase();
+          return !(deletedKeys.has(emailKey) || deletedKeys.has(idKey) || (nameKey && deletedKeys.has(nameKey)));
+        });
+
+        // Validação da sessão ativa do usuário atual
+        if (currentUser) {
+          const activeAccount = validRows.find(r =>
+            (currentUser.id && String(r.id) === String(currentUser.id)) ||
+            (r.email && r.email.toLowerCase() === String(currentUser.email || '').toLowerCase())
+          );
+          if (activeAccount?.password) {
+            const latestHash = await passwordSessionFingerprint(activeAccount.password);
+            if (!currentUser.authCredentialHash && latestHash) {
+              currentUser.authCredentialHash = latestHash;
+              localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
+            } else if (latestHash && latestHash !== currentUser.authCredentialHash) {
+              logoutUser('Sua senha foi alterada. Entre novamente com a nova senha.');
+              return false;
+            }
           }
         }
-      }
 
-      userApprovals = validRows;
-      localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
-      updateAppShellAccess();
-      if (currentPage === 'usuarios' && userManagementTab !== 'convidar' && canSafelyAutoRender(['usuarios'])) {
-        renderUserManagement();
+        userApprovals = validRows;
+        localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
+        updateAppShellAccess();
+        if (currentPage === 'usuarios' && userManagementTab !== 'convidar' && canSafelyAutoRender(['usuarios'])) {
+          renderUserManagement();
+        }
+        return true;
       }
+    } catch(e) {
+      console.warn('Supabase user_approvals sync indisponível:', e);
+      return false;
+    } finally {
+      activeUserApprovalsSync = null;
     }
-  } catch(e) {
-    console.warn('Supabase user_approvals sync indisponível:', e);
-  }
+  })();
+
+  return activeUserApprovalsSync;
 }
 
 async function passwordSessionFingerprint(password) {
@@ -1996,8 +2090,12 @@ function updateOfflineSyncStatus(state = {}) {
 }
 
 let activeReconnectSync = null;
+let lastReconnectSyncAt = 0;
 async function synchronizeAfterReconnect({ notify = false } = {}) {
   if (activeReconnectSync) return activeReconnectSync;
+  const now = Date.now();
+  if (!notify && now - lastReconnectSyncAt < 60000) return { sent: 0, failed: 0, pending: 0 };
+  lastReconnectSyncAt = now;
   activeReconnectSync = (async () => {
     // Converte primeiro a fila antiga de spools para a fila leve propria do
     // modulo. Assim o reconector nao tenta reenviar repetidamente varios MB.
@@ -2015,6 +2113,9 @@ async function synchronizeAfterReconnect({ notify = false } = {}) {
       if (notify) toast(`${result.pending} alteracao(oes) continuam na fila. O app tentara novamente.`, true);
       return result;
     }
+    if (currentUser) {
+      verifyCurrentUserSession().catch(() => {});
+    }
     await Promise.allSettled([
       syncFromSupabase({ pushAfter: hasPendingRemoteSave }),
       syncPackingSlipsFromSupabase(),
@@ -2022,7 +2123,7 @@ async function synchronizeAfterReconnect({ notify = false } = {}) {
       syncWorkforceFromSupabase(),
       typeof window.syncDailyWorkReportsFromSupabase === 'function' ? window.syncDailyWorkReportsFromSupabase() : Promise.resolve(),
       typeof syncRadiosFromSupabase === 'function' ? syncRadiosFromSupabase() : Promise.resolve(),
-      typeof syncSpoolProjectsFromSupabase === 'function' ? syncSpoolProjectsFromSupabase({ force: true }) : Promise.resolve()
+      typeof syncSpoolProjectsFromSupabase === 'function' ? syncSpoolProjectsFromSupabase() : Promise.resolve()
     ]);
     return result;
   })().finally(() => {
@@ -3091,8 +3192,12 @@ function pendingEquipmentIdSet() {
 }
 
 let activeDataSync = null;
+let lastDataSyncAt = 0;
 function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOperationalState = false } = {}) {
   if (activeDataSync) return activeDataSync;
+  const now = Date.now();
+  if (!pushAfter && !preferRemoteOperationalState && (now - lastDataSyncAt < 30000)) return Promise.resolve(true);
+  lastDataSyncAt = now;
   activeDataSync = (async () => {
     const stateBeforeSync = JSON.stringify({ equipments, history });
     const revisionAtStart = localDataRevision;
@@ -3231,20 +3336,57 @@ async function initializeApp() {
   setTimeout(() => syncPackingSlipsFromSupabase(), 100);
   setTimeout(() => syncReceivingInspectionsFromSupabase(), 200);
   if (typeof syncRadiosFromSupabase === 'function') setTimeout(() => syncRadiosFromSupabase(), 250);
-  setTimeout(() => syncUserApprovalsFromSupabase(), 300);
+  setTimeout(() => {
+    if (currentUser) verifyCurrentUserSession({ force: true });
+    syncUserApprovalsFromSupabase();
+  }, 300);
   if (typeof syncSpoolProjectsFromSupabase === 'function') setTimeout(() => syncSpoolProjectsFromSupabase({ force: true }), 350);
-  setInterval(() => syncFromSupabase({ renderAfter: true, pushAfter: false }), 12000);
-  setInterval(() => syncUserApprovalsFromSupabase(), 15000);
-  if (typeof syncSpoolProjectsFromSupabase === 'function') {
-    setInterval(() => syncSpoolProjectsFromSupabase({ force: true }), 15000);
-  }
+
+  // 1. Verificação contínua da sessão do usuário logado (desloga se a senha mudou ou conta foi revogada)
+  // Roda a cada 3 minutos consultando APENAS a linha do usuário logado (menos de 100 bytes).
   setInterval(() => {
+    if (document.visibilityState === 'visible' && navigator.onLine !== false && currentUser) {
+      verifyCurrentUserSession();
+    }
+  }, 180000);
+
+  // 2. Catálogo completo de aprovações/usuários: consulta a cada 2 minutos APENAS se o gestor estiver na tela de Usuários
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && navigator.onLine !== false && currentPage === 'usuarios') {
+      syncUserApprovalsFromSupabase();
+    }
+  }, 120000);
+
+  // 3. Catálogo de equipamentos e histórico de movimentações:
+  // Consulta a cada 2 minutos APENAS se a aba estiver visível e nas telas pertinentes
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && navigator.onLine !== false) {
+      if (['dashboard', 'equipamentos', 'cautelas'].includes(currentPage)) {
+        syncFromSupabase({ renderAfter: true, pushAfter: false });
+      }
+    }
+  }, 120000);
+
+  // 4. Catálogo de spools:
+  // Consulta a cada 2 minutos APENAS se estiver na aba de spools
+  if (typeof syncSpoolProjectsFromSupabase === 'function') {
+    setInterval(() => {
+      if (document.visibilityState === 'visible' && navigator.onLine !== false && (currentPage === 'spools' || window.location.hash === '#spools')) {
+        syncSpoolProjectsFromSupabase();
+      }
+    }, 120000);
+  }
+
+  // 5. Efetivo da obra:
+  // Consulta a cada 2 minutos APENAS se estiver na tela de empresas
+  setInterval(() => {
+    if (document.visibilityState !== 'visible' || navigator.onLine === false || currentPage !== 'empresas') return;
     syncWorkforceFromSupabase().then(updated => {
       if (updated && currentPage === 'empresas') {
         if (typeof updateWorkforceSummaryUI === 'function') updateWorkforceSummaryUI();
       }
     });
-  }, 15000);
+  }, 120000);
 }
 function companyOptions(selected='') {
   const companies = getAvailableCompanies();
@@ -3695,8 +3837,8 @@ function renderUserManagement() {
     return;
   }
 
-  // Dispara sincronização em segundo plano se tiverem passado mais de 3 segundos desde a última
-  if (Date.now() - lastUserSyncTime > 3000) {
+  // Dispara sincronização em segundo plano se tiverem passado mais de 30 segundos desde a última
+  if (Date.now() - lastUserSyncTime > 30000) {
     lastUserSyncTime = Date.now();
     syncUserApprovalsFromSupabase();
   }
@@ -3713,7 +3855,7 @@ function renderUserManagement() {
       'Painel do Gestor para autorização de acessos, solicitações de entrada e controle de funções na obra.',
       'CONTROLE DE ACESSO',
       `<div style="display:flex; gap:8px;">
-        <button class="button button-outline compact" onclick="syncUserApprovalsFromSupabase().then(() => toast('Lista de usuários atualizada com sucesso!'))">${icon('refresh')} Sincronizar Dados</button>
+        <button class="button button-outline compact" onclick="syncUserApprovalsFromSupabase({ force: true }).then(() => toast('Lista de usuários atualizada com sucesso!'))">${icon('refresh')} Sincronizar Dados</button>
         <button class="button button-green compact" onclick="setUserManagementTab('convidar')">${icon('plus')} Enviar Convite por E-mail</button>
       </div>`
     )}
@@ -3772,7 +3914,7 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
             <strong>📌 Como funcionam as aprovações no sistema:</strong><br/>
             • <strong>Convites por Link/E-mail enviados pelo gestor:</strong> O colaborador define sua senha no link e entra como <strong>Pré-aprovado</strong> imediatamente (não precisa esperar o admin aprovar).<br/>
             • <strong>Solicitação de Acesso Direto ("Solicitar Cadastro"):</strong> Fica como <strong>Pendente</strong> nesta aba até você clicar em <strong>Aprovar Acesso</strong>.<br/>
-            • <strong>Não vê o cadastro?</strong> Clique no botão <button class="button button-outline compact" style="padding:2px 8px; font-size:11px; margin-left:4px;" onclick="syncUserApprovalsFromSupabase().then(() => toast('Dados sincronizados com o Supabase!'))">🔄 Sincronizar Dados</button> para atualizar.
+            • <strong>Não vê o cadastro?</strong> Clique no botão <button class="button button-outline compact" style="padding:2px 8px; font-size:11px; margin-left:4px;" onclick="syncUserApprovalsFromSupabase({ force: true }).then(() => toast('Dados sincronizados com o Supabase!'))">🔄 Sincronizar Dados</button> para atualizar.
           </div>
         </div>`;
     }
@@ -7605,9 +7747,6 @@ window.addEventListener('offline',()=>window.ObraflowOfflineSync?.refresh());
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible' && navigator.onLine !== false) synchronizeAfterReconnect();
 });
-setInterval(()=>{
-  if(document.visibilityState==='visible' && navigator.onLine !== false) syncFromSupabase({ pushAfter: hasPendingRemoteSave });
-},5000);
 window.addEventListener('beforeunload', () => {
   if (typeof workforceRemoteSaveTimer !== 'undefined' && workforceRemoteSaveTimer) persistWorkforceControlRemote();
 });

@@ -8,6 +8,7 @@ const SPOOL_STORE_KEY = 'obraflow_spools_v5';
 const SPOOL_SUPPORT_STORE_KEY = 'obraflow_spool_supports_v1';
 const SPOOL_ISO_STORE_KEY = 'obraflow_spool_isometrics_v1';
 const SPOOL_SYNC_STATE_KEY = 'obraflow_spool_sync_state_v1';
+const SPOOL_REMOTE_UPDATED_AT_KEY = 'obraflow_spool_remote_updated_at_v1';
 const SPOOL_ITEM_SYNC_QUEUE_KEY = 'obraflow_spool_item_sync_queue_v1';
 const SPOOL_ITEM_SYNC_PREFIX = 'spool_item_v1.';
 const SPOOL_DELETED_STORE_KEY = 'obraflow_spool_deleted_v1';
@@ -1729,6 +1730,7 @@ function spoolSyncRemote(spools) {
         queueOffline: false,
         timeoutMs: 45000
       });
+      try { localStorage.setItem(SPOOL_REMOTE_UPDATED_AT_KEY, payload.updatedAt); } catch (error) {}
 
       // Não substitui uma edição que aconteceu enquanto o envio estava em andamento.
       if (revisionAtStart === spoolDataRevision) {
@@ -1763,14 +1765,33 @@ function spoolSyncRemote(spools) {
 
 // Baixar spools do Supabase (compartilhado entre Netlify, localhost e mobile)
 async function syncSpoolsFromSupabase(options = {}) {
-  try {
-    if (typeof supabaseRestRequest !== 'function') return false;
-    const rows = await supabaseRestRequest('app_metadata?key=eq.spool_registry&select=value', {
-      flushPending: false,
-      timeoutMs: 30000
-    });
-    const remoteValue = Array.isArray(rows) ? rows[0]?.value : null;
-    if (remoteValue && Array.isArray(remoteValue.spools)) {
+  if (spoolActiveDownloadSync) return spoolActiveDownloadSync;
+  if (typeof supabaseRestRequest !== 'function' || navigator.onLine === false) return false;
+  const force = options.force === true;
+  const now = Date.now();
+  if (!force && now - spoolLastRemoteCheckAt < 60000) return true;
+  spoolLastRemoteCheckAt = now;
+  spoolActiveDownloadSync = (async () => {
+    try {
+      let knownRemoteUpdatedAt = '';
+      try { knownRemoteUpdatedAt = localStorage.getItem(SPOOL_REMOTE_UPDATED_AT_KEY) || ''; } catch (error) {}
+      if (knownRemoteUpdatedAt) {
+        // Filtra pelo JSONB value.updatedAt e retorna só a chave. O snapshot inteiro
+        // e as páginas spool_item só são lidos quando o servidor mudou.
+        const markerRows = await supabaseRestRequest(
+          `app_metadata?key=eq.spool_registry&select=key&value->>updatedAt=neq.${encodeURIComponent(knownRemoteUpdatedAt)}`,
+          { flushPending: false, timeoutMs: 15000 }
+        );
+        if (!Array.isArray(markerRows) || markerRows.length === 0) return true;
+      }
+
+      const rows = await supabaseRestRequest('app_metadata?key=eq.spool_registry&select=value', {
+        flushPending: false,
+        timeoutMs: 30000
+      });
+      const remoteValue = Array.isArray(rows) ? rows[0]?.value : null;
+      if (!remoteValue || !Array.isArray(remoteValue.spools)) return false;
+
       const remoteItemRecords = await spoolFetchRemoteItemRecords();
       const remoteSpools = spoolDeduplicateList(spoolMergeRecordCollections(
         remoteItemRecords,
@@ -1800,6 +1821,9 @@ async function syncSpoolsFromSupabase(options = {}) {
       if (Array.isArray(remoteValue.isometrics)) {
         spoolIsoDb = spoolMergeRecordCollections(spoolIsoDb, remoteValue.isometrics, { includeLocalOnly: true, kind: 'iso', deletedRecords: spoolDeletedState.isometrics });
       }
+      if (remoteValue.updatedAt) {
+        try { localStorage.setItem(SPOOL_REMOTE_UPDATED_AT_KEY, String(remoteValue.updatedAt)); } catch (error) {}
+      }
       try {
         localStorage.setItem(SPOOL_STORE_KEY, JSON.stringify(spoolDb));
         localStorage.setItem(SPOOL_SUPPORT_STORE_KEY, JSON.stringify(spoolSupportDb));
@@ -1808,21 +1832,22 @@ async function syncSpoolsFromSupabase(options = {}) {
       } catch(e) {}
       const navCount = document.getElementById('navSpoolCount');
       if (navCount) navCount.textContent = spoolDb.length + spoolSupportDb.length;
-      if (window.location.hash === '#spools') {
-        renderSpools();
-      }
+      if (window.location.hash === '#spools') renderSpools();
       spoolUpdateSyncIndicator(true);
       if (pendingLocal || localHasNewerSpool || localHasNewerSupport || localHasNewerIso
         || localHasMissingRemoteSpool || localHasMissingRemoteSupport || localHasMissingRemoteIso) {
         return await spoolSyncRemote(spoolDb);
       }
       return true;
+    } catch (e) {
+      console.warn('Falha ao baixar spools do Supabase:', e);
+      spoolUpdateSyncIndicator(false);
+      return false;
+    } finally {
+      spoolActiveDownloadSync = null;
     }
-  } catch (e) {
-    console.warn('Falha ao baixar spools do Supabase:', e);
-    spoolUpdateSyncIndicator(false);
-  }
-  return false;
+  })();
+  return spoolActiveDownloadSync;
 }
 window.syncSpoolsFromSupabase = syncSpoolsFromSupabase;
 window.syncSpoolProjectsFromSupabase = syncSpoolsFromSupabase;
@@ -1975,6 +2000,8 @@ let spoolIsoDb = spoolLoadAuxiliary('iso');
 let spoolDeletedState = spoolLoadDeletedState();
 let spoolDataRevision = 0;
 let spoolRemoteSaveChain = Promise.resolve(true);
+let spoolActiveDownloadSync = null;
+let spoolLastRemoteCheckAt = 0;
 let spoolRemoteSaveTimer = null;
 let spoolRemoteSaveRequested = false;
 let spoolPendingRecoverySnapshot = null;

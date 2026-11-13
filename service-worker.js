@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'datacenter-omnia-';
-const APP_VERSION = '20261113_daily_work_v31';
+const APP_VERSION = '20261113_supabase_throttle_v32';
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${APP_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-${APP_VERSION}`;
 
