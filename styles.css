@@ -4092,7 +4092,7 @@ body.sidebar-collapsed .mobile-menu { display: inline-grid !important; }
 .checkin-header-fields { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 8px; padding: 12px 18px; }
 .checkin-header-fields label, .checkin-manual-form label { display: grid; min-width: 0; gap: 4px; }
 .checkin-header-fields label span, .checkin-manual-form label span { color: #75847a; font-size: 9px; font-weight: 750; text-transform: uppercase; }
-.checkin-header-fields input, .checkin-manual-form input { width: 100%; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid #d3ded7; border-radius: 6px; color: #20362a; background: #fff; font: inherit; font-size: 11px; }
+.checkin-header-fields input, .checkin-header-fields select, .checkin-manual-form input, .checkin-manual-form select { width: 100%; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid #d3ded7; border-radius: 6px; color: #20362a; background: #fff; font: inherit; font-size: 11px; }
 .checkin-activity-table-wrap { width: 100%; overflow-x: auto; }
 .checkin-activity-table { width: 100%; min-width: 1240px; border-collapse: collapse; }
 .checkin-activity-table th { padding: 9px 8px; border: 1px solid #d6e0e4; color: #24455e; background: #eaf1f9; font-size: 10px; text-align: left; white-space: nowrap; }
@@ -4102,10 +4102,30 @@ body.sidebar-collapsed .mobile-menu { display: inline-grid !important; }
 .checkin-activity-table td:nth-child(8) { min-width: 190px; }
 .checkin-activity-table td:nth-child(9) { min-width: 210px; }
 .checkin-activity-table td .checkin-note-input { display: block; width: 100%; min-width: 180px; min-height: 52px; height: 52px; padding: 6px 8px; border: 1px solid #d6e0da; border-radius: 5px; color: #293c30; background: #fffefa; font: inherit; font-size: 10px; line-height: 1.35; resize: vertical; box-sizing: border-box; white-space: pre-wrap; }
-.checkin-activity-table td:nth-child(10) { min-width: 170px; }
+.checkin-activity-table td:nth-child(10) { min-width: 220px; }
+.checkin-task-field-label { display: grid; gap: 2px; margin-bottom: 5px; }
+.checkin-task-field-label span { color: #64748b; font-size: 9px; font-weight: 750; text-transform: uppercase; }
+.checkin-task-field-label input, .checkin-task-field-label select { width: 100%; height: 28px; padding: 0 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; }
+.checkin-task-equip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 4px; }
 .checkin-task-actions .button { width: 100%; margin-top: 4px; }
 .checkin-activity-table td strong, .checkin-activity-table td small { display: block; }
 .checkin-activity-table td small { margin-top: 3px; color: #748279; font-size: 9px; }
+.checkin-activity-table tr.is-running { background-color: #f0faf4 !important; }
+.checkin-activity-table tr.is-running > td:first-child { border-left: 5px solid #167e4e !important; }
+.checkin-activity-table tr.is-closed { background-color: #f7fafc !important; }
+.checkin-activity-table tr.is-closed > td:first-child { border-left: 5px solid #3b82f6 !important; }
+.checkin-activity-table tr.is-pending > td:first-child { border-left: 5px solid #cbd5e1 !important; }
+.checkin-status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 99px; font-size: 9px; font-weight: 750; margin-bottom: 4px; }
+.checkin-status-pill.running { background: #dcfce7; color: #14532d; border: 1px solid #86efac; }
+.checkin-status-pill.closed { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.checkin-status-pill.pending { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+.checkin-status-pill .pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: #16a34a; animation: checkinPulse 1.8s infinite; }
+@keyframes checkinPulse { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.8; } }
+.checkin-discipline-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; background: #e2e8f0; color: #334155; margin-top: 4px; }
+.checkin-time-box { padding: 4px 6px; border-radius: 5px; margin-top: 4px; font-size: 9px; }
+.checkin-time-box.running { background: #e6f9ed; border: 1px solid #a7f3d0; color: #065f46; }
+.checkin-time-box.closed { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; }
+.checkin-time-box.running strong, .checkin-time-box.closed strong { display: block; font-size: 10px; }
 .checkin-activity-table td input, .checkin-activity-table td select { width: 100%; min-width: 65px; height: 30px; padding: 0 6px; border: 1px solid #d6e0da; border-radius: 5px; color: #293c30; background: #fffefa; font: inherit; font-size: 10px; }
 .checkin-activity-table td .checkin-number-input { width: 78px; }
 .checkin-activity-table .checkin-problem-other { margin-top: 4px; }

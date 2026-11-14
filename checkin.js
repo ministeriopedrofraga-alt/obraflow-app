@@ -23,11 +23,15 @@ let checkinReports = checkinLoadLocal();
 let checkinLoadedRemote = false;
 let checkinActiveTab = 'diario';
 let checkinSelectedDate = checkinToday();
+let checkinDisciplineFilter = '';
 let checkinEngineerFilter = '';
 let checkinDhFilter = '';
+let checkinCompanyFilter = '';
 let checkinPlanStart = checkinToday();
 let checkinPlanEnd = checkinDateOffset(checkinToday(), 6);
+let checkinPlanDisciplineFilter = '';
 let checkinPlanEngineerFilter = '';
+let checkinPlanCompanyFilter = '';
 let checkinCurveStart = checkinDateOffset(checkinToday(), -29);
 let checkinCurveEnd = checkinToday();
 let checkinCurveEngineer = '';
@@ -101,11 +105,16 @@ function checkinMigrateReportTaskTimes(report) {
   const hasTaskLevelTimes = (Array.isArray(report.activities) ? report.activities : []).some(activity => activity.checkinAt || activity.checkoutAt);
   return {
     ...report,
-    activities: (Array.isArray(report.activities) ? report.activities : []).map(activity => ({
-      ...activity,
-      checkinAt: activity.checkinAt || (!hasTaskLevelTimes ? report.checkinAt : '') || '',
-      checkoutAt: activity.checkoutAt || (!hasTaskLevelTimes ? report.checkoutAt : '') || ''
-    }))
+    activities: (Array.isArray(report.activities) ? report.activities : []).map(activity => {
+      const isGeneric = !activity.discipline || checkinNormalizeHeader(activity.discipline).includes('geral') || checkinNormalizeHeader(activity.discipline).includes('varias');
+      const resolvedDiscipline = isGeneric ? checkinGetActivityDiscipline(report, activity) : activity.discipline;
+      return {
+        ...activity,
+        discipline: resolvedDiscipline || activity.discipline || '',
+        checkinAt: activity.checkinAt || (!hasTaskLevelTimes ? report.checkinAt : '') || '',
+        checkoutAt: activity.checkoutAt || (!hasTaskLevelTimes ? report.checkoutAt : '') || ''
+      };
+    })
   };
 }
 
@@ -255,9 +264,73 @@ function checkinActualCrewTotal(report) {
   return (Array.isArray(report.activities) ? report.activities : []).reduce((sum, activity) => sum + (Number(activity.actualCrew) || 0), 0);
 }
 
+function checkinActualPtaTotal(report) {
+  return (Array.isArray(report.activities) ? report.activities : []).reduce((sum, a) => sum + (Number(a.ptaCount) || 0), 0);
+}
+
+function checkinActualForkliftTotal(report) {
+  return (Array.isArray(report.activities) ? report.activities : []).reduce((sum, a) => sum + (Number(a.forkliftCount) || 0), 0);
+}
+
+function checkinReportContractorsDisplay(report) {
+  const taskCompanies = checkinUniqueOptions((report.activities || []).map(a => a.contractor).filter(Boolean));
+  if (taskCompanies.length > 0) return taskCompanies.join(', ');
+  return report.contractor || '—';
+}
+
+function checkinUpdateCardTotals(input) {
+  const card = input.closest('[data-report-card]');
+  if (!card) return;
+  const reportId = card.dataset.reportCard;
+  const report = checkinCaptureReport(reportId);
+  if (!report) return;
+
+  const crewEl = card.querySelector(`[data-meta-crew="${CSS.escape(reportId)}"]`);
+  if (crewEl) crewEl.textContent = `${checkinActualCrewTotal(report)} pessoas`;
+
+  const equipEl = card.querySelector(`[data-meta-equip="${CSS.escape(reportId)}"]`);
+  if (equipEl) equipEl.textContent = `${checkinActualPtaTotal(report)} PTA · ${checkinActualForkliftTotal(report)} empilhadeira(s)`;
+
+  const contractorEl = card.querySelector(`[data-meta-contractor="${CSS.escape(reportId)}"]`);
+  if (contractorEl) contractorEl.textContent = checkinReportContractorsDisplay(report);
+}
+
+function checkinGetActivityDiscipline(report, activity) {
+  if (!activity) return report?.discipline || '';
+  const taskDiscipline = String(activity.discipline || '').trim();
+  const reportDiscipline = String(report?.discipline || '').trim();
+  const isGeneric = value => !value || checkinNormalizeHeader(value).includes('geral') || checkinNormalizeHeader(value).includes('varias');
+  if (!isGeneric(taskDiscipline)) return taskDiscipline;
+  if (!isGeneric(reportDiscipline)) return reportDiscipline;
+
+  const description = checkinNormalizeHeader([
+    activity.pstItem, activity.scheduleId, activity.location, activity.activity
+  ].filter(Boolean).join(' '));
+  if (/isolamento|isolante|armaflex|cladding|manta/.test(description)) return 'Isolamento';
+  if (/tubul|hidraul|hidrante|dreno|esgoto|agua|bomba|sprinkler/.test(description)) return 'Hidráulica';
+  if (/duto|duct|damper|ventil/.test(description)) return 'Duto';
+  if (/logistica|recebimento|movimentacao|transporte|descarga/.test(description)) return 'Logística';
+  return taskDiscipline || reportDiscipline || '';
+}
+
+function checkinAllDisciplines() {
+  const found = (Array.isArray(checkinReports) ? checkinReports : []).flatMap(report =>
+    (report.activities || []).map(activity => checkinGetActivityDiscipline(report, activity))
+  ).filter(Boolean);
+  return checkinUniqueOptions([...CHECKIN_DISCIPLINES, ...found]);
+}
+
 function checkinCompanies() {
-  if (typeof workforce === 'undefined' || !Array.isArray(workforce)) return [];
-  return checkinUniqueOptions(workforce.map(person => person?.company));
+  const fromWorkforce = (typeof workforce !== 'undefined' && Array.isArray(workforce))
+    ? workforce.map(person => person?.company)
+    : [];
+  const fromReports = (Array.isArray(checkinReports))
+    ? checkinReports.flatMap(report => [
+        report?.contractor,
+        ...(Array.isArray(report?.activities) ? report.activities.map(a => a?.contractor) : [])
+      ])
+    : [];
+  return checkinUniqueOptions([...fromWorkforce, ...fromReports]);
 }
 
 function checkinEngineers() {
@@ -333,15 +406,24 @@ async function renderCheckIn() {
   const dayReports = checkinReports.filter(report => report.workDate === checkinSelectedDate);
   const engineers = checkinUniqueOptions(checkinReports.map(report => report.engineer));
   const dataHalls = CHECKIN_DATA_HALLS;
-  const disciplines = checkinUniqueOptions(checkinReports.flatMap(report =>
-    report.activities.map(activity => checkinCurveActivityDiscipline(report, activity))
-  ).filter(discipline => discipline));
+  const disciplines = checkinAllDisciplines();
   const companies = checkinCompanies();
   const canManagePlanning = checkinCanManagePlanning();
-  const visibleReports = dayReports.filter(report =>
-    (!checkinEngineerFilter || report.engineer === checkinEngineerFilter)
-    && (!checkinDhFilter || report.dh === checkinDhFilter)
-  );
+  const visibleReports = dayReports
+    .map(report => {
+      if (!checkinDisciplineFilter) return report;
+      const filteredActivities = (report.activities || []).filter(activity =>
+        checkinGetActivityDiscipline(report, activity) === checkinDisciplineFilter
+      );
+      if (!filteredActivities.length) return null;
+      return { ...report, activities: filteredActivities };
+    })
+    .filter(Boolean)
+    .filter(report =>
+      (!checkinEngineerFilter || report.engineer === checkinEngineerFilter)
+      && (!checkinDhFilter || report.dh === checkinDhFilter)
+      && (!checkinCompanyFilter || (report.contractor === checkinCompanyFilter || (report.activities || []).some(a => a.contractor === checkinCompanyFilter)))
+    );
   const totalPlanned = visibleReports.reduce((sum, report) => sum + report.activities.reduce((total, activity) => total + checkinParseNumber(activity.plannedMeters), 0), 0);
   const totalExecuted = visibleReports.reduce((sum, report) => sum + report.activities.reduce((total, activity) => total + checkinParseNumber(activity.executedMeters), 0), 0);
   const openReports = visibleReports.filter(report => !report.checkoutAt).length;
@@ -353,18 +435,20 @@ async function renderCheckIn() {
       <button class="${checkinActiveTab === 'planejamento' ? 'active' : ''}" onclick="checkinSetTab('planejamento')">Planejamento</button>
       <button class="${checkinActiveTab === 'curva' ? 'active' : ''}" onclick="checkinSetTab('curva')">Curva S</button>
     </nav>
-    ${checkinActiveTab === 'diario' ? checkinRenderDaily(visibleReports, engineers, dataHalls, totalPlanned, totalExecuted, openReports) : ''}
-    ${checkinActiveTab === 'planejamento' ? checkinRenderPlanning(engineers, dataHalls) : ''}
+    ${checkinActiveTab === 'diario' ? checkinRenderDaily(visibleReports, engineers, dataHalls, disciplines, companies, totalPlanned, totalExecuted, openReports) : ''}
+    ${checkinActiveTab === 'planejamento' ? checkinRenderPlanning(engineers, dataHalls, disciplines, companies) : ''}
     ${checkinActiveTab === 'curva' ? checkinRenderCurve(engineers, dataHalls, disciplines, companies) : ''}
   `;
   document.querySelectorAll('.checkin-note-input').forEach(checkinResizeNote);
   if (typeof hydrateIcons === 'function') hydrateIcons();
 }
 
-function checkinRenderDaily(reports, engineers, dataHalls, planned, executed, openReports) {
+function checkinRenderDaily(reports, engineers, dataHalls, disciplines, companies, planned, executed, openReports) {
   return `
     <section class="checkin-filter-panel">
       <label><span>Data do diário</span><input type="date" value="${checkinSelectedDate}" onchange="checkinSetDay(this.value)"></label>
+      <label><span>Disciplina</span><select onchange="checkinSetDailyFilter('discipline', this.value)">${checkinSelectOptions(disciplines, checkinDisciplineFilter, 'Todas')}</select></label>
+      <label><span>Empresa</span><select onchange="checkinSetDailyFilter('company', this.value)">${checkinSelectOptions(companies, checkinCompanyFilter, 'Todas')}</select></label>
       <label><span>Engenheiro</span><select onchange="checkinSetDailyFilter('engineer', this.value)">${checkinSelectOptions(engineers, checkinEngineerFilter, 'Todos')}</select></label>
       <label><span>Data Hall</span><select onchange="checkinSetDailyFilter('dh', this.value)">${checkinSelectOptions(dataHalls, checkinDhFilter, 'Todos')}</select></label>
       <button class="button button-outline" onclick="checkinOpenStandaloneExtra()">Planejar atividade extra</button>
@@ -378,34 +462,37 @@ function checkinRenderDaily(reports, engineers, dataHalls, planned, executed, op
       <article><small>EXECUTADO</small><strong>${checkinNumber(executed)} m</strong></article>
       <article><small>DIÁRIOS EM ABERTO</small><strong>${openReports}</strong></article>
     </section>
-    ${reports.length ? reports.map(checkinRenderDailyReport).join('') : `<section class="checkin-empty"><span>${icon('calendar')}</span><h2>Nenhuma atividade planejada para ${checkinFormatDate(checkinSelectedDate)}</h2><p>Importe a planilha semanal ou cadastre uma atividade planejada para abrir o diário de campo.</p><button class="button button-green" onclick="checkinSetTab('planejamento')">Abrir planejamento</button></section>`}
+    ${reports.length ? reports.map(report => checkinRenderDailyReport(report, companies)).join('') : `<section class="checkin-empty"><span>${icon('calendar')}</span><h2>Nenhuma atividade planejada para ${checkinFormatDate(checkinSelectedDate)}</h2><p>Importe a planilha semanal ou cadastre uma atividade planejada para abrir o diário de campo.</p><button class="button button-green" onclick="checkinSetTab('planejamento')">Abrir planejamento</button></section>`}
   `;
 }
 
-function checkinRenderDailyReport(report) {
+function checkinRenderDailyReport(report, companies = checkinCompanies()) {
   const totalPlanned = report.activities.reduce((sum, activity) => sum + checkinParseNumber(activity.plannedMeters), 0);
   const totalExecuted = report.activities.reduce((sum, activity) => sum + checkinParseNumber(activity.executedMeters), 0);
   const checkinCount = report.activities.filter(activity => activity.checkinAt).length;
   const checkoutCount = report.activities.filter(activity => activity.checkoutAt).length;
   const allCheckedOut = report.activities.length > 0 && checkoutCount === report.activities.length;
   const overallStatus = allCheckedOut ? 'Fechado' : checkinCount ? `Iniciado ${checkinCount}/${report.activities.length}` : 'Planejado';
+  const uniqueCardDisciplines = checkinUniqueOptions(report.activities.map(a => checkinGetActivityDiscipline(report, a)).filter(Boolean));
+  const displayDiscipline = uniqueCardDisciplines.length === 1 ? uniqueCardDisciplines[0] : (report.discipline || 'Geral / várias');
+
   return `<article class="checkin-report-card" data-report-card="${esc(report.id)}">
     <header class="checkin-report-head">
-      <div><div class="checkin-report-eyebrow">${esc(report.dh)} · ${esc(report.discipline || 'Disciplina não informada')}</div><h2>${esc(report.engineer)}</h2><p>${esc(report.stage || 'Etapa não informada')}</p></div>
+      <div><div class="checkin-report-eyebrow">${esc(report.dh)} · ${esc(displayDiscipline)}</div><h2>${esc(report.engineer)}</h2><p>${esc(report.stage || 'Etapa não informada')}</p></div>
       <span class="checkin-report-state ${allCheckedOut ? 'closed' : checkinCount ? 'running' : ''}">${overallStatus}</span>
     </header>
     <div class="checkin-report-meta">
-      <span><small>Empreiteira</small><strong>${esc(report.contractor || '—')}</strong></span>
+      <span><small>Empreiteira</small><strong data-meta-contractor="${esc(report.id)}">${esc(checkinReportContractorsDisplay(report))}</strong></span>
       <span><small>Responsável HC</small><strong>${esc(report.hcEngineer || report.engineer)}</strong></span>
-      <span><small>Efetivo informado</small><strong>${checkinActualCrewTotal(report) || Number(report.actualCrew || 0) || "-"} pessoas</strong></span>
+      <span><small>Efetivo total</small><strong data-meta-crew="${esc(report.id)}">${checkinActualCrewTotal(report)} pessoas</strong></span>
+      <span><small>Equipamentos (total)</small><strong data-meta-equip="${esc(report.id)}">${checkinActualPtaTotal(report)} PTA · ${checkinActualForkliftTotal(report)} empilhadeira(s)</strong></span>
       <span><small>Turno / clima</small><strong>${esc(report.shift || '—')} · ${esc(report.weather || '—')}</strong></span>
       <span><small>Supervisor</small><strong>${esc(report.supervisor || '—')}</strong></span>
       <span><small>Atividades com entrada / saida</small><strong>${checkinCount} / ${checkoutCount} de ${report.activities.length}</strong></span>
     </div>
-    <div class="checkin-header-fields">${checkinHeaderInput(report, 'actualPtaCount', 'Quantidade de PTA', 'number')}${checkinHeaderInput(report, 'forkliftCount', 'Quantidade de empilhadeiras', 'number')}</div>
     <div class="checkin-activity-table-wrap"><table class="checkin-activity-table">
       <thead><tr><th>Item / cronograma</th><th>Local e atividade</th><th>Un.</th><th>Prev. dia</th><th>Exec. dia</th><th>%</th><th>Status</th><th>Cod. problema</th><th>Observacao</th><th>Efetivo / Check-in por tarefa</th>${checkinCanDeletePlanning() ? '<th>Excluir</th>' : ''}</tr></thead>
-      <tbody>${report.activities.map(activity => checkinRenderActivityRow(report, activity)).join('')}</tbody>
+      <tbody>${report.activities.map(activity => checkinRenderActivityRow(report, activity, companies)).join('')}</tbody>
       <tfoot><tr><th colspan="3">Total do diário</th><th>${checkinNumber(totalPlanned)} m</th><th>${checkinNumber(totalExecuted)} m</th><th>${totalPlanned ? `${checkinNumber(totalExecuted / totalPlanned * 100, 0)}%` : '—'}</th><th colspan="${checkinCanDeletePlanning() ? 5 : 4}"></th></tr></tfoot>
     </table></div>
     <footer class="checkin-report-actions">
@@ -435,13 +522,25 @@ function checkinActualCrewLabel(discipline) {
   return 'Efetivo real da disciplina';
 }
 
-function checkinRenderActivityRow(report, activity) {
+function checkinRenderActivityRow(report, activity, companies = checkinCompanies()) {
   const planned = checkinParseNumber(activity.plannedMeters);
   const executed = checkinParseNumber(activity.executedMeters);
   const percent = planned > 0 ? `${checkinNumber(executed / planned * 100, 0)}%` : executed ? 'Extra' : '—';
-  return `<tr data-report-id="${esc(report.id)}" data-activity-id="${esc(activity.id)}">
-    <td><strong>${esc(activity.pstItem || '—')}</strong><small>${esc(activity.scheduleId || 'Sem ID de cronograma')}</small></td>
-    <td><strong>${esc(activity.location || '—')}</strong><small>${esc(activity.activity || '')}</small></td>
+  const isClosed = Boolean(activity.checkoutAt);
+  const isRunning = Boolean(activity.checkinAt && !activity.checkoutAt);
+  const rowStateClass = isRunning ? 'is-running' : isClosed ? 'is-closed' : 'is-pending';
+  const actDiscipline = checkinGetActivityDiscipline(report, activity);
+  const taskContractor = activity.contractor || report.contractor || '';
+
+  const statusPill = isRunning
+    ? `<span class="checkin-status-pill running"><span class="pulse-dot"></span> Em andamento (${checkinFormatTime(activity.checkinAt)})</span>`
+    : isClosed
+      ? `<span class="checkin-status-pill closed">✓ Finalizada (${checkinFormatTime(activity.checkinAt)} → ${checkinFormatTime(activity.checkoutAt)})</span>`
+      : `<span class="checkin-status-pill pending">Não iniciada</span>`;
+
+  return `<tr class="checkin-activity-row ${rowStateClass}" data-report-id="${esc(report.id)}" data-activity-id="${esc(activity.id)}">
+    <td>${statusPill}<strong>${esc(activity.pstItem || '—')}</strong><small>${esc(activity.scheduleId || 'Sem ID de cronograma')}</small></td>
+    <td><strong>${esc(activity.location || '—')}</strong><small>${esc(activity.activity || '')}</small>${actDiscipline ? `<span class="checkin-discipline-tag">${esc(actDiscipline)}</span>` : ''}</td>
     <td>${esc(activity.unit || 'm')}</td>
     <td>${checkinNumber(planned)} ${esc(activity.unit || 'm')}</td>
     <td><input class="checkin-number-input" type="number" min="0" step="0.1" data-activity-field="executedMeters" value="${esc(executed)}" oninput="checkinUpdatePercent(this)"></td>
@@ -449,7 +548,27 @@ function checkinRenderActivityRow(report, activity) {
     <td><select data-activity-field="status" onchange="checkinToggleExtraReason(this)">${CHECKIN_STATUS.map(status => `<option ${activity.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select></td>
     <td><select data-activity-field="problemCode" onchange="checkinToggleOther(this)"><option value="">—</option>${CHECKIN_PROBLEMS.map(([code, label]) => `<option value="${code}" ${activity.problemCode === code ? 'selected' : ''}>${code} - ${label}</option>`).join('')}</select><input class="checkin-problem-other" data-activity-field="problemOther" placeholder="Descreva outro motivo" value="${esc(activity.problemOther || '')}" style="${activity.problemCode === 'OUTRO' ? '' : 'display:none'}"></td>
     <td><textarea class="checkin-note-input" data-activity-field="notes" rows="2" oninput="checkinResizeNote(this)" placeholder="${activity.status === CHECKIN_STATUS[3] ? 'Motivo da atividade extra' : 'Observacao'}" ${activity.status === CHECKIN_STATUS[3] ? 'required' : ''} maxlength="500">${esc(activity.notes || '')}</textarea></td>
-    <td class="checkin-task-actions"><small>${esc(checkinActualCrewLabel(activity.discipline || report.discipline))}</small><input type="number" min="0" step="1" data-activity-field="actualCrew" value="${activity.actualCrew ?? ''}" placeholder="Pessoas"><small>Entrada: ${checkinFormatTime(activity.checkinAt)}</small><small>Saida: ${checkinFormatTime(activity.checkoutAt)}</small><button class="button button-green compact" onclick="checkinRegister('${esc(report.id)}','checkin','${esc(activity.id)}')">${activity.checkinAt ? 'Atualizar entrada' : 'Registrar entrada'}</button><button class="button button-outline compact" ${activity.checkinAt ? '' : 'disabled'} onclick="checkinRegister('${esc(report.id)}','checkout','${esc(activity.id)}')">${activity.checkoutAt ? 'Atualizar saida' : 'Registrar saida'}</button></td>
+    <td class="checkin-task-actions">
+      <label class="checkin-task-field-label"><span>Empresa</span><select data-activity-field="contractor" onchange="checkinUpdateCardTotals(this)">${checkinSelectOptions(companies, taskContractor, 'Selecione a empresa')}</select></label>
+      <label class="checkin-task-field-label"><span>${esc(checkinActualCrewLabel(actDiscipline || report.discipline))}</span><input type="number" min="0" step="1" data-activity-field="actualCrew" value="${activity.actualCrew ?? ''}" placeholder="Pessoas" style="${isRunning ? 'border-color:#16a34a;' : ''}" oninput="checkinUpdateCardTotals(this)"></label>
+      <div class="checkin-task-equip-grid">
+        <label class="checkin-task-field-label"><span>Qtd PTA</span><input type="number" min="0" step="1" data-activity-field="ptaCount" value="${activity.ptaCount ?? ''}" placeholder="0" oninput="checkinUpdateCardTotals(this)"></label>
+        <label class="checkin-task-field-label"><span>Empilhadeira</span><input type="number" min="0" step="1" data-activity-field="forkliftCount" value="${activity.forkliftCount ?? ''}" placeholder="0" oninput="checkinUpdateCardTotals(this)"></label>
+      </div>
+      ${isRunning ? `
+        <div class="checkin-time-box running"><strong>● Entrada: ${checkinFormatTime(activity.checkinAt)}</strong><small>Check-in ativo</small></div>
+        <button class="button button-green compact" onclick="checkinRegister('${esc(report.id)}','checkout','${esc(activity.id)}')">Registrar saída</button>
+        <button class="button button-outline compact" onclick="checkinRegister('${esc(report.id)}','checkin','${esc(activity.id)}')">Alterar entrada</button>
+      ` : isClosed ? `
+        <div class="checkin-time-box closed"><strong>✓ Finalizada</strong><small>${checkinFormatTime(activity.checkinAt)} às ${checkinFormatTime(activity.checkoutAt)}</small></div>
+        <button class="button button-outline compact" onclick="checkinRegister('${esc(report.id)}','checkout','${esc(activity.id)}')">Alterar saída</button>
+        <button class="button button-outline compact" onclick="checkinRegister('${esc(report.id)}','checkin','${esc(activity.id)}')">Alterar entrada</button>
+      ` : `
+        <small>Sem registro de horário</small>
+        <button class="button button-green compact" onclick="checkinRegister('${esc(report.id)}','checkin','${esc(activity.id)}')">Registrar entrada</button>
+        <button class="button button-outline compact" disabled>Registrar saída</button>
+      `}
+    </td>
     ${checkinCanDeletePlanning() ? `<td><button class="button button-outline compact" onclick="checkinDeleteActivity('${esc(report.id)}','${esc(activity.id)}')">Excluir</button></td>` : ''}
   </tr>`;
 }
@@ -501,11 +620,19 @@ function checkinCaptureReport(reportId) {
     row.querySelectorAll('[data-activity-field]').forEach(input => {
       const field = input.dataset.activityField;
       activity[field] = field === 'executedMeters' ? checkinParseNumber(input.value)
-        : field === 'actualCrew' ? (input.value === '' ? null : checkinParseNumber(input.value))
-          : input.value;
+        : (field === 'actualCrew' || field === 'ptaCount' || field === 'forkliftCount') ? (input.value === '' ? null : checkinParseNumber(input.value))
+          : typeof input.value === 'string' ? input.value.trim() : input.value;
     });
+    if (activity.contractor && !next.contractor) {
+      next.contractor = activity.contractor;
+    }
   });
   next.actualCrew = checkinActualCrewTotal(next);
+  next.actualPtaCount = checkinActualPtaTotal(next);
+  next.forkliftCount = checkinActualForkliftTotal(next);
+  const taskCompanies = checkinUniqueOptions((next.activities || []).map(a => a.contractor).filter(Boolean));
+  if (taskCompanies.length === 1) next.contractor = taskCompanies[0];
+  else if (taskCompanies.length > 1) next.contractor = taskCompanies.join(', ');
   return next;
 }
 
@@ -523,6 +650,14 @@ async function checkinRegister(reportId, action, activityId) {
   if (!activity) return toast('Selecione uma tarefa para registrar o horario.', true);
 
   if (action === 'checkin') {
+    const taskContractor = activity.contractor || report.contractor;
+    const availableCompanies = checkinCompanies();
+    if (!taskContractor && availableCompanies.length) {
+      const selectEl = document.querySelector(`[data-activity-id="${CSS.escape(activityId)}"] select[data-activity-field="contractor"]`)
+        || document.querySelector(`[data-report-card="${CSS.escape(reportId)}"] select[data-header-field="contractor"]`);
+      if (selectEl) selectEl.focus();
+      return toast('Selecione a empresa / empreiteira da tarefa antes de fazer o check-in.', true);
+    }
     if (activity.actualCrew === null || activity.actualCrew === undefined || activity.actualCrew === '') return toast('Informe o efetivo real desta tarefa antes do check-in.', true);
     if (Number(activity.actualCrew) < 1) return toast('Informe ao menos uma pessoa nesta tarefa antes do check-in.', true);
     report.actualCrew = checkinActualCrewTotal(report);
@@ -595,7 +730,7 @@ function checkinBuildWhatsApp(report, action) {
     `Turno: ${report.shift || '—'}`,
     `Empreiteira: ${report.contractor || '—'}`,
     `Eng. responsável HC: ${report.hcEngineer || report.engineer}`,
-    `Equipamentos: ${Number(report.actualPtaCount || 0)} PTA · ${Number(report.forkliftCount || 0)} empilhadeira(s)`,
+    `Equipamentos: ${checkinActualPtaTotal(report)} PTA · ${checkinActualForkliftTotal(report)} empilhadeira(s)`,
     '',
     `Efetivo real informado nas tarefas: ${reportActivities.reduce((sum, activity) => sum + (Number(activity.actualCrew) || 0), 0)} pessoas`,
     '*Atividades do dia*'
@@ -603,8 +738,13 @@ function checkinBuildWhatsApp(report, action) {
   reportActivities.forEach((activity, index) => {
     const planned = checkinNumber(activity.plannedMeters);
     const executed = checkinNumber(activity.executedMeters);
+    const actDiscipline = checkinGetActivityDiscipline(report, activity);
     lines.push(`${index + 1}. ${[activity.pstItem, activity.scheduleId, activity.activity].filter(Boolean).join(' · ')}`);
-    lines.push(`   Efetivo real: ${Number(activity.actualCrew || 0)} pessoas - ${checkinActualCrewLabel(activity.discipline || report.discipline)}`);
+    lines.push(`   Efetivo real: ${Number(activity.actualCrew || 0)} pessoas - ${checkinActualCrewLabel(actDiscipline || activity.discipline || report.discipline)}`);
+    if (activity.contractor && activity.contractor !== report.contractor) lines.push(`   Empresa: ${activity.contractor}`);
+    if (Number(activity.ptaCount) || Number(activity.forkliftCount)) {
+      lines.push(`   Equipamentos: ${Number(activity.ptaCount || 0)} PTA · ${Number(activity.forkliftCount || 0)} empilhadeira(s)`);
+    }
     lines.push(`   ${activity.location || 'Local não informado'} · Previsto ${planned} ${activity.unit || 'm'}${isCheckout ? ` · Executado ${executed} ${activity.unit || 'm'} · ${activity.status || 'Não iniciado'}` : ''}`);
     lines.push(`   Entrada: ${checkinFormatTime(activity.checkinAt)}${isCheckout ? ` · Saida: ${checkinFormatTime(activity.checkoutAt)}` : ''}`);
     if (!isCheckout && activity.status === CHECKIN_STATUS[3]) lines.push('   Tipo: Atividade extra (não programada)');
@@ -666,32 +806,45 @@ function checkinSetTab(tab) {
 function checkinSetDay(value) {
   if (!value) return;
   checkinSelectedDate = value;
+  checkinDisciplineFilter = '';
   checkinEngineerFilter = '';
   checkinDhFilter = '';
+  checkinCompanyFilter = '';
   renderCheckIn();
 }
 
 function checkinSetDailyFilter(key, value) {
+  if (key === 'discipline') checkinDisciplineFilter = value;
   if (key === 'engineer') checkinEngineerFilter = value;
   if (key === 'dh') checkinDhFilter = value;
+  if (key === 'company') checkinCompanyFilter = value;
   renderCheckIn();
 }
 
-function checkinRenderPlanning(engineers, dataHalls) {
+function checkinRenderPlanning(engineers, dataHalls, disciplines = checkinAllDisciplines(), companies = checkinCompanies()) {
   const reports = checkinReports.filter(report => report.workDate >= checkinPlanStart && report.workDate <= checkinPlanEnd
-    && (!checkinPlanEngineerFilter || report.engineer === checkinPlanEngineerFilter));
-  const planned = reports.reduce((sum, report) => sum + report.activities.reduce((total, activity) => total + checkinParseNumber(activity.plannedMeters), 0), 0);
-  const rows = reports.flatMap(report => report.activities.map(activity => ({ report, activity })))
-    .sort((a, b) => a.report.workDate.localeCompare(b.report.workDate) || a.report.dh.localeCompare(b.report.dh) || a.report.engineer.localeCompare(b.report.engineer));
+    && (!checkinPlanEngineerFilter || report.engineer === checkinPlanEngineerFilter)
+    && (!checkinPlanCompanyFilter || (report.contractor === checkinPlanCompanyFilter || (report.activities || []).some(a => a.contractor === checkinPlanCompanyFilter))));
+
+  const rows = reports.flatMap(report =>
+    (report.activities || [])
+      .filter(activity => !checkinPlanDisciplineFilter || checkinGetActivityDiscipline(report, activity) === checkinPlanDisciplineFilter)
+      .filter(activity => !checkinPlanCompanyFilter || (activity.contractor ? activity.contractor === checkinPlanCompanyFilter : report.contractor === checkinPlanCompanyFilter))
+      .map(activity => ({ report, activity }))
+  ).sort((a, b) => a.report.workDate.localeCompare(b.report.workDate) || a.report.dh.localeCompare(b.report.dh) || a.report.engineer.localeCompare(b.report.engineer));
+  const planned = rows.reduce((sum, item) => sum + checkinParseNumber(item.activity.plannedMeters), 0);
+
   return `<section class="checkin-filter-panel checkin-plan-filter">
     <label><span>De</span><input type="date" value="${checkinPlanStart}" onchange="checkinSetPlanRange('start',this.value)"></label>
     <label><span>Até</span><input type="date" value="${checkinPlanEnd}" onchange="checkinSetPlanRange('end',this.value)"></label>
+    <label><span>Disciplina</span><select onchange="checkinSetPlanDisciplineFilter(this.value)">${checkinSelectOptions(disciplines, checkinPlanDisciplineFilter, 'Todas')}</select></label>
+    <label><span>Empresa</span><select onchange="checkinSetPlanCompanyFilter(this.value)">${checkinSelectOptions(companies, checkinPlanCompanyFilter, 'Todas')}</select></label>
     <label><span>Engenheiro</span><select onchange="checkinSetPlanEngineerFilter(this.value)">${checkinSelectOptions(engineers, checkinPlanEngineerFilter, 'Todos')}</select></label>
     ${checkinCanManagePlanning() ? `<button class="button button-outline" onclick="checkinOpenImport()">${icon('upload')} Importar planilha semanal</button>` : ''}
     <button class="button button-outline" onclick="checkinDownloadTemplate()">${icon('download')} Baixar modelo XLSX</button>
   </section>
   <section class="checkin-plan-summary"><strong>${rows.length}</strong> atividade(s) · <strong>${checkinNumber(planned)} m</strong> planejados · ${reports.length} diário(s) por engenheiro e DH</section>
-  ${rows.length ? `<article class="checkin-report-card"><div class="checkin-activity-table-wrap"><table class="checkin-activity-table checkin-plan-table"><thead><tr><th>Data / DH</th><th>Engenheiro / empreiteira</th><th>Disciplina / etapa</th><th>Item / cronograma</th><th>Local / atividade</th><th>Planejado</th></tr></thead><tbody>${rows.map(({ report, activity }) => `<tr><td>${checkinFormatDate(report.workDate)}<small>${esc(report.dh)}</small></td><td>${esc(report.engineer)}<small>${esc(report.contractor || '—')}</small></td><td>${esc(report.discipline || '—')}<small>${esc(report.stage || '—')}</small></td><td><strong>${esc(activity.pstItem || '—')}</strong><small>${esc(activity.scheduleId || activity.unit || '')}</small></td><td><strong>${esc(activity.location || '—')}</strong><small>${esc(activity.activity || '')}</small></td><td>${checkinNumber(activity.plannedMeters)} ${esc(activity.unit || 'm')}</td></tr>`).join('')}</tbody></table></div></article>` : `<section class="checkin-empty"><h2>Nenhum planejamento neste período</h2><p>Importe uma planilha semanal para abrir a agenda de atividades.</p></section>`}`;
+  ${rows.length ? `<article class="checkin-report-card"><div class="checkin-activity-table-wrap"><table class="checkin-activity-table checkin-plan-table"><thead><tr><th>Data / DH</th><th>Engenheiro / empreiteira</th><th>Disciplina / etapa</th><th>Item / cronograma</th><th>Local / atividade</th><th>Planejado</th></tr></thead><tbody>${rows.map(({ report, activity }) => `<tr><td>${checkinFormatDate(report.workDate)}<small>${esc(report.dh)}</small></td><td>${esc(report.engineer)}<small>${esc(activity.contractor || report.contractor || '—')}</small></td><td><strong>${esc(checkinGetActivityDiscipline(report, activity) || report.discipline || '—')}</strong><small>${esc(activity.stage || report.stage || '—')}</small></td><td><strong>${esc(activity.pstItem || '—')}</strong><small>${esc(activity.scheduleId || activity.unit || '')}</small></td><td><strong>${esc(activity.location || '—')}</strong><small>${esc(activity.activity || '')}</small></td><td>${checkinNumber(activity.plannedMeters)} ${esc(activity.unit || 'm')}</td></tr>`).join('')}</tbody></table></div></article>` : `<section class="checkin-empty"><h2>Nenhum planejamento neste período</h2><p>Importe uma planilha semanal para abrir a agenda de atividades.</p></section>`}`;
 }
 
 function checkinSetPlanRange(which, value) {
@@ -703,6 +856,28 @@ function checkinSetPlanRange(which, value) {
 function checkinSetPlanEngineerFilter(value) {
   checkinPlanEngineerFilter = value;
   renderCheckIn();
+}
+
+function checkinSetPlanCompanyFilter(value) {
+  checkinPlanCompanyFilter = value;
+  renderCheckIn();
+}
+
+function checkinSetPlanDisciplineFilter(value) {
+  checkinPlanDisciplineFilter = value;
+  renderCheckIn();
+}
+
+async function checkinUpdateContractor(reportId, company) {
+  const report = checkinGetReport(reportId);
+  if (!report) return;
+  report.contractor = company;
+  const metaEl = document.querySelector(`[data-meta-contractor="${CSS.escape(reportId)}"]`);
+  if (metaEl) metaEl.textContent = company || '—';
+  await checkinPersistReports(report, { silent: true });
+  if (checkinCompanyFilter && checkinCompanyFilter !== company) {
+    renderCheckIn();
+  }
 }
 
 async function checkinLoadTestTasks({ silent = false, testDate = checkinToday(), engineer = CHECKIN_TEST_ENGINEER } = {}) {
@@ -883,12 +1058,21 @@ function checkinReadDhWorkbook(workbook) {
     rows.forEach((row, rowIndex) => {
       const metadata = String(row[12] || '').split('|');
       const workDate = checkinParseDate(metadata[0]);
-      const rowLabel = checkinNormalizeHeader(row[0]);
-      const sectionDiscipline = CHECKIN_DISCIPLINES.find(value =>
-        rowLabel.startsWith(checkinNormalizeHeader(value))
-      ) || '';
-      if (sectionDiscipline && /atividade|programad/.test(rowLabel)) activeDiscipline = sectionDiscipline;
-      const discipline = String(activeDiscipline || metadata[1] || '').trim();
+      
+      // Detecção de linhas de seção como linha 161 ("ISOLAMENTO — 3 atividade(s) programada(s)") ou 169 ("DUTOS — 1 atividade(s) programada(s)")
+      const rowJoined = checkinNormalizeHeader(row.filter(cell => cell !== undefined && cell !== null).join(' '));
+      if (/interferencia/.test(rowJoined)) {
+        activeDiscipline = '';
+      } else {
+        const hasSectionPattern = /atividade.*programad|programad|disciplina|frente/.test(rowJoined) || /^(?:isolamento|dutos?|hidraulica|logistica)\b/.test(rowJoined);
+        if (hasSectionPattern) {
+          if (/isolament/.test(rowJoined)) activeDiscipline = 'Isolamento';
+          else if (/hidraul|hidrante|tubul/.test(rowJoined)) activeDiscipline = 'Hidráulica';
+          else if (/duto/.test(rowJoined)) activeDiscipline = 'Duto';
+          else if (/logist/.test(rowJoined)) activeDiscipline = 'Logística';
+        }
+      }
+
       const pstItem = String(row[0] || '').trim();
       const scheduleId = String(row[1] || '').trim();
       const location = String(row[2] || '').trim();
@@ -896,6 +1080,11 @@ function checkinReadDhWorkbook(workbook) {
       const unit = String(row[4] || '').trim() || 'm';
       const plannedValue = row[5];
       if (!workDate && !activityText) return;
+
+      const fallbackDiscipline = activityText ? checkinGetActivityDiscipline({ discipline: activeDiscipline }, {
+        pstItem, scheduleId, location, activity: activityText
+      }) : '';
+      const discipline = String(activeDiscipline || fallbackDiscipline || metadata[1] || '').trim();
       if (!activityText) {
         if (!workDate) return;
         const blankReportId = checkinReportId(workDate, dh, engineer);
@@ -1394,6 +1583,12 @@ window.checkinDeleteActivity = checkinDeleteActivity;
 window.checkinDeleteReport = checkinDeleteReport;
 window.checkinSetPlanRange = checkinSetPlanRange;
 window.checkinSetPlanEngineerFilter = checkinSetPlanEngineerFilter;
+window.checkinSetPlanCompanyFilter = checkinSetPlanCompanyFilter;
+window.checkinSetPlanDisciplineFilter = checkinSetPlanDisciplineFilter;
+window.checkinGetActivityDiscipline = checkinGetActivityDiscipline;
+window.checkinUpdateContractor = checkinUpdateContractor;
+window.checkinUpdateCardTotals = checkinUpdateCardTotals;
+window.checkinReportContractorsDisplay = checkinReportContractorsDisplay;
 window.checkinLoadTestTasks = checkinLoadTestTasks;
 window.checkinSetCurveRange = checkinSetCurveRange;
 window.checkinSetCurveFilter = checkinSetCurveFilter;
