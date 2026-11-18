@@ -13604,6 +13604,7 @@ body.sidebar-collapsed .mobile-menu {
 .checkin-task-inline-meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -13618,6 +13619,82 @@ body.sidebar-collapsed .mobile-menu {
   color: #334155;
   font-size: 9.5px;
   font-weight: 700;
+}
+
+.checkin-activity-table td .checkin-shift-select {
+  width: auto;
+  min-width: 98px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.checkin-activity-table td .checkin-shift-select.is-day {
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.checkin-activity-table td .checkin-shift-select.is-night {
+  border: 1px solid #93c5fd;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.checkin-activity-row.is-pending.is-night-shift .checkin-status-pill.pending {
+  background: #eff6ff;
+  color: #1e3a8a;
+  border: 1px solid #bfdbfe;
+}
+
+.checkin-extra-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px 4px;
+  padding: 2px 7px;
+  border: 1px solid #ddd6fe;
+  border-radius: 99px;
+  background: #f5f3ff;
+  color: #6d28d9;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.checkin-activity-table td .checkin-extra-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 9.5px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.checkin-activity-table td .checkin-extra-toggle input {
+  width: 13px;
+  min-width: 13px;
+  height: 13px;
+  margin: 0;
+  padding: 0;
+}
+
+.checkin-activity-table td .checkin-extra-toggle.is-extra {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.checkin-activity-table tr.is-extra-task>td:nth-child(2) {
+  box-shadow: inset 3px 0 0 #a78bfa;
 }
 
 .checkin-planned-wrap {
@@ -14135,5 +14212,489 @@ body.sidebar-collapsed .mobile-menu {
 
   .checkin-manual-form .modal-foot {
     margin: 8px -14px -14px;
+  }
+}
+
+/* Future-day attendance lock styles */
+.workforce-control-table th.future-day-col {
+  opacity: 0.55;
+  background: #f8fafc !important;
+  color: #94a3b8 !important;
+}
+
+.workforce-control-table td.future-day-col {
+  background: #fafbfc !important;
+}
+
+.attendance-cell.future-day {
+  opacity: 0.45;
+  cursor: not-allowed !important;
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #cbd5e1 !important;
+  pointer-events: auto;
+}
+
+/* ============================================================
+   Check-in / Check-out PDF Report (Preview & Print)
+   ============================================================ */
+.checkin-pdf-document {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 1020px;
+  padding: 22px 26px;
+  background: #ffffff;
+  color: #0f172a;
+  font-family: Arial, Helvetica, sans-serif;
+  border-radius: 8px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+}
+
+.checkin-pdf-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 2.5px solid #0f172a;
+}
+
+.checkin-pdf-logos {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.checkin-pdf-logos img {
+  height: 42px;
+  max-width: 130px;
+  object-fit: contain;
+}
+
+.checkin-pdf-logo-sep {
+  height: 32px;
+  width: 1.5px;
+  background: #cbd5e1;
+}
+
+.checkin-pdf-title-wrap {
+  text-align: center;
+}
+
+.checkin-pdf-title-wrap small {
+  display: block;
+  color: #15803d;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.checkin-pdf-title-wrap h1 {
+  margin: 4px 0 0;
+  font-size: 15.5px;
+  font-weight: 900;
+  color: #0f172a;
+  letter-spacing: -0.2px;
+}
+
+.checkin-pdf-title-wrap p {
+  margin: 4px 0 0;
+  font-size: 10px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.checkin-pdf-meta {
+  display: grid;
+  gap: 3px;
+  padding-left: 14px;
+  border-left: 1px solid #cbd5e1;
+  text-align: right;
+  font-size: 9.5px;
+  color: #475569;
+}
+
+.checkin-pdf-meta strong {
+  color: #0f172a;
+  font-size: 10.5px;
+}
+
+.checkin-pdf-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-bottom: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.checkin-pdf-kpi {
+  display: grid;
+  gap: 2px;
+  padding: 9px 11px;
+  border-right: 1px solid #e2e8f0;
+  align-content: center;
+}
+
+.checkin-pdf-kpi:last-child {
+  border-right: 0;
+}
+
+.checkin-pdf-kpi b {
+  font-size: 16px;
+  font-weight: 900;
+  color: #0f172a;
+  line-height: 1.15;
+}
+
+.checkin-pdf-kpi small {
+  font-size: 9px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.checkin-pdf-kpi.is-green {
+  background: #f0fdf4;
+}
+
+.checkin-pdf-kpi.is-green b,
+.checkin-pdf-kpi.is-green small {
+  color: #15803d;
+}
+
+.checkin-pdf-kpi.is-red {
+  background: #fef2f2;
+}
+
+.checkin-pdf-kpi.is-red b,
+.checkin-pdf-kpi.is-red small {
+  color: #b91c1c;
+}
+
+.checkin-pdf-kpi.is-blue b {
+  color: #1e40af;
+}
+
+.checkin-pdf-extra-tag {
+  font-size: 10px;
+  color: #6d28d9;
+  font-weight: 800;
+  text-transform: none;
+}
+
+.checkin-pdf-section {
+  margin-bottom: 14px;
+}
+
+.checkin-pdf-chart-section {
+  padding: 11px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.checkin-pdf-chart-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.checkin-pdf-chart-legend {
+  display: flex;
+  gap: 14px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.checkin-pdf-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+}
+
+.checkin-pdf-h2 {
+  margin: 0 0 7px;
+  padding-left: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  border-left: 3px solid #0f172a;
+}
+
+.checkin-pdf-chart-head .checkin-pdf-h2 {
+  margin-bottom: 0;
+}
+
+.checkin-pdf-h2.is-green {
+  border-left-color: #15803d;
+}
+
+.checkin-pdf-h2.is-blue {
+  border-left-color: #2777c7;
+}
+
+.checkin-pdf-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 9.5px;
+}
+
+.checkin-pdf-table thead tr {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.checkin-pdf-table th {
+  box-sizing: border-box;
+  padding: 6px 5px;
+  border: 1px solid #475569;
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-transform: uppercase;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.checkin-pdf-table td {
+  box-sizing: border-box;
+  padding: 5px 5px;
+  border: 1px solid #cbd5e1;
+  font-size: 9.2px;
+  line-height: 1.28;
+  vertical-align: top;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.checkin-pdf-table .col-left {
+  text-align: left;
+}
+
+.checkin-pdf-table .col-center {
+  text-align: center;
+}
+
+.checkin-pdf-table tbody tr.is-deviation {
+  background: #fff8f8;
+}
+
+.checkin-pdf-badge-extra {
+  display: inline-block;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #f3e8ff;
+  color: #6d28d9;
+  font-size: 7.5px;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+.checkin-pdf-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  margin-top: 26px;
+  padding-top: 14px;
+  border-top: 1px solid #cbd5e1;
+  text-align: center;
+}
+
+.checkin-pdf-sig-line {
+  height: 26px;
+  margin-bottom: 6px;
+  border-bottom: 1.5px solid #0f172a;
+}
+
+.checkin-pdf-signatures strong {
+  display: block;
+  font-size: 11px;
+  color: #0f172a;
+}
+
+.checkin-pdf-signatures span {
+  font-size: 9.5px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.checkin-pdf-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 7px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 8.5px;
+  color: #64748b;
+}
+
+@media print {
+  .checkin-print-area,
+  .checkin-print-area * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .checkin-print-area {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  .checkin-print-area .modal {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .checkin-print-area .modal-body,
+  .checkin-print-area .report-preview {
+    height: auto !important;
+    max-height: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  .checkin-print-area .checkin-pdf-document {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .checkin-print-area .checkin-pdf-head {
+    gap: 12px !important;
+    padding-bottom: 8px !important;
+    margin-bottom: 10px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .checkin-print-area .checkin-pdf-logos img {
+    height: 34px !important;
+    max-width: 110px !important;
+  }
+
+  .checkin-print-area .checkin-pdf-title-wrap h1 {
+    font-size: 13pt !important;
+  }
+
+  .checkin-print-area .checkin-pdf-title-wrap p {
+    font-size: 7.8pt !important;
+  }
+
+  .checkin-print-area .checkin-pdf-meta {
+    font-size: 7.5pt !important;
+  }
+
+  .checkin-print-area .checkin-pdf-summary {
+    margin-bottom: 10px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .checkin-print-area .checkin-pdf-kpi {
+    padding: 6px 8px !important;
+  }
+
+  .checkin-print-area .checkin-pdf-kpi b {
+    font-size: 11.5pt !important;
+  }
+
+  .checkin-print-area .checkin-pdf-kpi small {
+    font-size: 6.5pt !important;
+  }
+
+  .checkin-print-area .checkin-pdf-chart-section,
+  .checkin-print-area .checkin-pdf-disc-section,
+  .checkin-print-area .checkin-pdf-signatures {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .checkin-print-area .checkin-pdf-tasks-section {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .checkin-print-area .checkin-pdf-chart-section {
+    padding: 8px 10px !important;
+    margin-bottom: 10px !important;
+  }
+
+  .checkin-print-area .checkin-pdf-svg {
+    width: 100% !important;
+    height: 46mm !important;
+    max-height: 46mm !important;
+  }
+
+  .checkin-print-area .checkin-pdf-h2 {
+    font-size: 9.5pt !important;
+    margin-bottom: 5px !important;
+  }
+
+  .checkin-print-area .checkin-pdf-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+  }
+
+  .checkin-print-area .checkin-pdf-table thead {
+    display: table-header-group !important;
+  }
+
+  .checkin-print-area .checkin-pdf-table tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .checkin-print-area .checkin-pdf-table th {
+    padding: 1.4mm 1.3mm !important;
+    font-size: 6.5pt !important;
+    line-height: 1.18 !important;
+  }
+
+  .checkin-print-area .checkin-pdf-table td {
+    padding: 1.3mm 1.3mm !important;
+    font-size: 7pt !important;
+    line-height: 1.22 !important;
+  }
+
+  .checkin-print-area .checkin-pdf-signatures {
+    margin-top: 16px !important;
+    padding-top: 10px !important;
+  }
+
+  .checkin-print-area .checkin-pdf-footer {
+    margin-top: 10px !important;
+    font-size: 7pt !important;
   }
 }

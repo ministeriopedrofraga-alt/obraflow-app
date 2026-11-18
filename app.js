@@ -1,5 +1,5 @@
-window.addEventListener('error', function(e) { console.error('Global error caught:', e.message, e.filename, e.lineno, e.error); });
-window.addEventListener('unhandledrejection', function(e) { console.warn('Unhandled promise rejection caught:', e.reason); });
+window.addEventListener('error', function (e) { console.error('Global error caught:', e.message, e.filename, e.lineno, e.error); });
+window.addEventListener('unhandledrejection', function (e) { console.warn('Unhandled promise rejection caught:', e.reason); });
 const icons = {
   grid: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
   lift: '<svg viewBox="0 0 24 24"><path d="M4 20h16M7 17h10M9 17v-4l3-2 3 2v4M12 11V7M9 7h6M6 4h12"/></svg>',
@@ -32,67 +32,67 @@ const icons = {
   trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 14H7L6 7m4 4v6m4-6v6"/></svg>',
   file: '<svg viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6zM14 2v5h5M9 13h6m-6 4h6"/></svg>',
   location: '<svg viewBox="0 0 24 24"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>'
-  ,truck: '<svg viewBox="0 0 24 24"><path d="M3 6h11v11H3zM14 10h4l3 4v3h-7zM7 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>'
-  ,clipboard: '<svg viewBox="0 0 24 24"><path d="M9 5H6a2 2 0 0 0-2 2v14h16V7a2 2 0 0 0-2-2h-3M9 3h6v4H9zM8 12h8m-8 4h6"/></svg>'
-  ,radio: '<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="17" rx="2"/><path d="M9 2h6M12 2v3M8 9h8v5H8zM9 18h.01M12 18h.01M15 18h.01"/></svg>'
-  ,eye: '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
-  ,eyeOff: '<svg viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
-  ,lock: '<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
-  ,mail: '<svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>'
-  ,key: '<svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3M18 5l3 3"/></svg>'
-  ,spool: '<svg viewBox="0 0 24 24"><path d="M4 8h11a4 4 0 0 1 4 4v1a4 4 0 0 1-4 4H9"/><path d="M4 5v6m0 4v4M2 5h4m-4 6h4m1 4h4v4H7z"/></svg>'
+  , truck: '<svg viewBox="0 0 24 24"><path d="M3 6h11v11H3zM14 10h4l3 4v3h-7zM7 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>'
+  , clipboard: '<svg viewBox="0 0 24 24"><path d="M9 5H6a2 2 0 0 0-2 2v14h16V7a2 2 0 0 0-2-2h-3M9 3h6v4H9zM8 12h8m-8 4h6"/></svg>'
+  , radio: '<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="17" rx="2"/><path d="M9 2h6M12 2v3M8 9h8v5H8zM9 18h.01M12 18h.01M15 18h.01"/></svg>'
+  , eye: '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+  , eyeOff: '<svg viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+  , lock: '<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+  , mail: '<svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>'
+  , key: '<svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3M18 5l3 3"/></svg>'
+  , spool: '<svg viewBox="0 0 24 24"><path d="M4 8h11a4 4 0 0 1 4 4v1a4 4 0 0 1-4 4H9"/><path d="M4 5v6m0 4v4M2 5h4m-4 6h4m1 4h4v4H7z"/></svg>'
 };
 
 const seedEquipments = [
   // 08M
-  { id:'tpta00674', code:'TPTA00674', afNumber:'948', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023A00135', productCode:'931-000235', invoice:'2623', emissionDate:'2026-09-10', hourmeter:170, battery:'Chumbo', contractor:'', status:'in-use', inspection:'', usage:{ person:'BRUNO DOS SANTOS SILVA', company:'HEATING COOLING', role:'Encanador', phone:'', dataHall:'Data Hall 04', location:'corredor a forca a', activity:'Instalação Hidráulica', expectedAt:'2026-09-16T22:27:00' } },
-  { id:'tpta00845', code:'TPTA00845', afNumber:'626', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701N010208', productCode:'931-000233', invoice:'2533', emissionDate:'2026-08-12', hourmeter:101, battery:'Lítio', contractor:'LA', status:'in-use', inspection:'', usage:{ person:'JOSE VERAS CARVALHO', company:'LA', role:'Eletricista', phone:'', dataHall:'Data Hall 06', location:'corredor a', activity:'Instalação Elétrica', expectedAt:'2026-09-16T22:56:00' } },
-  { id:'tpta02796', code:'TPTA02796', afNumber:'686', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04867', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'AIRTEC', status:'available', inspection:'', usage:null },
-  { id:'tpta02797', code:'TPTA02797', afNumber:'687', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04855', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'SIP', status:'available', inspection:'', usage:null },
-  { id:'tpta02798', code:'TPTA02798', afNumber:'683', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04865', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'SIP', status:'available', inspection:'', usage:null },
-  { id:'tpta02799', code:'TPTA02799', afNumber:'685', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'JPAC125K04874', productCode:'931-000233', invoice:'2572', emissionDate:'2026-08-25', hourmeter:1, battery:'Lítio', contractor:'SIP', status:'available', inspection:'', usage:null },
-  { id:'tpta01333', code:'TPTA01333', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701N010217', productCode:'931-000233', invoice:'2650', emissionDate:'2026-09-15', hourmeter:118.5, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
-  { id:'tpta01604', code:'TPTA01604', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701P010467', productCode:'931-000233', invoice:'2650', emissionDate:'2026-09-15', hourmeter:158, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
-  { id:'tpta01605', code:'TPTA01605', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Li', serial:'0775300701P010468', productCode:'931-000233', invoice:'2650', emissionDate:'2026-09-15', hourmeter:196.5, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
-  { id:'tpta00389', code:'TPTA00389', afNumber:'955', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC022K02449', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:172.8, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
-  { id:'tpta00408', code:'TPTA00408', afNumber:'', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC022K02453', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:215.3, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
-  { id:'tpta00664', code:'TPTA00664', afNumber:'953', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023A00124', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:201, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
-  { id:'tpta00823', code:'TPTA00823', afNumber:'954', name:'Plataforma Tesoura 08m 4x2 Pb', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 08m 4x2 Pb', serial:'JPAC023B00418', productCode:'931-000235', invoice:'2650', emissionDate:'2026-09-15', hourmeter:203, battery:'Chumbo', contractor:'', status:'available', inspection:'', usage:null },
+  { id: 'tpta00674', code: 'TPTA00674', afNumber: '948', name: 'Plataforma Tesoura 08m 4x2 Pb', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Pb', serial: 'JPAC023A00135', productCode: '931-000235', invoice: '2623', emissionDate: '2026-09-10', hourmeter: 170, battery: 'Chumbo', contractor: '', status: 'in-use', inspection: '', usage: { person: 'BRUNO DOS SANTOS SILVA', company: 'HEATING COOLING', role: 'Encanador', phone: '', dataHall: 'Data Hall 04', location: 'corredor a forca a', activity: 'Instalação Hidráulica', expectedAt: '2026-09-16T22:27:00' } },
+  { id: 'tpta00845', code: 'TPTA00845', afNumber: '626', name: 'Plataforma Tesoura 08m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Li', serial: '0775300701N010208', productCode: '931-000233', invoice: '2533', emissionDate: '2026-08-12', hourmeter: 101, battery: 'Lítio', contractor: 'LA', status: 'in-use', inspection: '', usage: { person: 'JOSE VERAS CARVALHO', company: 'LA', role: 'Eletricista', phone: '', dataHall: 'Data Hall 06', location: 'corredor a', activity: 'Instalação Elétrica', expectedAt: '2026-09-16T22:56:00' } },
+  { id: 'tpta02796', code: 'TPTA02796', afNumber: '686', name: 'Plataforma Tesoura 08m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Li', serial: 'JPAC125K04867', productCode: '931-000233', invoice: '2572', emissionDate: '2026-08-25', hourmeter: 1, battery: 'Lítio', contractor: 'AIRTEC', status: 'available', inspection: '', usage: null },
+  { id: 'tpta02797', code: 'TPTA02797', afNumber: '687', name: 'Plataforma Tesoura 08m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Li', serial: 'JPAC125K04855', productCode: '931-000233', invoice: '2572', emissionDate: '2026-08-25', hourmeter: 1, battery: 'Lítio', contractor: 'SIP', status: 'available', inspection: '', usage: null },
+  { id: 'tpta02798', code: 'TPTA02798', afNumber: '683', name: 'Plataforma Tesoura 08m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Li', serial: 'JPAC125K04865', productCode: '931-000233', invoice: '2572', emissionDate: '2026-08-25', hourmeter: 1, battery: 'Lítio', contractor: 'SIP', status: 'available', inspection: '', usage: null },
+  { id: 'tpta02799', code: 'TPTA02799', afNumber: '685', name: 'Plataforma Tesoura 08m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Li', serial: 'JPAC125K04874', productCode: '931-000233', invoice: '2572', emissionDate: '2026-08-25', hourmeter: 1, battery: 'Lítio', contractor: 'SIP', status: 'available', inspection: '', usage: null },
+  { id: 'tpta01333', code: 'TPTA01333', afNumber: '', name: 'Plataforma Tesoura 08m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Li', serial: '0775300701N010217', productCode: '931-000233', invoice: '2650', emissionDate: '2026-09-15', hourmeter: 118.5, battery: 'Lítio', contractor: '', status: 'available', inspection: '', usage: null },
+  { id: 'tpta01604', code: 'TPTA01604', afNumber: '', name: 'Plataforma Tesoura 08m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Li', serial: '0775300701P010467', productCode: '931-000233', invoice: '2650', emissionDate: '2026-09-15', hourmeter: 158, battery: 'Lítio', contractor: '', status: 'available', inspection: '', usage: null },
+  { id: 'tpta01605', code: 'TPTA01605', afNumber: '', name: 'Plataforma Tesoura 08m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Li', serial: '0775300701P010468', productCode: '931-000233', invoice: '2650', emissionDate: '2026-09-15', hourmeter: 196.5, battery: 'Lítio', contractor: '', status: 'available', inspection: '', usage: null },
+  { id: 'tpta00389', code: 'TPTA00389', afNumber: '955', name: 'Plataforma Tesoura 08m 4x2 Pb', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Pb', serial: 'JPAC022K02449', productCode: '931-000235', invoice: '2650', emissionDate: '2026-09-15', hourmeter: 172.8, battery: 'Chumbo', contractor: '', status: 'available', inspection: '', usage: null },
+  { id: 'tpta00408', code: 'TPTA00408', afNumber: '', name: 'Plataforma Tesoura 08m 4x2 Pb', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Pb', serial: 'JPAC022K02453', productCode: '931-000235', invoice: '2650', emissionDate: '2026-09-15', hourmeter: 215.3, battery: 'Chumbo', contractor: '', status: 'available', inspection: '', usage: null },
+  { id: 'tpta00664', code: 'TPTA00664', afNumber: '953', name: 'Plataforma Tesoura 08m 4x2 Pb', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Pb', serial: 'JPAC023A00124', productCode: '931-000235', invoice: '2650', emissionDate: '2026-09-15', hourmeter: 201, battery: 'Chumbo', contractor: '', status: 'available', inspection: '', usage: null },
+  { id: 'tpta00823', code: 'TPTA00823', afNumber: '954', name: 'Plataforma Tesoura 08m 4x2 Pb', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 08m 4x2 Pb', serial: 'JPAC023B00418', productCode: '931-000235', invoice: '2650', emissionDate: '2026-09-15', hourmeter: 203, battery: 'Chumbo', contractor: '', status: 'available', inspection: '', usage: null },
   // 10M
-  { id:'tpta02019', code:'TPTA02019', afNumber:'947', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501P010468', productCode:'931-000236', invoice:'2623', emissionDate:'2026-09-10', hourmeter:156.7, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
-  { id:'tpta00254', code:'TPTA00254', afNumber:'615', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'JPAC022K02485', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:206.7, battery:'Lítio', contractor:'A.LA', status:'available', inspection:'', usage:null },
-  { id:'tpta01868', code:'TPTA01868', afNumber:'618', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'JPAC023K05802', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:82.6, battery:'Lítio', contractor:'AIRTEC', status:'available', inspection:'', usage:null },
-  { id:'tpta02162', code:'TPTA02162', afNumber:'617', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501S010034', productCode:'931-000236', invoice:'2533', emissionDate:'2026-08-12', hourmeter:111.5, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
-  { id:'tpta00984', code:'TPTA00984', afNumber:'659', name:'Plataforma Tesoura 10m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 10m 4x2 Li', serial:'0775400501N010148', productCode:'931-000236', invoice:'2571', emissionDate:'2026-08-25', hourmeter:131, battery:'Lítio', contractor:'A.LA', status:'available', inspection:'', usage:null },
+  { id: 'tpta02019', code: 'TPTA02019', afNumber: '947', name: 'Plataforma Tesoura 10m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 10m 4x2 Li', serial: '0775400501P010468', productCode: '931-000236', invoice: '2623', emissionDate: '2026-09-10', hourmeter: 156.7, battery: 'Lítio', contractor: '', status: 'available', inspection: '', usage: null },
+  { id: 'tpta00254', code: 'TPTA00254', afNumber: '615', name: 'Plataforma Tesoura 10m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 10m 4x2 Li', serial: 'JPAC022K02485', productCode: '931-000236', invoice: '2533', emissionDate: '2026-08-12', hourmeter: 206.7, battery: 'Lítio', contractor: 'A.LA', status: 'available', inspection: '', usage: null },
+  { id: 'tpta01868', code: 'TPTA01868', afNumber: '618', name: 'Plataforma Tesoura 10m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 10m 4x2 Li', serial: 'JPAC023K05802', productCode: '931-000236', invoice: '2533', emissionDate: '2026-08-12', hourmeter: 82.6, battery: 'Lítio', contractor: 'AIRTEC', status: 'available', inspection: '', usage: null },
+  { id: 'tpta02162', code: 'TPTA02162', afNumber: '617', name: 'Plataforma Tesoura 10m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 10m 4x2 Li', serial: '0775400501S010034', productCode: '931-000236', invoice: '2533', emissionDate: '2026-08-12', hourmeter: 111.5, battery: 'Lítio', contractor: '', status: 'available', inspection: '', usage: null },
+  { id: 'tpta00984', code: 'TPTA00984', afNumber: '659', name: 'Plataforma Tesoura 10m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 10m 4x2 Li', serial: '0775400501N010148', productCode: '931-000236', invoice: '2571', emissionDate: '2026-08-25', hourmeter: 131, battery: 'Lítio', contractor: 'A.LA', status: 'available', inspection: '', usage: null },
   // 12M
-  { id:'tpta01095', code:'TPTA01095', afNumber:'949', name:'Plataforma Tesoura 12m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 12m 4x2 Li', serial:'0775500500N010105', productCode:'931-000238', invoice:'2623', emissionDate:'2026-09-10', hourmeter:112.4, battery:'Lítio', contractor:'', status:'available', inspection:'', usage:null },
+  { id: 'tpta01095', code: 'TPTA01095', afNumber: '949', name: 'Plataforma Tesoura 12m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 12m 4x2 Li', serial: '0775500500N010105', productCode: '931-000238', invoice: '2623', emissionDate: '2026-09-10', hourmeter: 112.4, battery: 'Lítio', contractor: '', status: 'available', inspection: '', usage: null },
   // 14M
-  { id:'tpta01122', code:'TPTA01122', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', serial:'', productCode:'', invoice:'2669', emissionDate:'2026-09-19', hourmeter:0, battery:'Lítio', contractor:'SIP', status:'maintenance', inspection:'', usage:null },
-  { id:'tpta01667', code:'TPTA01667', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', serial:'', productCode:'', invoice:'2669', emissionDate:'2026-09-19', hourmeter:0, battery:'Lítio', contractor:'SIP', status:'maintenance', inspection:'', usage:null },
-  { id:'tpta02233', code:'TPTA02233', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', serial:'', productCode:'', invoice:'2669', emissionDate:'2026-09-19', hourmeter:0, battery:'Lítio', contractor:'', status:'maintenance', inspection:'', usage:null },
-  { id:'tpta02236', code:'TPTA02236', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', serial:'', productCode:'', invoice:'2669', emissionDate:'2026-09-19', hourmeter:0, battery:'Lítio', contractor:'', status:'maintenance', inspection:'', usage:null },
-  { id:'tpta02240', code:'TPTA02240', afNumber:'968', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', serial:'', productCode:'', invoice:'2669', emissionDate:'2026-09-19', hourmeter:0, battery:'Lítio', contractor:'A.L.A', status:'in-use', inspection:'', usage:{ responsible:'A.L.A', company:'A.L.A', phone:'', dataHall:'—', location:'—', activity:'Em uso via planilha', expectedAt:'', startedAt:'2026-09-25T16:36:06.000Z' } },
-  { id:'tpta02664', code:'TPTA02664', afNumber:'', name:'Plataforma Tesoura 14m 4x2 Li', type:'PTA Tesoura', brand:'Tecnogera', model:'Tesoura 14m 4x2 Li', serial:'', productCode:'', invoice:'2669', emissionDate:'2026-09-19', hourmeter:0, battery:'Lítio', contractor:'', status:'maintenance', inspection:'', usage:null }
+  { id: 'tpta01122', code: 'TPTA01122', afNumber: '', name: 'Plataforma Tesoura 14m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 14m 4x2 Li', serial: '', productCode: '', invoice: '2669', emissionDate: '2026-09-19', hourmeter: 0, battery: 'Lítio', contractor: 'SIP', status: 'maintenance', inspection: '', usage: null },
+  { id: 'tpta01667', code: 'TPTA01667', afNumber: '', name: 'Plataforma Tesoura 14m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 14m 4x2 Li', serial: '', productCode: '', invoice: '2669', emissionDate: '2026-09-19', hourmeter: 0, battery: 'Lítio', contractor: 'SIP', status: 'maintenance', inspection: '', usage: null },
+  { id: 'tpta02233', code: 'TPTA02233', afNumber: '', name: 'Plataforma Tesoura 14m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 14m 4x2 Li', serial: '', productCode: '', invoice: '2669', emissionDate: '2026-09-19', hourmeter: 0, battery: 'Lítio', contractor: '', status: 'maintenance', inspection: '', usage: null },
+  { id: 'tpta02236', code: 'TPTA02236', afNumber: '', name: 'Plataforma Tesoura 14m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 14m 4x2 Li', serial: '', productCode: '', invoice: '2669', emissionDate: '2026-09-19', hourmeter: 0, battery: 'Lítio', contractor: '', status: 'maintenance', inspection: '', usage: null },
+  { id: 'tpta02240', code: 'TPTA02240', afNumber: '968', name: 'Plataforma Tesoura 14m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 14m 4x2 Li', serial: '', productCode: '', invoice: '2669', emissionDate: '2026-09-19', hourmeter: 0, battery: 'Lítio', contractor: 'A.L.A', status: 'in-use', inspection: '', usage: { responsible: 'A.L.A', company: 'A.L.A', phone: '', dataHall: '—', location: '—', activity: 'Em uso via planilha', expectedAt: '', startedAt: '2026-09-25T16:36:06.000Z' } },
+  { id: 'tpta02664', code: 'TPTA02664', afNumber: '', name: 'Plataforma Tesoura 14m 4x2 Li', type: 'PTA Tesoura', brand: 'Tecnogera', model: 'Tesoura 14m 4x2 Li', serial: '', productCode: '', invoice: '2669', emissionDate: '2026-09-19', hourmeter: 0, battery: 'Lítio', contractor: '', status: 'maintenance', inspection: '', usage: null }
 ];
 
 const equipmentCatalogRevision = '2026-09-21-aff-1';
 const equipmentOperationalRevision = '2026-09-28-planilha-25-10-em-uso-v3';
 const equipmentOperationalCutoff = Date.parse('2026-09-26T00:00:00.000Z');
 const verifiedAfNumbers = {
-  TPTA00845:'626', TPTA02796:'686', TPTA02797:'687', TPTA02798:'683', TPTA02799:'685',
-  TPTA00389:'955', TPTA00408:'969', TPTA00664:'953', TPTA00674:'948', TPTA00823:'954', TPTA00254:'615',
-  TPTA00984:'659', TPTA01868:'618', TPTA02019:'947', TPTA02162:'617', TPTA01095:'949', TPTA02240:'968'
+  TPTA00845: '626', TPTA02796: '686', TPTA02797: '687', TPTA02798: '683', TPTA02799: '685',
+  TPTA00389: '955', TPTA00408: '969', TPTA00664: '953', TPTA00674: '948', TPTA00823: '954', TPTA00254: '615',
+  TPTA00984: '659', TPTA01868: '618', TPTA02019: '947', TPTA02162: '617', TPTA01095: '949', TPTA02240: '968'
 };
 
 // Retrato confirmado na planilha "controle-ptas-omnia-2026-09-25 atualizado.xlsx".
 // A revisão é aplicada uma única vez e nunca substitui uma movimentação posterior.
 const verifiedEquipmentOperationalStates = {
-  TPTA00845:'in-use', TPTA01333:'maintenance', TPTA01604:'maintenance', TPTA01605:'maintenance',
-  TPTA02796:'in-use', TPTA02797:'in-use', TPTA02798:'in-use', TPTA02799:'available',
-  TPTA00389:'available', TPTA00408:'available', TPTA00664:'available', TPTA00674:'available', TPTA00823:'available',
-  TPTA00254:'in-use', TPTA00984:'in-use', TPTA01868:'in-use', TPTA02019:'in-use', TPTA02162:'in-use',
-  TPTA01095:'available', TPTA01122:'maintenance', TPTA01667:'maintenance', TPTA02233:'maintenance',
-  TPTA02236:'maintenance', TPTA02240:'in-use', TPTA02664:'maintenance'
+  TPTA00845: 'in-use', TPTA01333: 'maintenance', TPTA01604: 'maintenance', TPTA01605: 'maintenance',
+  TPTA02796: 'in-use', TPTA02797: 'in-use', TPTA02798: 'in-use', TPTA02799: 'available',
+  TPTA00389: 'available', TPTA00408: 'available', TPTA00664: 'available', TPTA00674: 'available', TPTA00823: 'available',
+  TPTA00254: 'in-use', TPTA00984: 'in-use', TPTA01868: 'in-use', TPTA02019: 'in-use', TPTA02162: 'in-use',
+  TPTA01095: 'available', TPTA01122: 'maintenance', TPTA01667: 'maintenance', TPTA02233: 'maintenance',
+  TPTA02236: 'maintenance', TPTA02240: 'in-use', TPTA02664: 'maintenance'
 };
 
 const seedHistory = [
@@ -116,7 +116,7 @@ const seedHistory = [
       operatorName: 'BRUNO DOS SANTOS SILVA',
       company: 'HEATING COOLING',
       dataHall: 'Data Hall 04',
-      answers: ['A','A','A','A','A','A'],
+      answers: ['A', 'A', 'A', 'A', 'A', 'A'],
       observations: 'Equipamento em perfeito estado de operação.'
     }
   },
@@ -140,7 +140,7 @@ const seedHistory = [
       operatorName: 'JOSE VERAS CARVALHO',
       company: 'LA',
       dataHall: 'Data Hall 06',
-      answers: ['A','A','A','A','A','A'],
+      answers: ['A', 'A', 'A', 'A', 'A', 'A'],
       observations: 'Sem avarias observadas no momento da retirada.'
     }
   },
@@ -164,7 +164,7 @@ const seedHistory = [
       operatorName: 'AIRTON SENNA SILVA',
       company: 'AIRTEC',
       dataHall: 'Data Hall 02',
-      answers: ['A','A','A','A','A','A'],
+      answers: ['A', 'A', 'A', 'A', 'A', 'A'],
       observations: 'Checklist inicial OK.'
     }
   },
@@ -188,7 +188,7 @@ const seedHistory = [
       operatorName: 'SERGIO PEREIRA',
       company: 'SIP',
       dataHall: 'Data Hall 01',
-      answers: ['A','A','A','A','A','A'],
+      answers: ['A', 'A', 'A', 'A', 'A', 'A'],
       observations: 'Operação liberada.'
     }
   }
@@ -314,10 +314,114 @@ let equipmentImportMeta = { source: 'Nenhuma base', updatedAt: '' };
 let workforce = [];
 let workforceMeta = { source: 'Nenhuma base', updatedAt: '' };
 let workforceAttendance = {};
+let workforceClearedAttendance = {};
+let workforceCompanies = [];
+let workforceCompanyRenames = {};
+let workforceDeletedCompanies = {};
 let workforceControlMeta = { updatedAt: '' };
 let workforceDeletedPeople = {};
 let workforceView = 'control';
 let workforceControlSubView = 'table';
+
+const DEFAULT_WORKFORCE_COMPANIES = [
+  'AIR TEC',
+  'CORDEIRO',
+  'DM Isolamento',
+  'FORT MUNCK',
+  'HEATING COOLING',
+  'JI',
+  'L.A Comercio e Instalações de Ar Condicionado',
+  'LC TENDAS',
+  'M.B.S Isolamentos',
+  'SIP'
+];
+
+const DEFAULT_COMPANY_ALIASES = {
+  'la': 'L.A Comercio e Instalações de Ar Condicionado',
+  'ala': 'L.A Comercio e Instalações de Ar Condicionado',
+  'lacomercioeinstalacaodearcondicionado': 'L.A Comercio e Instalações de Ar Condicionado',
+  'alacomercioeinstalacaodearcondicionado': 'L.A Comercio e Instalações de Ar Condicionado',
+  'lacomercioeinstalacoesdearcondicionado': 'L.A Comercio e Instalações de Ar Condicionado',
+  'alacomercioeinstalacoesdearcondicionado': 'L.A Comercio e Instalações de Ar Condicionado',
+  'lacomercioeinstalacoesdearcondicionadoltda': 'L.A Comercio e Instalações de Ar Condicionado',
+  'alacomercioeinstalacoesdearcondicionadoltda': 'L.A Comercio e Instalações de Ar Condicionado',
+  'airtec': 'AIR TEC',
+  'heatingcooling': 'HEATING COOLING',
+  'ji': 'JI',
+  'jiengenharia': 'JI',
+  'sip': 'SIP',
+  'sipcomercio': 'SIP',
+  'dmisolamento': 'DM Isolamento',
+  'dmisolamentos': 'DM Isolamento',
+  'mbsisolamentos': 'M.B.S Isolamentos',
+  'mbsisolamento': 'M.B.S Isolamentos',
+  'cordeiro': 'CORDEIRO',
+  'fortmunck': 'FORT MUNCK',
+  'fortunck': 'FORT MUNCK',
+  'lctendas': 'LC TENDAS'
+};
+
+function companyComparisonKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function normalizeCompanyName(value) {
+  const clean = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  const cmpKey = companyComparisonKey(clean);
+  if (!cmpKey) return '';
+  if (workforceCompanyRenames && typeof workforceCompanyRenames === 'object' && workforceCompanyRenames[cmpKey]) {
+    return String(workforceCompanyRenames[cmpKey]).replace(/\s+/g, ' ').trim();
+  }
+  if (Array.isArray(workforceCompanies)) {
+    const registered = workforceCompanies.find(c => companyComparisonKey(c) === cmpKey);
+    if (registered) return String(registered).replace(/\s+/g, ' ').trim();
+  }
+  if (DEFAULT_COMPANY_ALIASES[cmpKey]) {
+    const mapped = DEFAULT_COMPANY_ALIASES[cmpKey];
+    const mappedKey = companyComparisonKey(mapped);
+    if (workforceCompanyRenames && typeof workforceCompanyRenames === 'object' && workforceCompanyRenames[mappedKey]) {
+      return String(workforceCompanyRenames[mappedKey]).replace(/\s+/g, ' ').trim();
+    }
+    if (Array.isArray(workforceCompanies)) {
+      const registeredMapped = workforceCompanies.find(c => companyComparisonKey(c) === mappedKey);
+      if (registeredMapped) return String(registeredMapped).replace(/\s+/g, ' ').trim();
+    }
+    return mapped;
+  }
+  return clean;
+}
+window.normalizeCompanyName = normalizeCompanyName;
+
+function getRegisteredWorkforceCompanies() {
+  const activePeopleCompanies = new Set(
+    (Array.isArray(workforce) ? workforce : [])
+      .map(p => normalizeCompanyName(p?.company))
+      .filter(Boolean)
+      .map(companyComparisonKey)
+  );
+  const byKey = new Map();
+  const addCandidate = (raw, isExplicitOrActive = false) => {
+    const canonical = normalizeCompanyName(raw);
+    if (!canonical) return;
+    const key = companyComparisonKey(canonical);
+    if (!key) return;
+    if (!isExplicitOrActive && workforceDeletedCompanies && workforceDeletedCompanies[key] && !activePeopleCompanies.has(key)) {
+      return;
+    }
+    if (!byKey.has(key)) byKey.set(key, canonical);
+  };
+  DEFAULT_WORKFORCE_COMPANIES.forEach(c => addCandidate(c, false));
+  (Array.isArray(workforceCompanies) ? workforceCompanies : []).forEach(c => addCandidate(c, true));
+  (Array.isArray(workforce) ? workforce : []).forEach(p => addCandidate(p?.company, true));
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+}
+window.getRegisteredWorkforceCompanies = getRegisteredWorkforceCompanies;
+
 function currentLocalDateISO(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -339,7 +443,7 @@ function getDeletedUserKeys() {
     const defaults = ['wallace campos machado alves', 'wallace', 'walace'];
     defaults.forEach(d => { if (!list.includes(d)) list.push(d); });
     return list;
-  } catch(e) {
+  } catch (e) {
     return ['wallace campos machado alves', 'wallace', 'walace'];
   }
 }
@@ -436,7 +540,7 @@ try {
       }
     }
   }
-} catch(e) {}
+} catch (e) { }
 
 let userApprovals = [];
 try {
@@ -459,7 +563,7 @@ try {
       }
     }
   }
-} catch(e) {}
+} catch (e) { }
 
 let inviteDraft = {
   email: '',
@@ -484,9 +588,9 @@ function generateUUID() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     try {
       return crypto.randomUUID();
-    } catch(e) {}
+    } catch (e) { }
   }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     const r = Math.random() * 16 | 0;
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
@@ -497,18 +601,142 @@ function isValidUUID(str) {
   return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 }
 
+const AUTH_SESSION_VERSION = '2026-11-18-strict-v2';
+let userCredentialsMap = {};
+try {
+  const savedCreds = localStorage.getItem('obraflow_user_credentials_v1');
+  if (savedCreds) {
+    const parsedCreds = JSON.parse(savedCreds);
+    if (parsedCreds && typeof parsedCreds === 'object' && !Array.isArray(parsedCreds)) {
+      userCredentialsMap = parsedCreds;
+    }
+  }
+} catch (e) { }
+
+function persistUserCredentialsLocal() {
+  try {
+    localStorage.setItem('obraflow_user_credentials_v1', JSON.stringify(userCredentialsMap));
+  } catch (e) { }
+}
+
+function getUserCredential(email) {
+  const key = String(email || '').trim().toLowerCase();
+  if (!key) return null;
+  return userCredentialsMap[key] || null;
+}
+
+let lastUserCredentialsSyncAt = 0;
+async function syncUserCredentialsFromSupabase({ force = false } = {}) {
+  if (typeof supabaseRestRequest !== 'function' || navigator.onLine === false) return userCredentialsMap;
+  const now = Date.now();
+  if (!force && lastUserCredentialsSyncAt && (now - lastUserCredentialsSyncAt < 15 * 60 * 1000)) {
+    return userCredentialsMap;
+  }
+  try {
+    lastUserCredentialsSyncAt = now;
+    const rows = await supabaseRestRequest('app_metadata?key=eq.user_credentials_v1&select=value', {
+      flushPending: false,
+      timeoutMs: 15000
+    });
+    const remoteCreds = rows?.[0]?.value?.credentials;
+    let localHasNewer = false;
+    if (remoteCreds && typeof remoteCreds === 'object') {
+      Object.entries(remoteCreds).forEach(([emailKey, remoteEntry]) => {
+        if (!remoteEntry || typeof remoteEntry !== 'object') return;
+        const cleanKey = String(emailKey || '').trim().toLowerCase();
+        if (!cleanKey) return;
+        const localEntry = userCredentialsMap[cleanKey];
+        const remoteTime = Date.parse(remoteEntry.updatedAt || '') || 0;
+        const localTime = Date.parse(localEntry?.updatedAt || '') || 0;
+        if (!localEntry || remoteTime >= localTime) {
+          userCredentialsMap[cleanKey] = { ...remoteEntry, email: cleanKey };
+        } else {
+          localHasNewer = true;
+        }
+      });
+    }
+    // Se algum registro local de userApprovals tinha senha ainda não sincronizada no mapa de credenciais
+    for (const u of (Array.isArray(userApprovals) ? userApprovals : [])) {
+      const emailKey = String(u?.email || '').trim().toLowerCase();
+      if (emailKey && u?.password && !userCredentialsMap[emailKey]?.password) {
+        const hash = await passwordSessionFingerprint(u.password);
+        userCredentialsMap[emailKey] = {
+          email: emailKey,
+          password: String(u.password),
+          passwordHash: hash,
+          updatedAt: u.updated_at || new Date().toISOString()
+        };
+        localHasNewer = true;
+      }
+    }
+    persistUserCredentialsLocal();
+    if (localHasNewer) {
+      await pushUserCredentialsToSupabase();
+    }
+  } catch (e) {
+    console.warn('Sincronização de credenciais indisponível no momento:', e);
+  }
+  return userCredentialsMap;
+}
+
+async function pushUserCredentialsToSupabase() {
+  if (typeof supabaseRestRequest !== 'function') return false;
+  try {
+    await supabaseRestRequest('app_metadata?on_conflict=key', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        key: 'user_credentials_v1',
+        value: {
+          updatedAt: new Date().toISOString(),
+          credentials: userCredentialsMap
+        }
+      })
+    });
+    return true;
+  } catch (e) {
+    console.warn('Credenciais salvas localmente; aguardando conexão:', e);
+    return false;
+  }
+}
+
+async function saveUserCredentialToSupabase(email, password) {
+  const emailKey = String(email || '').trim().toLowerCase();
+  const cleanPassword = String(password ?? '').trim();
+  if (!emailKey || !cleanPassword) return false;
+  const hash = await passwordSessionFingerprint(cleanPassword);
+  userCredentialsMap[emailKey] = {
+    email: emailKey,
+    password: cleanPassword,
+    passwordHash: hash,
+    updatedAt: new Date().toISOString()
+  };
+  persistUserCredentialsLocal();
+  const match = Array.isArray(userApprovals)
+    ? userApprovals.find(u => u && String(u.email || '').trim().toLowerCase() === emailKey)
+    : null;
+  if (match) {
+    match.password = cleanPassword;
+    try { localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals)); } catch (e) { }
+  }
+  return pushUserCredentialsToSupabase();
+}
+
 function userApprovalDatabasePayload(record) {
   if (!record) return {};
   const allowedFields = [
     'id', 'email', 'name', 'role', 'company', 'status',
     'invite_token', 'invited_by', 'created_at', 'updated_at',
-    'approved_at', 'approved_by', 'password', 'photo'
+    'approved_at', 'approved_by'
   ];
   const payload = {};
   for (const field of allowedFields) {
     if (record[field] !== undefined && record[field] !== null) {
       payload[field] = record[field];
     }
+  }
+  if (payload.company) {
+    payload.company = normalizeCompanyName(payload.company);
   }
   if (!payload.id || !isValidUUID(payload.id)) {
     payload.id = generateUUID();
@@ -518,57 +746,30 @@ function userApprovalDatabasePayload(record) {
 }
 
 function getAvailableCompanies() {
-  const defaults = ['Heating Cooling', 'AIRTEC', 'SIP', 'Afonso França', 'SuperCore'];
-  const set = new Set(defaults);
-  if (typeof workforce !== 'undefined' && Array.isArray(workforce)) {
-    workforce.forEach(p => {
-      if (p && p.company && p.company.trim()) set.add(p.company.trim());
-    });
-  }
-  if (typeof equipments !== 'undefined' && Array.isArray(equipments)) {
-    equipments.forEach(e => {
-      if (e?.usage?.company && e.usage.company.trim()) set.add(e.usage.company.trim());
-      if (e?.company && e.company.trim()) set.add(e.company.trim());
-      if (e?.supplier && e.supplier.trim()) set.add(e.supplier.trim());
-    });
-  }
-  if (typeof userApprovals !== 'undefined' && Array.isArray(userApprovals)) {
-    userApprovals.forEach(u => {
-      if (u?.company && u.company.trim()) set.add(u.company.trim());
-    });
-  }
-  return Array.from(set).filter(Boolean).sort((a,b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  const registered = getRegisteredWorkforceCompanies();
+  const byKey = new Map();
+  const add = raw => {
+    const canonical = normalizeCompanyName(raw);
+    if (!canonical) return;
+    const key = companyComparisonKey(canonical);
+    if (key && !byKey.has(key)) byKey.set(key, canonical);
+  };
+  registered.forEach(add);
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
 }
 
 function handleCompanySelectChange(idPrefix) {
   const sel = document.getElementById(`${idPrefix}CompanySelect`);
-  const box = document.getElementById(`${idPrefix}CompanyCustomBox`);
-  const customInput = document.getElementById(`${idPrefix}CompanyCustomInput`);
   const finalInput = document.getElementById(`${idPrefix}CompanyFinalInput`);
   if (!sel) return;
-  const val = sel.value;
-  if (val === '__other__') {
-    if (box) box.style.display = 'block';
-    if (finalInput) finalInput.value = (customInput?.value || '').trim();
-    if (customInput) {
-      customInput.required = true;
-      customInput.focus();
-    }
-  } else {
-    if (box) box.style.display = 'none';
-    if (finalInput) finalInput.value = val;
-    if (customInput) {
-      customInput.required = false;
-      customInput.value = val;
-    }
-  }
+  if (finalInput) finalInput.value = sel.value;
 }
 
 function syncCompanyInput(idPrefix) {
-  const customInput = document.getElementById(`${idPrefix}CompanyCustomInput`);
+  const sel = document.getElementById(`${idPrefix}CompanySelect`);
   const finalInput = document.getElementById(`${idPrefix}CompanyFinalInput`);
-  if (customInput && finalInput) {
-    finalInput.value = customInput.value.trim();
+  if (sel && finalInput) {
+    finalInput.value = sel.value.trim();
   }
 }
 
@@ -582,30 +783,25 @@ function renderCompanySelectHtml(opts = {}) {
   } = opts;
 
   const companies = getAvailableCompanies();
-  const cleanCurrent = (currentValue || '').trim();
-  const isKnown = cleanCurrent && companies.some(c => c.toLowerCase() === cleanCurrent.toLowerCase());
-  const selectedKnown = isKnown ? companies.find(c => c.toLowerCase() === cleanCurrent.toLowerCase()) : '';
-  const isCustom = cleanCurrent && !isKnown;
+  const cleanCurrent = normalizeCompanyName(currentValue || '');
+  const selectedKnown = cleanCurrent
+    ? (companies.find(c => companyComparisonKey(c) === companyComparisonKey(cleanCurrent)) || '')
+    : '';
 
   return `
     <div class="field full" style="margin-bottom:14px;">
       <label style="display:flex; justify-content:space-between; align-items:center;">
         <span>${esc(label)} ${required ? '<em>*</em>' : ''}</span>
-        <span style="font-size:10px; color:var(--muted); text-transform:none; font-weight:normal;">Lista suspensa da obra</span>
+        <span style="font-size:10px; color:var(--muted); text-transform:none; font-weight:normal;">Empresas cadastradas na obra</span>
       </label>
       <div class="input-icon-wrapper" style="margin-bottom:6px;">
         <span class="input-leading-icon">${icon('building')}</span>
         <select id="${idPrefix}CompanySelect" onchange="handleCompanySelectChange('${idPrefix}')" ${required ? 'required' : ''} style="width:100%; min-height:44px; padding-left:38px; border:1px solid #dce2de; border-radius:8px; background:white; font-size:14px; color:var(--ink); -webkit-appearance:menulist;">
-          <option value="">— Selecione da lista suspensa ou escolha 'Outra' —</option>
+          <option value="">— Selecione uma empresa cadastrada —</option>
           ${companies.map(c => `<option value="${esc(c)}" ${selectedKnown === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
-          <option value="__other__" ${isCustom ? 'selected' : ''}>✏️ Outra empresa (não está na lista / digitar)...</option>
         </select>
       </div>
-      <div id="${idPrefix}CompanyCustomBox" style="display:${isCustom ? 'block' : 'none'}; margin-top:6px;">
-        <input type="text" id="${idPrefix}CompanyCustomInput" value="${esc(isCustom ? cleanCurrent : '')}" placeholder="Digite o nome da empresa..." style="width:100%; min-height:42px; padding:0 12px; border:1px solid #65ad87; border-radius:8px; font-size:14px; background:#f4fbf7;" oninput="syncCompanyInput('${idPrefix}')" />
-        <small style="color:#206b49; font-size:11px; margin-top:3px; display:block;">✍️ Você pode digitar livremente o nome da empresa acima.</small>
-      </div>
-      <input type="hidden" id="${idPrefix}CompanyFinalInput" name="${esc(name)}" value="${esc(cleanCurrent)}" />
+      <input type="hidden" id="${idPrefix}CompanyFinalInput" name="${esc(name)}" value="${esc(selectedKnown)}" />
     </div>
   `;
 }
@@ -615,76 +811,106 @@ let lastUserApprovalsSyncAt = 0;
 let activeSessionCheck = null;
 let lastSessionCheckAt = 0;
 
+const SESSION_CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutos entre consultas remotas (economia máxima de dados no Supabase)
+
+function verifyCurrentUserSessionLocal() {
+  if (!currentUser) return false;
+  if (!currentUser.authCredentialHash || currentUser.authSessionVersion !== AUTH_SESSION_VERSION) {
+    logoutUser('Sua sessão expirou ou precisa de confirmação de senha. Faça login novamente.');
+    return false;
+  }
+  const emailLower = String(currentUser.email || '').trim().toLowerCase();
+  const cred = getUserCredential(emailLower);
+  if (cred?.passwordHash && currentUser.authCredentialHash !== cred.passwordHash) {
+    logoutUser('Sua senha está incorreta ou foi alterada. Entre novamente com a senha atual.');
+    return false;
+  }
+  return true;
+}
+
 /**
- * Validação leve e direcionada da sessão atual do usuário.
- * Consulta APENAS a linha do usuário logado (id/email) e APENAS colunas essenciais,
- * consumindo menos de 100 bytes e evitando requisições pesadas em lote na tabela inteira.
- * Desloga o usuário se a senha foi alterada em outro aparelho ou se o acesso foi revogado/excluído.
+ * Validação rigorosa da sessão atual do usuário com consumo mínimo de banco.
+ * A validação de hash e versão ocorre 100% em memória (0 bytes de rede), e a
+ * conferência remota ocorre apenas ao abrir o app ou a cada 30 minutos.
  */
 async function verifyCurrentUserSession({ force = false } = {}) {
-  if (!currentUser || navigator.onLine === false || typeof supabaseRestRequest !== 'function') return true;
+  if (!verifyCurrentUserSessionLocal()) return false;
+  if (navigator.onLine === false || typeof supabaseRestRequest !== 'function') return true;
   const now = Date.now();
-  // Cooldown de 3 minutos para checagem em segundo plano, a menos que seja forçada
-  if (!force && now - lastSessionCheckAt < 180000) return true;
+  if (!force && lastSessionCheckAt && (now - lastSessionCheckAt < SESSION_CHECK_INTERVAL_MS)) return true;
   if (activeSessionCheck) return activeSessionCheck;
 
   activeSessionCheck = (async () => {
     try {
       lastSessionCheckAt = Date.now();
+      const emailLower = String(currentUser.email || '').trim().toLowerCase();
+      const isSysAdmin = isSystemAdminEmail(emailLower);
       const identifier = currentUser.id && isValidUUID(currentUser.id)
         ? `id=eq.${encodeURIComponent(currentUser.id)}`
-        : `email=eq.${encodeURIComponent(String(currentUser.email || '').trim().toLowerCase())}`;
+        : `email=eq.${encodeURIComponent(emailLower)}`;
 
-      const rows = await supabaseRestRequest(
-        `user_approvals?${identifier}&select=id,name,email,role,company,status,password`,
-        { flushPending: false, timeoutMs: 15000 }
-      );
+      const [rows] = await Promise.all([
+        supabaseRestRequest(
+          `user_approvals?${identifier}&select=id,name,email,role,company,status`,
+          { flushPending: false, timeoutMs: 15000 }
+        ).catch(() => null),
+        syncUserCredentialsFromSupabase({ force })
+      ]);
 
-      if (!Array.isArray(rows) || rows.length === 0) {
-        // Se a conta não existe mais no banco, foi excluída pelo gestor
-        logoutUser('Seu cadastro não foi encontrado ou foi removido. Entre novamente ou consulte o gestor.');
-        return false;
+      let account = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+      if (!account && emailLower && currentUser.id) {
+        const byEmailRows = await supabaseRestRequest(
+          `user_approvals?email=eq.${encodeURIComponent(emailLower)}&select=id,name,email,role,company,status`,
+          { flushPending: false, timeoutMs: 15000 }
+        ).catch(() => null);
+        if (Array.isArray(byEmailRows) && byEmailRows.length > 0) account = byEmailRows[0];
       }
 
-      const account = rows[0];
-
-      // Se a conta foi revogada, desativada ou rejeitada
-      if (account.status && account.status !== 'approved') {
-        logoutUser('Seu acesso foi desativado pelo administrador.');
-        return false;
-      }
-
-      // Validação de senha: encerra a sessão se a senha foi alterada em outro aparelho
-      if (account.password) {
-        const latestHash = await passwordSessionFingerprint(account.password);
-        if (!currentUser.authCredentialHash && latestHash) {
-          currentUser.authCredentialHash = latestHash;
-          try { localStorage.setItem('obraflow_user', JSON.stringify(currentUser)); } catch (e) {}
-        } else if (latestHash && latestHash !== currentUser.authCredentialHash) {
-          logoutUser('Sua senha foi alterada. Entre novamente com a nova senha.');
+      if (!isSysAdmin) {
+        if (Array.isArray(rows) && !account) {
+          logoutUser('Seu cadastro não foi encontrado ou foi removido. Entre novamente ou consulte o gestor.');
+          return false;
+        }
+        if (account && account.status && account.status !== 'approved' && account.status !== 'active') {
+          logoutUser('Seu acesso foi desativado ou revogado pelo administrador.');
           return false;
         }
       }
 
-      // Atualiza nome e papel em tempo real se o gestor alterou
-      let profileUpdated = false;
-      if (account.role && account.role !== currentUser.role && !isSystemAdminEmail(account.email)) {
-        currentUser.role = normalizeAccessRole(account.role);
-        profileUpdated = true;
+      const cred = getUserCredential(emailLower);
+      const latestPassword = cred?.password || '';
+      const latestHash = cred?.passwordHash || (latestPassword ? await passwordSessionFingerprint(latestPassword) : '');
+
+      if (latestHash) {
+        if (!currentUser.authCredentialHash || currentUser.authCredentialHash !== latestHash) {
+          logoutUser('Sua senha está incorreta ou foi alterada. Entre novamente com a senha atual.');
+          return false;
+        }
+      } else if (!isSysAdmin) {
+        logoutUser('Sua conta requer validação de senha. Faça login novamente.');
+        return false;
       }
-      if (account.name && account.name !== currentUser.name) {
-        currentUser.name = account.name;
-        profileUpdated = true;
-      }
-      if (profileUpdated) {
-        try { localStorage.setItem('obraflow_user', JSON.stringify(currentUser)); } catch (e) {}
-        updateAppShellAccess();
+
+      if (account) {
+        let profileUpdated = false;
+        if (account.role && account.role !== currentUser.role && !isSysAdmin) {
+          currentUser.role = normalizeAccessRole(account.role);
+          profileUpdated = true;
+        }
+        if (account.name && account.name !== currentUser.name) {
+          currentUser.name = account.name;
+          profileUpdated = true;
+        }
+        if (profileUpdated) {
+          try { localStorage.setItem('obraflow_user', JSON.stringify(currentUser)); } catch (e) { }
+          updateAppShellAccess();
+        }
       }
 
       return true;
     } catch (e) {
       console.warn('Verificação de credenciais de sessão indisponível no momento:', e);
-      return true; // Falha de rede pontual não desloga o operador no meio do trabalho
+      return true;
     } finally {
       activeSessionCheck = null;
     }
@@ -699,43 +925,58 @@ async function syncUserApprovalsFromSupabase({ force = false } = {}) {
   if (typeof supabaseRestRequest !== 'function' || navigator.onLine === false) return false;
 
   const now = Date.now();
-  // Se não for forçado, evita requisições completas de catálogo em intervalos menores que 45s
-  if (!force && now - lastUserApprovalsSyncAt < 45000) return true;
+  if (!force && lastUserApprovalsSyncAt && (now - lastUserApprovalsSyncAt < 5 * 60 * 1000)) return true;
   lastUserApprovalsSyncAt = now;
 
   activeUserApprovalsSync = (async () => {
     try {
-      const rows = await supabaseRestRequest('user_approvals?select=*&order=created_at.desc', {
-        flushPending: false,
-        timeoutMs: 25000
-      });
+      const [rows] = await Promise.all([
+        supabaseRestRequest('user_approvals?select=id,name,email,role,company,status,invite_token,created_at,updated_at,approved_at&order=created_at.desc', {
+          flushPending: false,
+          timeoutMs: 25000
+        }),
+        syncUserCredentialsFromSupabase({ force })
+      ]);
       if (Array.isArray(rows)) {
         const deletedKeys = new Set(getDeletedUserKeys().map(k => String(k).trim().toLowerCase()));
 
-        // Filtra usuários apagados sem disparar requisições DELETE redundantes em lote
         const validRows = rows.filter(r => {
           if (!r) return false;
           const emailKey = (r.email || '').trim().toLowerCase();
           const idKey = (r.id || '').trim().toLowerCase();
           const nameKey = (r.name || '').trim().toLowerCase();
           return !(deletedKeys.has(emailKey) || deletedKeys.has(idKey) || (nameKey && deletedKeys.has(nameKey)));
+        }).map(r => {
+          const emailKey = String(r.email || '').trim().toLowerCase();
+          const cred = getUserCredential(emailKey);
+          return {
+            ...r,
+            company: r.company ? normalizeCompanyName(r.company) : r.company,
+            password: cred?.password || r.password || undefined
+          };
         });
 
-        // Validação da sessão ativa do usuário atual
         if (currentUser) {
+          const currentEmail = String(currentUser.email || '').trim().toLowerCase();
+          const isSysAdmin = isSystemAdminEmail(currentEmail);
           const activeAccount = validRows.find(r =>
             (currentUser.id && String(r.id) === String(currentUser.id)) ||
-            (r.email && r.email.toLowerCase() === String(currentUser.email || '').toLowerCase())
+            (r.email && r.email.toLowerCase() === currentEmail)
           );
-          if (activeAccount?.password) {
-            const latestHash = await passwordSessionFingerprint(activeAccount.password);
-            if (!currentUser.authCredentialHash && latestHash) {
-              currentUser.authCredentialHash = latestHash;
-              localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
-            } else if (latestHash && latestHash !== currentUser.authCredentialHash) {
-              logoutUser('Sua senha foi alterada. Entre novamente com a nova senha.');
-              return false;
-            }
+          if (!isSysAdmin && (!activeAccount || (activeAccount.status !== 'approved' && activeAccount.status !== 'active'))) {
+            logoutUser('Seu acesso não está ativo. Faça login novamente ou consulte o administrador.');
+            return false;
+          }
+          const cred = getUserCredential(currentEmail);
+          const expectedPassword = cred?.password || activeAccount?.password || '';
+          const latestHash = cred?.passwordHash || (expectedPassword ? await passwordSessionFingerprint(expectedPassword) : '');
+          if (!currentUser.authCredentialHash || currentUser.authSessionVersion !== AUTH_SESSION_VERSION) {
+            logoutUser('Sua sessão expirou. Faça login novamente com sua senha.');
+            return false;
+          }
+          if (latestHash && latestHash !== currentUser.authCredentialHash) {
+            logoutUser('Sua senha está incorreta ou foi alterada. Entre novamente com a senha correta.');
+            return false;
           }
         }
 
@@ -747,7 +988,7 @@ async function syncUserApprovalsFromSupabase({ force = false } = {}) {
         }
         return true;
       }
-    } catch(e) {
+    } catch (e) {
       console.warn('Supabase user_approvals sync indisponível:', e);
       return false;
     } finally {
@@ -759,23 +1000,37 @@ async function syncUserApprovalsFromSupabase({ force = false } = {}) {
 }
 
 async function passwordSessionFingerprint(password) {
+  const raw = String(password ?? '').trim();
+  if (!raw) return '';
   try {
-    if (!window.crypto?.subtle || typeof TextEncoder === 'undefined') return null;
-    const bytes = new TextEncoder().encode(String(password));
-    const digest = await window.crypto.subtle.digest('SHA-256', bytes);
-    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    if (window.crypto?.subtle && typeof TextEncoder !== 'undefined') {
+      const bytes = new TextEncoder().encode(raw);
+      const digest = await window.crypto.subtle.digest('SHA-256', bytes);
+      return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    }
   } catch (error) {
-    console.warn('Não foi possível validar a versão da senha desta sessão:', error);
-    return null;
+    console.warn('Fallback hash para validação de sessão:', error);
   }
+  let h1 = 0xdeadbeef ^ raw.length;
+  let h2 = 0x41c6ce57 ^ raw.length;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return `fnv-${(h2 >>> 0).toString(16).padStart(8, '0')}${(h1 >>> 0).toString(16).padStart(8, '0')}`;
 }
 
 async function saveUserApprovalToSupabase(record) {
   if (!record || !record.email) return null;
+  if (record.password) {
+    await saveUserCredentialToSupabase(record.email, record.password);
+  }
   const payload = userApprovalDatabasePayload(record);
 
   async function trySave(p) {
-    // 1. Se tem ID válido, tenta atualizar o registro existente (PATCH por ID)
     if (p.id && isValidUUID(p.id)) {
       try {
         const patchById = await supabaseRestRequest(`user_approvals?id=eq.${encodeURIComponent(p.id)}`, {
@@ -793,7 +1048,6 @@ async function saveUserApprovalToSupabase(record) {
       }
     }
 
-    // 2. Se não atualizou por ID, tenta atualizar por e-mail (PATCH por e-mail)
     if (p.email) {
       try {
         const patchByEmail = await supabaseRestRequest(`user_approvals?email=eq.${encodeURIComponent(p.email.toLowerCase())}`, {
@@ -811,7 +1065,6 @@ async function saveUserApprovalToSupabase(record) {
       }
     }
 
-    // 3. Se não existia ainda nem por ID nem por e-mail, insere (POST)
     return await supabaseRestRequest('user_approvals', {
       method: 'POST',
       headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' },
@@ -821,16 +1074,8 @@ async function saveUserApprovalToSupabase(record) {
 
   try {
     return await trySave(payload);
-  } catch(e) {
-    console.warn('Erro ao salvar no Supabase, tentando fallback sem campos de senha/foto:', e);
-    try {
-      const fallbackPayload = { ...payload };
-      delete fallbackPayload.password;
-      delete fallbackPayload.photo;
-      return await trySave(fallbackPayload);
-    } catch(err2) {
-      console.error('Falha crítica ao salvar usuário no Supabase:', err2);
-    }
+  } catch (e) {
+    console.error('Falha ao salvar usuário no Supabase:', e);
   }
 }
 
@@ -844,7 +1089,7 @@ function updateAppShellAccess() {
   const isAdm = isAdmin();
   const sidebar = document.getElementById('sidebar');
   const mainArea = document.querySelector('.main-area');
-  
+
   // O sidebar só é ocultado na tela cheia de acesso público
   const isPublicPage = document.body.classList.contains('public-access-page');
   if (sidebar) sidebar.style.display = isPublicPage ? 'none' : 'flex';
@@ -873,10 +1118,10 @@ function updateAppShellAccess() {
     const avatarEl = document.getElementById('sidebarUserAvatar') || userBox.querySelector('.avatar');
     const nameEl = document.getElementById('sidebarUserName') || userBox.querySelector('strong');
     const roleEl = document.getElementById('sidebarUserRole') || userBox.querySelector('small');
-    
+
     if (currentUser) {
       const name = currentUser.name || currentUser.email || 'Usuário';
-      const initials = name.split(' ').filter(Boolean).map(n=>n[0]).join('').substring(0, 2).toUpperCase() || 'US';
+      const initials = name.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'US';
       if (avatarEl) {
         if (currentUser.photo) {
           avatarEl.innerHTML = `<img src="${currentUser.photo}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;" />`;
@@ -1081,22 +1326,15 @@ function renderAccessLanding(mode, params) {
 
         <div class="field full" style="margin-bottom:14px;">
           <label style="display:flex; justify-content:space-between; align-items:center;">
-            <span>Senha ou PIN de Acesso <em>*</em></span>
-            <a href="javascript:void(0)" onclick="showLoginHelp()" style="font-size:11px; font-weight:600; color:var(--green-dark); text-decoration:none;">Dúvidas ou PIN?</a>
+            <span>Senha de Acesso <em>*</em></span>
+            <a href="javascript:void(0)" onclick="showLoginHelp()" style="font-size:11px; font-weight:600; color:var(--green-dark); text-decoration:none;">Dúvidas no acesso?</a>
           </label>
           <div class="input-icon-wrapper has-trailing-btn">
             <span class="input-leading-icon">${icon('lock')}</span>
-            <input type="password" id="accessLoginPassword" name="password" placeholder="Digite sua senha ou PIN (ex: 1234)" required />
+            <input type="password" id="accessLoginPassword" name="password" placeholder="Digite sua senha cadastrada" required />
             <button type="button" class="input-trailing-btn" title="Mostrar senha" onclick="togglePasswordVisibility('accessLoginPassword', this)">
               ${icon('eye')}
             </button>
-          </div>
-        </div>
-
-        <div class="auth-help-card" style="margin-bottom:16px;">
-          ${icon('key')}
-          <div>
-            <strong>🔑 PIN Master / Teste:</strong> Use <code>1234</code> ou <code>0000</code> para entrar imediatamente.
           </div>
         </div>
 
@@ -1177,8 +1415,8 @@ function showLoginHelp() {
     ${modalHead('Dúvidas no Acesso / Esqueceu a Senha?', 'Saiba como se autenticar ou solicitar acesso à obra.')}
     <div class="modal-body" style="display:grid; gap:16px;">
       <div class="notice" style="background:#f0f7f3; border-color:#bce1cb; color:#0d4225;">
-        <strong>🔑 PIN Master de Teste / Acesso Rápido:</strong><br/>
-        Se você é administrador ou precisa testar o sistema rapidamente, pode digitar qualquer e-mail e a senha <code>1234</code> ou <code>0000</code>.
+        <strong>🔒 Segurança e Senha Pessoal:</strong><br/>
+        O acesso requer seu e-mail aprovado e sua senha pessoal cadastrada. Caso tenha esquecido sua senha, solicite a redefinição ao Administrador Master da obra.
       </div>
       <div style="display:grid; gap:6px;">
         <h4 style="margin:0; font-size:13px; color:var(--ink);">Primeiro Acesso na Obra?</h4>
@@ -1224,12 +1462,12 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', pre
 
           <div class="field full" style="margin-bottom:14px;">
             <label style="display:flex; justify-content:space-between; align-items:center;">
-              <span>Senha ou PIN de Acesso <em>*</em></span>
-              <a href="javascript:void(0)" onclick="showLoginHelp()" style="font-size:11px; font-weight:600; color:var(--green-dark); text-decoration:none;">Dúvidas ou PIN?</a>
+              <span>Senha de Acesso <em>*</em></span>
+              <a href="javascript:void(0)" onclick="showLoginHelp()" style="font-size:11px; font-weight:600; color:var(--green-dark); text-decoration:none;">Dúvidas no acesso?</a>
             </label>
             <div class="input-icon-wrapper has-trailing-btn">
               <span class="input-leading-icon">${icon('lock')}</span>
-              <input type="password" id="loginPasswordInput" name="password" placeholder="Digite sua senha ou PIN (ex: 1234)" required />
+              <input type="password" id="loginPasswordInput" name="password" placeholder="Digite sua senha cadastrada" required />
               <button type="button" class="input-trailing-btn" title="Mostrar senha" onclick="togglePasswordVisibility('loginPasswordInput', this)">
                 ${icon('eye')}
               </button>
@@ -1239,7 +1477,6 @@ function openLoginModal(tab = 'login', prefillEmail = '', prefillToken = '', pre
           <div class="auth-help-card">
             ${icon('key')}
             <div>
-              <strong>🔑 PIN Master / Teste Rápido:</strong> Use <code>1234</code> ou <code>0000</code> para entrar imediatamente.<br/>
               Novo por aqui? <a href="javascript:void(0)" onclick="openLoginModal('signup', document.getElementById('loginEmailInput')?.value || '')" style="color:#0d4225; font-weight:700; text-decoration:underline;">Solicitar Cadastro de Usuário</a>
             </div>
           </div>
@@ -1392,7 +1629,7 @@ function handleInvitePhotoChange(input) {
   const hidden = document.getElementById('invitePhotoBase64');
   if (file) {
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
       if (preview) {
         preview.innerHTML = '<img src="' + e.target.result + '" style="width:100%; height:100%; object-fit:cover;"/>';
       }
@@ -1417,19 +1654,52 @@ async function submitUserLogin(event) {
   const email = (data.email || '').toLowerCase().trim();
   const password = String(data.password || '').trim();
 
-  if (password === '1234' || password === '0000') {
-    currentUser = { email: email || 'pedro.alves@heatingcooling.com.br', name: 'Pedro Alves', role: 'admin', company: 'Heating Cooling' };
+  if (!email || !password) {
+    toast('Informe seu e-mail e sua senha.', true);
+    return;
+  }
+
+  // Sincronizar usuários e credenciais do Supabase antes de validar o login
+  await Promise.all([
+    syncUserApprovalsFromSupabase({ force: true }),
+    syncUserCredentialsFromSupabase()
+  ]);
+
+  const cred = getUserCredential(email);
+
+  // Conta Master do Sistema
+  if (isSystemAdminEmail(email)) {
+    const matchAdmin = userApprovals.find(u => u.email && u.email.toLowerCase() === email);
+    const expectedAdminPassword = cred?.password || matchAdmin?.password || '';
+    if (expectedAdminPassword) {
+      if (password !== expectedAdminPassword) {
+        toast('Senha incorreta. Verifique sua senha e tente novamente.', true);
+        return;
+      }
+    } else {
+      if (password !== '1234' && password !== '0000' && password.length < 4) {
+        toast('Senha incorreta.', true);
+        return;
+      }
+      await saveUserCredentialToSupabase(email, password);
+    }
+    currentUser = {
+      id: matchAdmin?.id,
+      email,
+      name: matchAdmin?.name || 'Pedro Alves',
+      role: 'admin',
+      company: normalizeCompanyName(matchAdmin?.company || 'HEATING COOLING'),
+      authCredentialHash: await passwordSessionFingerprint(password),
+      authSessionVersion: AUTH_SESSION_VERSION
+    };
     localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
     closeModal();
     updateAppShellAccess();
     finishAuthenticationRoute();
     render();
-    toast('Login master efetuado! Painel liberado.');
+    toast('Login Master efetuado! Painel liberado.');
     return;
   }
-
-  // Sincronizar usuários do Supabase antes de validar o login
-  await syncUserApprovalsFromSupabase();
 
   const match = userApprovals.find(u => u.email && u.email.toLowerCase() === email);
 
@@ -1438,28 +1708,38 @@ async function submitUserLogin(event) {
       toast('Sua solicitação de acesso está aguardando aprovação do Gestor da Obra.', true);
       return;
     }
-    if (match.status === 'rejected') {
-      toast('Sua solicitação de acesso foi recusada pelo gestor.', true);
+    if (match.status === 'rejected' || match.status === 'inactive') {
+      toast('Seu acesso foi recusado ou revogado pelo gestor.', true);
       return;
     }
     if (match.status === 'approved' || match.status === 'active') {
-      if (!match.password && match.invite_token) {
-        toast(`Seu e-mail possui um convite pendente. Crie sua senha na aba "Ativar Convite".`);
-        openLoginModal('invite', match.email, match.invite_token, match.company, match.name);
+      const effectivePassword = cred?.password || match.password || '';
+      if (!effectivePassword) {
+        if (match.invite_token) {
+          toast('Seu e-mail possui um convite pendente. Crie sua senha na aba "Ativar Convite".');
+          openLoginModal('invite', match.email, match.invite_token, match.company, match.name);
+        } else {
+          toast('Sua conta precisa de definição de senha. Crie sua senha na aba "Ativar Convite".', true);
+          openLoginModal('invite', match.email, 'PRIMEIRO-ACESSO', match.company, match.name);
+        }
         return;
       }
-      if (match.password && match.password !== password) {
+      if (effectivePassword !== password) {
         toast('Senha incorreta. Tente novamente.', true);
         return;
+      }
+      if (!cred?.password) {
+        await saveUserCredentialToSupabase(email, password);
       }
       currentUser = {
         id: match.id,
         email: match.email,
         name: match.name,
-        role: isSystemAdminEmail(match.email) ? 'admin' : normalizeAccessRole(match.role || 'gestor'),
-        company: match.company || 'Obra',
+        role: isSystemAdminEmail(match.email) ? 'admin' : normalizeAccessRole(match.role || 'operador'),
+        company: normalizeCompanyName(match.company || 'HEATING COOLING'),
         photo: match.photo || undefined,
-        authCredentialHash: await passwordSessionFingerprint(password)
+        authCredentialHash: await passwordSessionFingerprint(password),
+        authSessionVersion: AUTH_SESSION_VERSION
       };
       localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
       closeModal();
@@ -1479,32 +1759,7 @@ async function submitUserLogin(event) {
     return;
   }
 
-  const client = getSupabase();
-  if (client && client.auth && typeof client.auth.signInWithPassword === 'function') {
-    try {
-      const { data: authData, error } = await client.auth.signInWithPassword({ email, password });
-      if (authData && authData.user && !error) {
-        currentUser = {
-          id: authData.user.id,
-          email: authData.user.email,
-          name: authData.user.user_metadata?.name || email.split('@')[0],
-          role: isSystemAdminEmail(authData.user.email) ? 'admin' : normalizeAccessRole(authData.user.user_metadata?.role || 'admin'),
-          company: authData.user.user_metadata?.company || 'Heating Cooling'
-        };
-        localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
-        closeModal();
-        updateAppShellAccess();
-        finishAuthenticationRoute();
-        render();
-        toast(`Bem-vindo, ${currentUser.name}! Acesso Supabase liberado.`);
-        return;
-      }
-    } catch(e) {
-      console.warn('Supabase Auth login falhou:', e);
-    }
-  }
-
-  toast('E-mail não encontrado ou pendente de ativação/aprovação. Utilize a aba "Ativar Convite" ou "Solicitar Cadastro".', true);
+  toast('E-mail não encontrado ou senha inválida. Utilize a aba "Ativar Convite" ou "Solicitar Cadastro".', true);
 }
 
 async function submitUserSignup(event) {
@@ -1513,8 +1768,13 @@ async function submitUserSignup(event) {
   const email = (data.email || '').toLowerCase().trim();
   const name = (data.name || '').trim();
   const password = String(data.password || '').trim();
-  const company = (data.company || '').trim();
+  const company = normalizeCompanyName(data.company || '');
   const role = data.role || 'operador';
+
+  if (!company) {
+    toast('Selecione uma empresa cadastrada na lista.', true);
+    return;
+  }
 
   const existing = userApprovals.find(u => u.email && u.email.toLowerCase() === email);
   if (existing) {
@@ -1556,7 +1816,7 @@ async function submitInviteActivation(event) {
   const email = (data.email || '').toLowerCase().trim();
   const token = (data.token || '').trim();
   const name = (data.name || '').trim();
-  const company = (data.company || '').trim();
+  const company = normalizeCompanyName(data.company || '');
   const password = String(data.password || '').trim();
   const photo = data.photo_base64 || '';
 
@@ -1564,12 +1824,15 @@ async function submitInviteActivation(event) {
     toast('Informe seu e-mail para ativar o acesso.', true);
     return;
   }
-  if (!password) {
-    toast('Defina uma senha de acesso.', true);
+  if (!password || password.length < 4) {
+    toast('Defina uma senha de acesso de pelo menos 4 caracteres.', true);
     return;
   }
 
-  await syncUserApprovalsFromSupabase();
+  await Promise.all([
+    syncUserApprovalsFromSupabase({ force: true }),
+    syncUserCredentialsFromSupabase()
+  ]);
 
   let match = userApprovals.find(u =>
     (token && u.invite_token && u.invite_token.toUpperCase() === token.toUpperCase()) ||
@@ -1577,32 +1840,28 @@ async function submitInviteActivation(event) {
   );
 
   if (!match) {
-    match = {
-      id: generateUUID(),
-      email: email,
-      name: name || (email.split('@')[0]),
-      company: company || 'Obra',
-      password: password,
-      photo: photo || undefined,
-      role: 'gestor',
-      status: 'approved',
-      invite_token: token || undefined,
-      approved_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    userApprovals.unshift(match);
-  } else {
-    match.email = email;
-    match.name = name || match.name;
-    if (company) match.company = company;
-    match.password = password;
-    if (photo) match.photo = photo;
-    match.status = 'approved';
-    if (!match.role) match.role = 'gestor';
-    match.approved_at = new Date().toISOString();
-    match.updated_at = new Date().toISOString();
+    toast('Convite não encontrado. Verifique seu e-mail e código de convite ou solicite um novo ao gestor.', true);
+    return;
   }
+
+  const existingCred = getUserCredential(email);
+  const tokenMatches = Boolean(token && match.invite_token && match.invite_token.toUpperCase() === token.toUpperCase());
+  const isFirstAccessWithoutPassword = !existingCred?.password && !match.password && (token.toUpperCase() === 'PRIMEIRO-ACESSO' || match.status === 'approved');
+
+  if (!tokenMatches && !isFirstAccessWithoutPassword) {
+    toast('Código de convite inválido. Caso já tenha senha, utilize a aba "Entrar".', true);
+    return;
+  }
+
+  match.email = email;
+  match.name = name || match.name;
+  if (company) match.company = company;
+  match.password = password;
+  if (photo) match.photo = photo;
+  match.status = 'approved';
+  if (!match.role) match.role = 'operador';
+  match.approved_at = new Date().toISOString();
+  match.updated_at = new Date().toISOString();
 
   localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
   await saveUserApprovalToSupabase(match);
@@ -1611,10 +1870,11 @@ async function submitInviteActivation(event) {
     id: match.id,
     email: match.email,
     name: match.name,
-    role: isSystemAdminEmail(match.email) ? 'admin' : normalizeAccessRole(match.role || 'gestor'),
-    company: match.company || 'Obra',
+    role: isSystemAdminEmail(match.email) ? 'admin' : normalizeAccessRole(match.role || 'operador'),
+    company: normalizeCompanyName(match.company || 'HEATING COOLING'),
     photo: match.photo || undefined,
-    authCredentialHash: await passwordSessionFingerprint(password)
+    authCredentialHash: await passwordSessionFingerprint(password),
+    authSessionVersion: AUTH_SESSION_VERSION
   };
   localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
 
@@ -1642,10 +1902,11 @@ function openUserProfileModal() {
 
   const name = currentUser.name || currentUser.email || '';
   const email = currentUser.email || '';
-  const company = currentUser.company || '';
+  const company = normalizeCompanyName(currentUser.company || '');
   const role = getEffectiveAccessRole();
   const roleLabel = accessRoleLabel(role);
-  const initials = (name.split(' ').map(n=>n[0]).join('').substring(0, 2) || 'US').toUpperCase();
+  const initials = (name.split(' ').map(n => n[0]).join('').substring(0, 2) || 'US').toUpperCase();
+  const companies = getRegisteredWorkforceCompanies();
 
   modal(`
     <form onsubmit="saveUserProfile(event)">
@@ -1669,7 +1930,10 @@ function openUserProfileModal() {
 
         <div class="field full">
           <label style="font-weight:700; display:block; margin-bottom:4px;">Empresa / Vínculo</label>
-          <input type="text" name="company" value="${esc(company)}" placeholder="Ex: Heating Cooling, AIRTEC..." style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px;" />
+          <select name="company" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px; background:white;">
+            <option value="">Selecione uma empresa cadastrada...</option>
+            ${companies.map(c => `<option value="${esc(c)}" ${companyComparisonKey(c) === companyComparisonKey(company) ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+          </select>
         </div>
 
         <div class="field full">
@@ -1687,11 +1951,11 @@ function openUserProfileModal() {
           <div class="form-grid two">
             <div class="field">
               <label style="font-weight:700; display:block; margin-bottom:4px;">Nova senha</label>
-              <input type="password" name="newPassword" minlength="6" autocomplete="new-password" placeholder="Mínimo de 6 caracteres" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px;" />
+              <input type="password" name="newPassword" minlength="4" autocomplete="new-password" placeholder="Mínimo de 4 caracteres" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px;" />
             </div>
             <div class="field">
               <label style="font-weight:700; display:block; margin-bottom:4px;">Confirmar nova senha</label>
-              <input type="password" name="confirmPassword" minlength="6" autocomplete="new-password" placeholder="Repita a nova senha" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px;" />
+              <input type="password" name="confirmPassword" minlength="4" autocomplete="new-password" placeholder="Repita a nova senha" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:13px;" />
             </div>
           </div>
         </div>
@@ -1716,7 +1980,7 @@ async function saveUserProfile(event) {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(event.target));
   const newName = (data.name || '').trim();
-  const newCompany = (data.company || '').trim();
+  const newCompany = normalizeCompanyName(data.company || '');
   const newEmail = (data.email || '').trim().toLowerCase();
   const currentPassword = String(data.currentPassword || '');
   const newPassword = String(data.newPassword || '');
@@ -1732,8 +1996,9 @@ async function saveUserProfile(event) {
   }
 
   if (!currentUser) return;
+  await syncUserCredentialsFromSupabase();
   const oldEmail = String(currentUser.email || '').trim().toLowerCase();
-  const match = userApprovals.find(u =>
+  let match = userApprovals.find(u =>
     (currentUser.id && u.id === currentUser.id) ||
     (u.email && u.email.toLowerCase() === oldEmail)
   );
@@ -1745,16 +2010,19 @@ async function saveUserProfile(event) {
     return;
   }
 
+  const storedCred = getUserCredential(oldEmail);
+  const knownPassword = storedCred?.password || match?.password || '';
+
   if (newPassword) {
-    if (newPassword.length < 6) {
-      toast('A nova senha deve ter pelo menos 6 caracteres.', true);
+    if (newPassword.length < 4) {
+      toast('A nova senha deve ter pelo menos 4 caracteres.', true);
       return;
     }
     if (newPassword !== confirmPassword) {
       toast('A confirmação da nova senha não confere.', true);
       return;
     }
-    if (match?.password && currentPassword !== String(match.password)) {
+    if (knownPassword && currentPassword !== String(knownPassword)) {
       toast('A senha atual está incorreta.', true);
       return;
     }
@@ -1765,7 +2033,11 @@ async function saveUserProfile(event) {
 
   const previousRole = getEffectiveAccessRole();
   const emailChanged = newEmail !== oldEmail;
-  if (newPassword) currentUser.authCredentialHash = await passwordSessionFingerprint(newPassword);
+  if (newPassword) {
+    currentUser.authCredentialHash = await passwordSessionFingerprint(newPassword);
+    await saveUserCredentialToSupabase(newEmail, newPassword);
+  }
+  currentUser.authSessionVersion = AUTH_SESSION_VERSION;
   currentUser.name = newName;
   currentUser.email = newEmail;
   currentUser.company = newCompany;
@@ -1787,28 +2059,9 @@ async function saveUserProfile(event) {
     }
   }
 
-  const client = getSupabase();
-  if ((emailChanged || newPassword) && client?.auth?.updateUser) {
-    try {
-      const authChanges = {};
-      if (emailChanged) authChanges.email = newEmail;
-      if (newPassword) authChanges.password = newPassword;
-      const { error } = await client.auth.updateUser(authChanges);
-      if (!error && newPassword && typeof client.auth.signOut === 'function') {
-        const { error: signOutError } = await client.auth.signOut({ scope: 'others' });
-        if (signOutError) console.warn('Não foi possível encerrar as outras sessões do Supabase Auth:', signOutError);
-      }
-      if (error && !/session/i.test(error.message || '')) {
-        console.warn('Não foi possível atualizar as credenciais no provedor de autenticação:', error);
-      }
-    } catch (error) {
-      console.warn('Atualização externa de credenciais indisponível:', error);
-    }
-  }
-
   updateAppShellAccess();
   closeModal();
-  toast(newPassword ? 'Perfil, e-mail e senha atualizados com sucesso!' : 'Perfil atualizado com sucesso!');
+  toast(newPassword ? 'Perfil e senha atualizados! Outros aparelhos com a senha antiga serão desconectados.' : 'Perfil atualizado com sucesso!');
   render();
 }
 
@@ -1820,7 +2073,7 @@ function getSupabase() {
   if (!supabase && typeof window !== 'undefined' && window.supabase && typeof window.supabase.createClient === 'function') {
     try {
       supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-    } catch(e) {
+    } catch (e) {
       console.warn('Erro ao conectar ao Supabase:', e);
     }
   }
@@ -1857,7 +2110,7 @@ async function performSupabaseRestRequest(path, options = {}) {
       try {
         const parsed = JSON.parse(body);
         detail = parsed.message || parsed.details || parsed.hint || body;
-      } catch(e) {}
+      } catch (e) { }
       const error = new Error(`Supabase ${response.status}: ${detail || response.statusText}`);
       error.name = 'SupabaseHttpError';
       error.status = response.status;
@@ -2114,7 +2367,7 @@ async function synchronizeAfterReconnect({ notify = false } = {}) {
       return result;
     }
     if (currentUser) {
-      verifyCurrentUserSession().catch(() => {});
+      verifyCurrentUserSession().catch(() => { });
     }
     await Promise.allSettled([
       syncFromSupabase({ pushAfter: hasPendingRemoteSave }),
@@ -2175,7 +2428,7 @@ async function persistEquipmentSnapshotRemote() {
       headers: { Prefer: 'resolution=merge-duplicates' }
     });
     return true;
-  } catch(err) {
+  } catch (err) {
     console.warn('Erro ao salvar snapshot de equipamentos no app_metadata:', err);
     return false;
   }
@@ -2352,15 +2605,15 @@ function migrateVerifiedEquipmentOperationalStates() {
 
     const usage = desiredStatus === 'in-use'
       ? (normalizeEquipmentUsage(equipment.usage) || {
-          responsible: equipment.contractor || 'Em uso (Planilha)',
-          company: equipment.contractor || '',
-          phone: '',
-          dataHall: '—',
-          location: '—',
-          activity: 'Em uso via planilha',
-          expectedAt: '',
-          startedAt: '2026-09-25T16:36:06.000Z'
-        })
+        responsible: equipment.contractor || 'Em uso (Planilha)',
+        company: equipment.contractor || '',
+        phone: '',
+        dataHall: '—',
+        location: '—',
+        activity: 'Em uso via planilha',
+        expectedAt: '',
+        startedAt: '2026-09-25T16:36:06.000Z'
+      })
       : null;
     changed = true;
     return { ...equipment, status: desiredStatus, usage, updatedAt: migratedAt };
@@ -2396,8 +2649,28 @@ function loadLocalStorageBackup() {
         const hsMap = new Map();
         seedHistory.forEach(h => hsMap.set(String(h.id), h));
         parsed.forEach(h => hsMap.set(String(h.id), h));
-        history = Array.from(hsMap.values()).sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
+        history = Array.from(hsMap.values()).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
       }
+    }
+    const localWfCompanies = localStorage.getItem('obraflow_workforce_companies');
+    if (localWfCompanies) {
+      const parsed = JSON.parse(localWfCompanies);
+      if (Array.isArray(parsed)) workforceCompanies = parsed;
+    }
+    const localWfCompanyRenames = localStorage.getItem('obraflow_workforce_company_renames');
+    if (localWfCompanyRenames) {
+      const parsed = JSON.parse(localWfCompanyRenames);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) workforceCompanyRenames = parsed;
+    }
+    const localWfDeletedCompanies = localStorage.getItem('obraflow_workforce_deleted_companies');
+    if (localWfDeletedCompanies) {
+      const parsed = JSON.parse(localWfDeletedCompanies);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) workforceDeletedCompanies = parsed;
+    }
+    const localClearedAttendance = localStorage.getItem('obraflow_workforce_cleared_attendance');
+    if (localClearedAttendance) {
+      const parsed = JSON.parse(localClearedAttendance);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) workforceClearedAttendance = parsed;
     }
     const localWf = localStorage.getItem('obraflow_workforce');
     if (localWf) {
@@ -2417,7 +2690,9 @@ function loadLocalStorageBackup() {
     const localAttendance = localStorage.getItem('obraflow_workforce_attendance');
     if (localAttendance) {
       const parsed = JSON.parse(localAttendance);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) workforceAttendance = parsed;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        workforceAttendance = normalizeWorkforceAttendanceMap(parsed);
+      }
     }
     const localWorkforceControlMeta = localStorage.getItem('obraflow_workforce_control_meta');
     if (localWorkforceControlMeta) {
@@ -2431,6 +2706,7 @@ function loadLocalStorageBackup() {
       workforce = normalizeWorkforcePeople(workforce);
       pruneDeletedWorkforceAttendance();
     }
+    workforceCompanies = getRegisteredWorkforceCompanies();
     // O controle operacional sempre deve abrir no dia atual. Persistir a data
     // selecionada fazia o quadro continuar mostrando o dia anterior após a virada.
     const currentWorkforceDate = currentLocalDateISO();
@@ -2460,6 +2736,10 @@ function saveLocalBackup() {
     ['obraflow_equipments', equipments],
     ['obraflow_history', history],
     ['obraflow_workforce', workforce],
+    ['obraflow_workforce_companies', workforceCompanies],
+    ['obraflow_workforce_company_renames', workforceCompanyRenames],
+    ['obraflow_workforce_deleted_companies', workforceDeletedCompanies],
+    ['obraflow_workforce_cleared_attendance', workforceClearedAttendance],
     ['obraflow_workforce_meta', workforceMeta],
     ['obraflow_workforce_attendance', workforceAttendance],
     ['obraflow_workforce_control_meta', workforceControlMeta],
@@ -2559,7 +2839,7 @@ async function save(equipmentId = '', historyId = '') {
   // O backup local e imediato; a copia compartilhada usa a API REST sem biblioteca externa.
   try {
     await flushPendingFieldEvents();
-  } catch(e) {
+  } catch (e) {
     hasPendingRemoteSave = true;
     console.warn('Erro ao salvar no Supabase:', e);
     return { local: savedLocally, remote: false, error: e };
@@ -2579,7 +2859,7 @@ function dedupePackingSlips(records = []) {
     const currentTime = Date.parse(current?.updatedAt || current?.createdAt || current?.issuedAt || 0) || 0;
     if (!current || recordTime > currentTime || (recordTime === currentTime && JSON.stringify(record).length > JSON.stringify(current).length)) unique.set(key, record);
   });
-  return Array.from(unique.values()).sort((a,b) => (Date.parse(b.issuedAt || b.createdAt || '') || 0) - (Date.parse(a.issuedAt || a.createdAt || '') || 0));
+  return Array.from(unique.values()).sort((a, b) => (Date.parse(b.issuedAt || b.createdAt || '') || 0) - (Date.parse(a.issuedAt || a.createdAt || '') || 0));
 }
 
 async function syncPackingSlipsFromSupabase() {
@@ -2597,7 +2877,7 @@ async function syncPackingSlipsFromSupabase() {
     packingSlips = dedupePackingSlips(Array.from(merged.values()));
     packingSlipRemoteAvailable = true;
     saveLocalBackup();
-    if (canSafelyAutoRender(['romaneios','formularios','materiais','notas-entrada','movimentacoes-materiais','cautelas'])) render();
+    if (canSafelyAutoRender(['romaneios', 'formularios', 'materiais', 'notas-entrada', 'movimentacoes-materiais', 'cautelas'])) render();
   } catch (error) {
     packingSlipRemoteAvailable = false;
     console.warn('Sincronização de romaneios indisponível; mantendo os dados locais:', error);
@@ -2632,9 +2912,9 @@ async function syncReceivingInspectionsFromSupabase() {
       const local = merged.get(String(remote.id));
       if (!local || Date.parse(remote.updatedAt || row.updated_at || 0) >= Date.parse(local.updatedAt || 0)) merged.set(String(remote.id), remote);
     });
-    receivingInspections = Array.from(merged.values()).sort((a,b) => (Date.parse(b.inspectedAt || b.entryDate || b.createdAt || '') || 0) - (Date.parse(a.inspectedAt || a.entryDate || a.createdAt || '') || 0));
+    receivingInspections = Array.from(merged.values()).sort((a, b) => (Date.parse(b.inspectedAt || b.entryDate || b.createdAt || '') || 0) - (Date.parse(a.inspectedAt || a.entryDate || a.createdAt || '') || 0));
     saveLocalBackup();
-    if (canSafelyAutoRender(['formularios','materiais','notas-entrada','movimentacoes-materiais'])) render();
+    if (canSafelyAutoRender(['formularios', 'materiais', 'notas-entrada', 'movimentacoes-materiais'])) render();
   } catch (error) {
     console.warn('Sincronização dos checklists de recebimento indisponível; mantendo os dados locais:', error);
   }
@@ -2740,15 +3020,16 @@ async function loadSeedWorkforce() {
     if (data.source && !workforceMeta.source) {
       workforceMeta = { source: data.source, updatedAt: data.updatedAt || '' };
     }
-  } catch(e) {
+  } catch (e) {
     console.warn('Seed workforce falhou:', e);
   }
 }
 
 function workforcePersonKey(personOrCompany, name = '') {
-  const company = typeof personOrCompany === 'object' ? personOrCompany?.company : personOrCompany;
+  const rawCompany = typeof personOrCompany === 'object' ? personOrCompany?.company : personOrCompany;
   const personName = typeof personOrCompany === 'object' ? personOrCompany?.name : name;
-  return `${String(company || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR')}|${String(personName || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR')}`;
+  const canonicalCompany = normalizeCompanyName(rawCompany);
+  return `${String(canonicalCompany || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR')}|${String(personName || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR')}`;
 }
 
 function normalizeWorkforceSearch(value) {
@@ -2764,7 +3045,7 @@ function workforceDatabasePayload(person) {
   if (!person?.id || !person?.company || !person?.name) return null;
   return {
     id: String(person.id),
-    company: String(person.company || ''),
+    company: normalizeCompanyName(person.company),
     name: String(person.name || ''),
     role: String(person.role || ''),
     status: String(person.status || ''),
@@ -2780,7 +3061,7 @@ function workforcePersonFromDatabase(row) {
   return {
     ...row,
     id: String(row.id),
-    company: String(row.company || ''),
+    company: normalizeCompanyName(row.company),
     name: String(row.name || ''),
     role: String(row.role || ''),
     status: String(row.status || ''),
@@ -2828,7 +3109,7 @@ function normalizeWorkforceDeletionMap(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return normalized;
   Object.entries(value).forEach(([storedKey, tombstone]) => {
     if (!tombstone || typeof tombstone !== 'object') return;
-    const personKey = tombstone.personKey || workforcePersonKey(tombstone.company, tombstone.name) || storedKey;
+    const personKey = tombstone.personKey ? workforcePersonKey(tombstone.company || tombstone.personKey.split('|')[0], tombstone.name || tombstone.personKey.split('|')[1]) : workforcePersonKey(tombstone.company, tombstone.name) || storedKey;
     if (!personKey || personKey === '|') return;
     const deletedAt = tombstone.deletedAt || tombstone.updatedAt || new Date(0).toISOString();
     const previous = normalized[personKey];
@@ -2836,7 +3117,7 @@ function normalizeWorkforceDeletionMap(value) {
       normalized[personKey] = {
         personKey,
         id: tombstone.id ? String(tombstone.id) : '',
-        company: String(tombstone.company || '').replace(/\s+/g, ' ').trim(),
+        company: normalizeCompanyName(tombstone.company || ''),
         name: String(tombstone.name || '').replace(/\s+/g, ' ').trim(),
         deletedAt
       };
@@ -2876,7 +3157,7 @@ function markWorkforcePersonDeleted(person) {
   workforceDeletedPeople[personKey] = {
     personKey,
     id: person?.id ? String(person.id) : '',
-    company: String(person?.company || '').replace(/\s+/g, ' ').trim(),
+    company: normalizeCompanyName(person?.company || ''),
     name: String(person?.name || '').replace(/\s+/g, ' ').trim(),
     deletedAt: new Date().toISOString()
   };
@@ -2904,34 +3185,47 @@ function pruneObsoleteWorkforceDeletions() {
 }
 
 function pruneDeletedWorkforceAttendance() {
+  const validKeys = Array.isArray(workforce) && workforce.length > 0
+    ? new Set(workforce.map(workforcePersonKey))
+    : null;
   Object.keys(workforceAttendance || {}).forEach(personKey => {
-    if (workforceDeletedPeople[personKey]) delete workforceAttendance[personKey];
+    if (workforceDeletedPeople[personKey] || (validKeys && !validKeys.has(personKey))) {
+      delete workforceAttendance[personKey];
+    }
   });
 }
 
 function normalizeWorkforcePeople(people) {
-  return (Array.isArray(people) ? people : [])
-    .filter(person => {
-      if (!person?.company || !person?.name) return false;
-      const n = String(person.name).trim().toLowerCase();
-      if (n.startsWith('[cadastro empresa')) return false;
-      // Excluir uma conta de acesso não deve apagar o colaborador do efetivo.
-      // Aqui vale somente a exclusão feita no próprio controle de efetivo.
-      if (isWorkforcePersonDeleted(person)) return false;
-      return true;
-    })
-    .map(person => ({
+  const byKey = new Map();
+  (Array.isArray(people) ? people : []).forEach(person => {
+    if (!person?.company || !person?.name) return;
+    const n = String(person.name).trim().toLowerCase();
+    if (n.startsWith('[cadastro empresa')) return;
+    if (isWorkforcePersonDeleted(person)) return;
+    const normalizedPerson = {
       ...person,
       id: person.id || crypto.randomUUID(),
-      company: String(person.company).replace(/\s+/g, ' ').trim(),
+      company: normalizeCompanyName(person.company),
       name: String(person.name).replace(/\s+/g, ' ').trim(),
       auxRole: String(person.auxRole || '').replace(/\s+/g, ' ').trim(),
       role: String(person.role || '').replace(/\s+/g, ' ').trim(),
       status: String(person.status || '').replace(/\s+/g, ' ').trim(),
       accessRole: person.accessRole || person.accessrole || person.access_role || 'operator',
       updatedAt: person.updatedAt || person.updated_at || ''
-    }))
-    .sort((a, b) => safeSort(a?.company, b?.company) || safeSort(a?.name, b?.name));
+    };
+    const key = workforcePersonKey(normalizedPerson);
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, normalizedPerson);
+    } else {
+      const existingTime = Date.parse(existing.updatedAt || existing.createdAt || '') || 0;
+      const candidateTime = Date.parse(normalizedPerson.updatedAt || normalizedPerson.createdAt || '') || 0;
+      if (candidateTime >= existingTime) {
+        byKey.set(key, { ...existing, ...normalizedPerson });
+      }
+    }
+  });
+  return [...byKey.values()].sort((a, b) => safeSort(a?.company, b?.company) || safeSort(a?.name, b?.name));
 }
 
 function mergeWorkforcePeople(localPeople, remotePeople, preferLocalOnTie = false) {
@@ -2959,22 +3253,72 @@ function mergeWorkforcePeople(localPeople, remotePeople, preferLocalOnTie = fals
   return normalizeWorkforcePeople(merged.map(item => item.person));
 }
 
-function normalizeWorkforceAttendanceMap(value) {
+function normalizeWorkforceClearedAttendanceMap(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const normalized = {};
-  Object.entries(value).forEach(([personKey, dates]) => {
+  Object.entries(value).forEach(([rawPersonKey, dates]) => {
     if (!dates || typeof dates !== 'object' || Array.isArray(dates)) return;
-    const entries = {};
-    Object.entries(dates).forEach(([date, marker]) => {
-      const clean = normalizeAttendanceValue(marker);
-      if (/^\d{4}-\d{2}-\d{2}$/.test(date) && clean) entries[date] = clean;
+    const sep = String(rawPersonKey || '').indexOf('|');
+    const canonicalKey = sep >= 0
+      ? workforcePersonKey(rawPersonKey.slice(0, sep), rawPersonKey.slice(sep + 1))
+      : rawPersonKey;
+    if (!canonicalKey || canonicalKey === '|') return;
+    Object.entries(dates).forEach(([date, clearedAt]) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !clearedAt) return;
+      if (!normalized[canonicalKey]) normalized[canonicalKey] = {};
+      const prev = normalized[canonicalKey][date];
+      if (!prev || (Date.parse(clearedAt) || 0) >= (Date.parse(prev) || 0)) {
+        normalized[canonicalKey][date] = String(clearedAt);
+      }
     });
-    if (Object.keys(entries).length) normalized[personKey] = entries;
   });
   return normalized;
 }
 
-function mergeWorkforceAttendance(localValue, remoteValue, localWins = false) {
+function mergeWorkforceClearedAttendanceMaps(...sources) {
+  const merged = {};
+  sources.forEach(source => {
+    Object.entries(normalizeWorkforceClearedAttendanceMap(source)).forEach(([personKey, dates]) => {
+      if (!merged[personKey]) merged[personKey] = {};
+      Object.entries(dates).forEach(([date, clearedAt]) => {
+        const prev = merged[personKey][date];
+        if (!prev || (Date.parse(clearedAt) || 0) >= (Date.parse(prev) || 0)) {
+          merged[personKey][date] = clearedAt;
+        }
+      });
+    });
+  });
+  return merged;
+}
+
+function normalizeWorkforceAttendanceMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const maxAllowedDate = currentLocalDateISO();
+  const normalized = {};
+  Object.entries(value).forEach(([rawPersonKey, dates]) => {
+    if (!dates || typeof dates !== 'object' || Array.isArray(dates)) return;
+    const sep = String(rawPersonKey || '').indexOf('|');
+    const canonicalKey = sep >= 0
+      ? workforcePersonKey(rawPersonKey.slice(0, sep), rawPersonKey.slice(sep + 1))
+      : rawPersonKey;
+    if (!canonicalKey || canonicalKey === '|') return;
+    Object.entries(dates).forEach(([date, marker]) => {
+      // Bloqueia e limpa qualquer marcação automática/indevida em dias posteriores ao dia atual
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > maxAllowedDate) return;
+      const clean = normalizeAttendanceValue(marker);
+      if (!clean) return;
+      if (!normalized[canonicalKey]) normalized[canonicalKey] = {};
+      const existing = normalized[canonicalKey][date];
+      // Se duas chaves legadas da mesma pessoa tinham marcação no mesmo dia, prioriza D/N sobre 1
+      if (!existing || (existing === '1' && ['D', 'N'].includes(clean))) {
+        normalized[canonicalKey][date] = clean;
+      }
+    });
+  });
+  return normalized;
+}
+
+function mergeWorkforceAttendance(localValue, remoteValue, localWins = false, clearedMap = workforceClearedAttendance) {
   const localAttendance = normalizeWorkforceAttendanceMap(localValue);
   const remoteAttendance = normalizeWorkforceAttendanceMap(remoteValue);
   const baseAttendance = localWins ? remoteAttendance : localAttendance;
@@ -2989,17 +3333,38 @@ function mergeWorkforceAttendance(localValue, remoteValue, localWins = false) {
       if (marker) merged[personKey][date] = marker;
     });
   });
+  // Respeita exclusões/limpezas explícitas de presença para que marcações apagadas não voltem sozinhas
+  const cleanTombstones = normalizeWorkforceClearedAttendanceMap(clearedMap);
+  Object.entries(cleanTombstones).forEach(([personKey, dates]) => {
+    if (!merged[personKey]) return;
+    Object.keys(dates).forEach(date => {
+      if (localWins && !localAttendance[personKey]?.[date]) {
+        delete merged[personKey][date];
+      } else if (!localWins && !remoteAttendance[personKey]?.[date]) {
+        delete merged[personKey][date];
+      } else if (localAttendance[personKey]?.[date] === undefined) {
+        delete merged[personKey][date];
+      }
+    });
+    if (!Object.keys(merged[personKey]).length) delete merged[personKey];
+  });
   return merged;
 }
 
 function workforceSnapshot() {
   pruneObsoleteWorkforceDeletions();
+  pruneDeletedWorkforceAttendance();
+  workforceCompanies = getRegisteredWorkforceCompanies();
   return {
-    version: 6,
+    version: 7,
     updatedAt: workforceControlMeta.updatedAt || new Date().toISOString(),
     meta: workforceMeta,
+    companies: workforceCompanies,
+    companyRenames: workforceCompanyRenames,
+    deletedCompanies: workforceDeletedCompanies,
     people: workforce,
     attendance: workforceAttendance,
+    clearedAttendance: workforceClearedAttendance,
     deletedPeople: workforceDeletedPeople
   };
 }
@@ -3018,8 +3383,6 @@ function persistWorkforceControlRemote() {
           ? controlRows[0].value
           : null;
       } catch (readError) {
-        // Sem rede ou com uma escrita offline já enfileirada, o retrato local
-        // continua seguro e será enviado pela fila automática.
         console.warn('Não foi possível conferir o efetivo remoto antes de salvar:', readError);
       }
 
@@ -3028,17 +3391,43 @@ function persistWorkforceControlRemote() {
         const localTime = Date.parse(localSnapshot.updatedAt || '') || 0;
         const remoteTime = Date.parse(remoteSnapshot.updatedAt || '') || 0;
         const localWins = localTime >= remoteTime;
+        workforceCompanyRenames = localWins
+          ? { ...(remoteSnapshot.companyRenames || {}), ...(localSnapshot.companyRenames || {}) }
+          : { ...(localSnapshot.companyRenames || {}), ...(remoteSnapshot.companyRenames || {}) };
+        workforceDeletedCompanies = localWins
+          ? { ...(remoteSnapshot.deletedCompanies || {}), ...(localSnapshot.deletedCompanies || {}) }
+          : { ...(localSnapshot.deletedCompanies || {}), ...(remoteSnapshot.deletedCompanies || {}) };
+        workforceClearedAttendance = mergeWorkforceClearedAttendanceMaps(localSnapshot.clearedAttendance, remoteSnapshot.clearedAttendance);
         workforceDeletedPeople = mergeWorkforceDeletionMaps(localSnapshot.deletedPeople, remoteSnapshot.deletedPeople);
+        const mergedPeople = mergeWorkforcePeople(localSnapshot.people, remoteSnapshot.people, localWins);
+        const mergedCompanies = [...new Set([
+          ...(Array.isArray(remoteSnapshot.companies) ? remoteSnapshot.companies : []),
+          ...(Array.isArray(localSnapshot.companies) ? localSnapshot.companies : []),
+          ...mergedPeople.map(p => p.company)
+        ].map(normalizeCompanyName).filter(Boolean))].filter(c => {
+          const k = companyComparisonKey(c);
+          return !workforceDeletedCompanies[k] || mergedPeople.some(p => companyComparisonKey(p.company) === k);
+        }).sort(safeSort);
+        workforceCompanies = mergedCompanies;
+        const mergedAtt = mergeWorkforceAttendance(localSnapshot.attendance, remoteSnapshot.attendance, localWins, workforceClearedAttendance);
+        const validPersonKeys = new Set(mergedPeople.map(workforcePersonKey));
+        Object.keys(mergedAtt).forEach(k => {
+          if (!validPersonKeys.has(k)) delete mergedAtt[k];
+        });
         snapshot = {
-          version: 6,
+          version: 7,
           updatedAt: new Date().toISOString(),
           meta: localWins ? (localSnapshot.meta || workforceMeta) : (remoteSnapshot.meta || workforceMeta),
-          people: mergeWorkforcePeople(localSnapshot.people, remoteSnapshot.people, localWins),
-          attendance: mergeWorkforceAttendance(localSnapshot.attendance, remoteSnapshot.attendance, localWins),
+          companies: mergedCompanies,
+          companyRenames: workforceCompanyRenames,
+          deletedCompanies: workforceDeletedCompanies,
+          people: mergedPeople,
+          attendance: mergedAtt,
+          clearedAttendance: workforceClearedAttendance,
           deletedPeople: workforceDeletedPeople
         };
       } else {
-        snapshot.version = 6;
+        snapshot.version = 7;
         snapshot.updatedAt = new Date().toISOString();
       }
 
@@ -3047,9 +3436,8 @@ function persistWorkforceControlRemote() {
         body: JSON.stringify({ key: 'workforce_control', value: snapshot }),
         headers: { Prefer: 'resolution=merge-duplicates' }
       });
-      // Uma edição feita enquanto a requisição estava em andamento nunca pode
-      // ser substituída pela resposta preparada antes dela.
       if (revisionAtStart === workforceDataRevision) {
+        workforceCompanies = getRegisteredWorkforceCompanies();
         workforce = normalizeWorkforcePeople(snapshot.people);
         workforceAttendance = normalizeWorkforceAttendanceMap(snapshot.attendance);
         workforceDeletedPeople = normalizeWorkforceDeletionMap(snapshot.deletedPeople);
@@ -3095,6 +3483,20 @@ async function syncWorkforceFromSupabase() {
     if (remoteSnapshot) {
       const remoteTime = Date.parse(remoteSnapshot.updatedAt || '') || 0;
       const localTime = Date.parse(workforceControlMeta.updatedAt || '') || 0;
+      const localChangedDuringSync = workforceDataRevision !== revisionAtStart;
+      const localWins = localChangedDuringSync || localTime > remoteTime;
+
+      workforceCompanyRenames = localWins
+        ? { ...(remoteSnapshot.companyRenames || {}), ...(workforceCompanyRenames || {}) }
+        : { ...(workforceCompanyRenames || {}), ...(remoteSnapshot.companyRenames || {}) };
+      workforceDeletedCompanies = localWins
+        ? { ...(remoteSnapshot.deletedCompanies || {}), ...(workforceDeletedCompanies || {}) }
+        : { ...(workforceDeletedCompanies || {}), ...(remoteSnapshot.deletedCompanies || {}) };
+      if (Array.isArray(remoteSnapshot.companies)) {
+        workforceCompanies = [...new Set([...workforceCompanies, ...remoteSnapshot.companies].map(normalizeCompanyName).filter(Boolean))];
+      }
+      workforceClearedAttendance = mergeWorkforceClearedAttendanceMaps(workforceClearedAttendance, remoteSnapshot.clearedAttendance);
+
       const localDeletionMap = normalizeWorkforceDeletionMap(workforceDeletedPeople);
       const remoteDeletionMap = normalizeWorkforceDeletionMap(remoteSnapshot.deletedPeople);
       const hasUnpublishedLocalDeletion = Object.entries(localDeletionMap).some(([key, tombstone]) => {
@@ -3102,15 +3504,9 @@ async function syncWorkforceFromSupabase() {
         return !remoteTombstone || (Date.parse(tombstone.deletedAt) || 0) > (Date.parse(remoteTombstone.deletedAt) || 0);
       });
       workforceDeletedPeople = mergeWorkforceDeletionMaps(localDeletionMap, remoteDeletionMap);
-      const localChangedDuringSync = workforceDataRevision !== revisionAtStart;
-      const localWins = localChangedDuringSync || localTime > remoteTime;
 
-      // A fonte mais recente vence conflitos do mesmo dia; dias exclusivos das
-      // duas cópias continuam preservados.
-      const mergedAttendance = mergeWorkforceAttendance(workforceAttendance, remoteSnapshot.attendance, localWins);
+      const mergedAttendance = mergeWorkforceAttendance(workforceAttendance, remoteSnapshot.attendance, localWins, workforceClearedAttendance);
 
-      // A tabela por pessoa funciona como diário de recuperação: um cadastro
-      // confirmado nela não some caso o retrato global ainda esteja atrasado.
       const snapshotPeople = Array.isArray(remoteSnapshot.people) ? remoteSnapshot.people : [];
       const snapshotIds = new Set(snapshotPeople.map(person => String(person?.id || '')).filter(Boolean));
       const snapshotKeys = new Set(snapshotPeople.map(workforcePersonKey));
@@ -3123,19 +3519,21 @@ async function syncWorkforceFromSupabase() {
       );
       const remotePeople = mergeWorkforcePeople(snapshotPeople, recoverableDirectPeople, false);
       workforce = mergeWorkforcePeople(workforce, remotePeople, localWins);
-      const remoteNeedsCleanup = (Array.isArray(remoteSnapshot.people) ? remoteSnapshot.people : [])
-        .some(person => String(person?.name || '').trim().toLowerCase().startsWith('[cadastro empresa'));
+      workforceCompanies = getRegisteredWorkforceCompanies();
 
+      const maxAllowedDate = currentLocalDateISO();
+      const remoteHadFutureOrDuplicateCompany = (remoteSnapshot.version || 0) < 7
+        || (Array.isArray(remoteSnapshot.people) && remoteSnapshot.people.some(p => p?.company && normalizeCompanyName(p.company) !== String(p.company).trim()))
+        || Object.values(remoteSnapshot.attendance || {}).some(dates => dates && Object.keys(dates).some(d => d > maxAllowedDate));
+
+      workforceAttendance = mergedAttendance;
       if (!localWins) {
-        workforceAttendance = mergedAttendance;
         workforceMeta = remoteSnapshot.meta || workforceMeta;
         workforceControlMeta = { updatedAt: remoteSnapshot.updatedAt || '' };
-      } else {
-        workforceAttendance = mergedAttendance;
       }
       pruneDeletedWorkforceAttendance();
       pruneObsoleteWorkforceDeletions();
-      if (localWins || hasUnpublishedLocalDeletion || remoteNeedsCleanup || hasDirectRecovery) {
+      if (localWins || hasUnpublishedLocalDeletion || remoteHadFutureOrDuplicateCompany || hasDirectRecovery) {
         workforceControlMeta = { updatedAt: new Date().toISOString() };
         scheduleWorkforceRemoteSave(0);
       }
@@ -3144,9 +3542,8 @@ async function syncWorkforceFromSupabase() {
       return true;
     }
 
-    // Em instalações antigas sem o retrato global, recupera primeiro os
-    // registros individuais e publica a base consolidada.
     workforce = mergeWorkforcePeople(workforce, directPeople, false);
+    workforceCompanies = getRegisteredWorkforceCompanies();
     if (!workforceControlMeta.updatedAt) workforceControlMeta = { updatedAt: new Date().toISOString() };
     saveLocalBackup();
     return persistWorkforceControlRemote();
@@ -3226,7 +3623,7 @@ function syncFromSupabase({ renderAfter = true, pushAfter = true, preferRemoteOp
       const localRecord = currentLocalHistory.find(item => String(item.id) === id) || seedRecord;
       const remoteRecord = (remoteHistory || []).find(item => String(item.id) === id);
       return chooseHistoryRecord(localRecord, remoteRecord);
-    }).filter(Boolean).sort((a,b) => recordTimestamp(b) - recordTimestamp(a));
+    }).filter(Boolean).sort((a, b) => recordTimestamp(b) - recordTimestamp(a));
 
     try {
       await backfillLocalEquipmentCatalog(currentLocalEquipments, remoteEquipments || []);
@@ -3338,24 +3735,23 @@ async function initializeApp() {
   if (typeof syncRadiosFromSupabase === 'function') setTimeout(() => syncRadiosFromSupabase(), 250);
   setTimeout(() => {
     if (currentUser) verifyCurrentUserSession({ force: true });
-    syncUserApprovalsFromSupabase();
-  }, 300);
+    if (currentPage === 'usuarios') syncUserApprovalsFromSupabase({ force: true });
+  }, 50);
   if (typeof syncSpoolProjectsFromSupabase === 'function') setTimeout(() => syncSpoolProjectsFromSupabase({ force: true }), 350);
 
-  // 1. Verificação contínua da sessão do usuário logado (desloga se a senha mudou ou conta foi revogada)
-  // Roda a cada 3 minutos consultando APENAS a linha do usuário logado (menos de 100 bytes).
+  // 1. Verificação periódica da sessão do usuário logado: apenas a cada 30 minutos para economizar dados do Supabase
   setInterval(() => {
     if (document.visibilityState === 'visible' && navigator.onLine !== false && currentUser) {
       verifyCurrentUserSession();
     }
-  }, 180000);
+  }, SESSION_CHECK_INTERVAL_MS);
 
-  // 2. Catálogo completo de aprovações/usuários: consulta a cada 2 minutos APENAS se o gestor estiver na tela de Usuários
+  // 2. Catálogo completo de aprovações/usuários: consulta a cada 5 minutos APENAS se o gestor estiver na tela de Usuários
   setInterval(() => {
     if (document.visibilityState === 'visible' && navigator.onLine !== false && currentPage === 'usuarios') {
       syncUserApprovalsFromSupabase();
     }
-  }, 120000);
+  }, 5 * 60 * 1000);
 
   // 3. Catálogo de equipamentos e histórico de movimentações:
   // Consulta a cada 2 minutos APENAS se a aba estiver visível e nas telas pertinentes
@@ -3388,26 +3784,26 @@ async function initializeApp() {
     });
   }, 120000);
 }
-function companyOptions(selected='') {
+function companyOptions(selected = '') {
   const companies = getAvailableCompanies();
   if (selected && !companies.some(c => c.toLowerCase() === selected.toLowerCase())) companies.push(selected);
   companies.sort(safeSort);
-  return `<option value="">Selecione a empresa...</option>${companies.map(company=>`<option value="${esc(company)}" ${company===selected?'selected':''}>${esc(company)}</option>`).join('')}`;
+  return `<option value="">Selecione a empresa...</option>${companies.map(company => `<option value="${esc(company)}" ${company === selected ? 'selected' : ''}>${esc(company)}</option>`).join('')}`;
 }
-function responsibleOptions(company='',selected='') {
+function responsibleOptions(company = '', selected = '') {
   const people = workforce.filter(person => {
     if (!person || !person.name) return false;
     return !company || person.company === company;
-  }).sort((a,b)=>safeSort(a.name, b.name));
+  }).sort((a, b) => safeSort(a.name, b.name));
   const selectedIsListed = people.some(person => person.name === selected);
   const legacyOption = selected && !selectedIsListed ? `<option value="${esc(selected)}" selected>${esc(selected)} — responsável atual</option>` : '';
-  return `<option value="">Selecione o responsável...</option>${legacyOption}${people.map(person=>`<option value="${esc(person.name)}" ${person.name===selected?'selected':''}>${esc(person.name)}${person.role?` — ${esc(person.role)}`:''}</option>`).join('')}`;
+  return `<option value="">Selecione o responsável...</option>${legacyOption}${people.map(person => `<option value="${esc(person.name)}" ${person.name === selected ? 'selected' : ''}>${esc(person.name)}${person.role ? ` — ${esc(person.role)}` : ''}</option>`).join('')}`;
 }
 function updateResponsibleOptions(companySelect) {
   const form = companySelect.closest('form');
   const responsible = form ? form.querySelector('select[name="responsible"]') : null;
   const currentVal = responsible ? responsible.value : '';
-  if(responsible) {
+  if (responsible) {
     responsible.innerHTML = responsibleOptions(companySelect.value, currentVal);
     if (currentVal && [...responsible.options].some(opt => opt.value === currentVal)) {
       responsible.value = currentVal;
@@ -3419,10 +3815,10 @@ function handleInspectionPersonChange(responsibleSelect) {
   if (!personName) return;
   const form = responsibleSelect.closest('form');
   const companySelect = form ? form.querySelector('select[name="company"]') : null;
-  
+
   const people = typeof workforce !== 'undefined' && Array.isArray(workforce) ? workforce : [];
   const person = people.find(p => (p.name || '').trim().toLowerCase() === personName.trim().toLowerCase());
-  
+
   if (person && person.company && companySelect) {
     const targetComp = person.company.trim();
     let optionFound = [...companySelect.options].find(opt => opt.value.trim().toLowerCase() === targetComp.toLowerCase());
@@ -3439,10 +3835,10 @@ function handleInspectionPersonChange(responsibleSelect) {
   fillPersonPhone(responsibleSelect);
 }
 function fillPersonPhone(responsibleSelect) {
-  const form=responsibleSelect.closest('form'); const company=form.querySelector('[name="company"]')?.value; const person=workforce.find(item=>item.name===responsibleSelect.value && (!company || item.company===company)); const phone=form.querySelector('[name="phone"]'); if(phone&&person?.phone)phone.value=person.phone;
+  const form = responsibleSelect.closest('form'); const company = form.querySelector('[name="company"]')?.value; const person = workforce.find(item => item.name === responsibleSelect.value && (!company || item.company === company)); const phone = form.querySelector('[name="phone"]'); if (phone && person?.phone) phone.value = person.phone;
 }
 function esc(value = '') {
-  return String(value).replace(/[&<>'"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[c]));
+  return String(value).replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
 }
 function icon(name) { return icons[name] || ''; }
 function hydrateIcons(root = document) {
@@ -3453,7 +3849,7 @@ function statusLabel(status) { return ({ available: 'Disponível', 'in-use': 'Em
 function statusBadge(status) { return `<span class="status ${status}">${statusLabel(status)}</span>`; }
 function dateTime(value) {
   if (!value) return '—';
-  return new Intl.DateTimeFormat('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }).format(new Date(value));
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 }
 function fullDate(value) {
   if (!value) return '—';
@@ -3462,16 +3858,16 @@ function fullDate(value) {
   const parsed = new Date(dateOnly ? `${raw}T12:00:00` : value);
   if (Number.isNaN(parsed.getTime())) return '—';
   const options = dateOnly
-    ? { day:'2-digit', month:'short', year:'numeric' }
-    : { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' };
+    ? { day: '2-digit', month: 'short', year: 'numeric' }
+    : { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
   return new Intl.DateTimeFormat('pt-BR', options).format(parsed);
 }
 function nowLocal() {
-  const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,16);
+  const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16);
 }
 function openDateTimePicker(input) {
   if (!input || input.readOnly || input.disabled) return;
-  try { input.showPicker?.(); } catch(e) {}
+  try { input.showPicker?.(); } catch (e) { }
 }
 function inspectionFormHTML(eq, mode, preset = {}) {
   const isReturn = mode === 'devolucao';
@@ -3484,8 +3880,8 @@ function inspectionFormHTML(eq, mode, preset = {}) {
     </header>
     <div class="inspection-identification">
       <label><span>Equipamento</span><input value="${esc(eq.code)} — ${esc(eq.name)}" readonly></label>
-      <label><span>${isReturn ? 'Empresa de quem está devolvendo' : 'Empresa'}</span><select name="company" required onchange="updateResponsibleOptions(this)">${companyOptions(preset.company||'')}</select></label>
-      <label><span>${isReturn ? 'Nome de quem está devolvendo' : 'Nome do responsável'}</span><select name="responsible" required onchange="handleInspectionPersonChange(this)">${responsibleOptions(preset.company||'',preset.responsible||'')}</select></label>
+      <label><span>${isReturn ? 'Empresa de quem está devolvendo' : 'Empresa'}</span><select name="company" required onchange="updateResponsibleOptions(this)">${companyOptions(preset.company || '')}</select></label>
+      <label><span>${isReturn ? 'Nome de quem está devolvendo' : 'Nome do responsável'}</span><select name="responsible" required onchange="handleInspectionPersonChange(this)">${responsibleOptions(preset.company || '', preset.responsible || '')}</select></label>
       <label class="year-field"><span>Ano base</span><input value="${new Date().getFullYear()}" readonly></label>
     </div>
     <div class="inspection-strip"><strong>Inspeção obrigatória</strong><span>Selecione uma opção em cada item conforme a legenda do formulário original.</span></div>
@@ -3659,8 +4055,8 @@ function inspectionFromData(data, mode) {
 }
 function inspectionHasFailure(inspection) { return inspection.answers.some(answer => answer === 'O'); }
 function printableInspection(eq, movement) {
-  const list = (movement.inspections && movement.inspections.length > 0) 
-    ? movement.inspections 
+  const list = (movement.inspections && movement.inspections.length > 0)
+    ? movement.inspections
     : (movement.inspection ? [movement.inspection] : []);
   const firstInspection = list[0] || {};
   const groupHeaders = [['Comandos', 2], ['Sistema', 3], ['Segurança', 4], ['Outros', 1]];
@@ -3730,7 +4126,7 @@ function metric(label, value, detail, type, iconName, width) {
 
 function render() {
   try {
-    const rawHash = location.hash.replace('#','');
+    const rawHash = location.hash.replace('#', '');
     const hash = rawHash.split('?')[0] || 'dashboard';
     const isInviteLanding = rawHash.startsWith('convite') || rawHash.startsWith('invite');
     const isLoginLanding = hash === 'login' || hash === 'acesso';
@@ -3753,7 +4149,10 @@ function render() {
       return;
     }
 
-    // USUÁRIO AUTENTICADO: LIBERA ACESSO
+    // USUÁRIO AUTENTICADO: VALIDA SESSÃO EM MEMÓRIA (0 CONSULTAS AO BANCO NA TROCA DE TELA)
+    if (!verifyCurrentUserSessionLocal()) {
+      return;
+    }
     document.body.classList.remove('public-access-page');
     updateAppShellAccess();
 
@@ -3782,7 +4181,7 @@ function render() {
       currentPage = 'equipamentos';
       renderMovements();
     } else {
-      currentPage = ['dashboard','equipamentos','romaneios','formularios','empresas','relatorios','materiais','notas-entrada','movimentacoes-materiais','usuarios','cautelas','radios','spools','checkin'].includes(hash) ? hash : 'equipamentos';
+      currentPage = ['dashboard', 'equipamentos', 'romaneios', 'formularios', 'empresas', 'relatorios', 'materiais', 'notas-entrada', 'movimentacoes-materiais', 'usuarios', 'cautelas', 'radios', 'spools', 'checkin'].includes(hash) ? hash : 'equipamentos';
       const views = {
         dashboard: renderDashboard,
         equipamentos: renderEquipments,
@@ -3824,8 +4223,8 @@ function render() {
     }
   }
 }
-function equipmentModuleTabs(active='equipamentos') {
-  return `<nav class="module-tabs" aria-label="Seções do controle de PTAs"><a href="#equipamentos" class="${active==='equipamentos'?'active':''}">${icon('lift')} Equipamentos</a><a href="#pemt-checklists" class="${active==='checklists'?'active':''}">${icon('file')} Checklists PEMT <b>${history.filter(item=>item.inspection).length}</b></a></nav>`;
+function equipmentModuleTabs(active = 'equipamentos') {
+  return `<nav class="module-tabs" aria-label="Seções do controle de PTAs"><a href="#equipamentos" class="${active === 'equipamentos' ? 'active' : ''}">${icon('lift')} Equipamentos</a><a href="#pemt-checklists" class="${active === 'checklists' ? 'active' : ''}">${icon('file')} Checklists PEMT <b>${history.filter(item => item.inspection).length}</b></a></nav>`;
 }
 
 let userManagementTab = 'pendentes';
@@ -3851,14 +4250,14 @@ function renderUserManagement() {
   const appEl = document.getElementById('app');
   appEl.innerHTML = `
     ${pageHeader(
-      'Gestão de Usuários & Aprovações',
-      'Painel do Gestor para autorização de acessos, solicitações de entrada e controle de funções na obra.',
-      'CONTROLE DE ACESSO',
-      `<div style="display:flex; gap:8px;">
+    'Gestão de Usuários & Aprovações',
+    'Painel do Gestor para autorização de acessos, solicitações de entrada e controle de funções na obra.',
+    'CONTROLE DE ACESSO',
+    `<div style="display:flex; gap:8px;">
         <button class="button button-outline compact" onclick="syncUserApprovalsFromSupabase({ force: true }).then(() => toast('Lista de usuários atualizada com sucesso!'))">${icon('refresh')} Sincronizar Dados</button>
         <button class="button button-green compact" onclick="setUserManagementTab('convidar')">${icon('plus')} Enviar Convite por E-mail</button>
       </div>`
-    )}
+  )}
 
     <section class="metrics-grid">
       ${metric('Pendentes para Aceitar', pendingList.length, pendingList.length > 0 ? `${pendingList.length} aguardando liberação do gestor` : 'Nenhuma solicitação pendente', pendingList.length > 0 ? 'amber' : 'green', 'clock', pendingList.length > 0 ? 100 : 0)}
@@ -3959,6 +4358,7 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
   }
 
   if (userManagementTab === 'ativos') {
+    const masterCred = getUserCredential('pedro.alves@heatingcooling.com.br');
     return `
       <section class="table-card" style="border:1px solid var(--line); border-radius:12px; background:white; overflow:hidden;">
         <table class="data-table" style="width:100%; border-collapse:collapse; font-size:13px;">
@@ -3968,7 +4368,7 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
               <th style="padding:12px 16px;">E-mail</th>
               <th style="padding:12px 16px;">Empresa</th>
               <th style="padding:12px 16px;">Nível de Acesso</th>
-              <th style="padding:12px 16px;">Aprovado Em</th>
+              <th style="padding:12px 16px;">Status da Senha</th>
               <th style="padding:12px 16px; text-align:right;">Ações</th>
             </tr>
           </thead>
@@ -3976,32 +4376,47 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
             <tr style="border-bottom:1px solid var(--line); background:#fdfdfd;">
               <td style="padding:14px 16px;"><strong>Pedro Alves</strong> <span class="badge" style="background:#e7f5ee; color:#206b49; font-size:10px; padding:2px 6px; border-radius:6px; margin-left:6px;">Master</span></td>
               <td style="padding:14px 16px; color:var(--muted);">pedro.alves@heatingcooling.com.br</td>
-              <td style="padding:14px 16px;">Heating Cooling</td>
+              <td style="padding:14px 16px;">HEATING COOLING</td>
               <td style="padding:14px 16px;"><strong>Administrador Master</strong></td>
-              <td style="padding:14px 16px; color:var(--muted); font-size:12px;">Sistema Base</td>
-              <td style="padding:14px 16px; text-align:right; color:var(--muted); font-size:12px;">Conta Principal</td>
+              <td style="padding:14px 16px;">
+                <span class="badge" style="background:${masterCred?.password ? '#e7f5ee' : '#fef3c7'}; color:${masterCred?.password ? '#206b49' : '#92400e'}; font-size:11px; padding:3px 8px; border-radius:6px; font-weight:700;">
+                  ${masterCred?.password ? '🔑 Senha ativa' : '🔑 Padrão / Definir'}
+                </span>
+              </td>
+              <td style="padding:14px 16px; text-align:right; white-space:nowrap;">
+                ${isMasterUser() ? `<button class="button button-outline compact" onclick="openAdminChangePasswordModal('', 'pedro.alves@heatingcooling.com.br', 'Pedro Alves')">${icon('key')} Alterar Senha</button>` : '<span style="color:var(--muted); font-size:12px;">Conta Principal</span>'}
+              </td>
             </tr>
-            ${approvedList.map(u => `
+            ${approvedList.map(u => {
+      const uCred = getUserCredential(u.email);
+      const hasPass = Boolean(uCred?.password || u.password);
+      return `
               <tr style="border-bottom:1px solid var(--line);">
                 <td style="padding:14px 16px;"><strong>${esc(u.name)}</strong></td>
                 <td style="padding:14px 16px; color:var(--muted);">${esc(u.email)}</td>
-                <td style="padding:14px 16px;">${esc(u.company || '—')}</td>
+                <td style="padding:14px 16px;">${esc(normalizeCompanyName(u.company) || '—')}</td>
                 <td style="padding:14px 16px;">
-                  <select onchange="updateApprovedUserRole('${esc(u.id)}', this.value, '${esc(u.email)}')" style="padding:4px 8px; border-radius:6px; border:1px solid var(--line); font-size:12px; font-weight:700; color:${u.role==='admin'?'#206b49':u.role==='gestor'?'#206b49':'#334155'};">
+                  <select onchange="updateApprovedUserRole('${esc(u.id)}', this.value, '${esc(u.email)}')" style="padding:4px 8px; border-radius:6px; border:1px solid var(--line); font-size:12px; font-weight:700; color:${u.role === 'admin' ? '#206b49' : u.role === 'gestor' ? '#206b49' : '#334155'};">
                     <option value="operador" ${u.role === 'operador' ? 'selected' : ''}>Operador de Campo</option>
                     <option value="engenheiro" ${u.role === 'engenheiro' ? 'selected' : ''}>Engenheiro</option>
                     <option value="gestor" ${u.role === 'gestor' ? 'selected' : ''}>Gestor de Obra</option>
                     <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Master / Administrador</option>
                   </select>
                 </td>
-                <td style="padding:14px 16px; color:var(--muted); font-size:12px;">${fullDate(u.approved_at || u.created_at)}</td>
+                <td style="padding:14px 16px;">
+                  <span class="badge" style="background:${hasPass ? '#e7f5ee' : '#fef3c7'}; color:${hasPass ? '#206b49' : '#92400e'}; font-size:11px; padding:3px 8px; border-radius:6px; font-weight:700;">
+                    ${hasPass ? '🔑 Senha definida' : '⚠️ Sem senha'}
+                  </span>
+                </td>
                 <td style="padding:14px 16px; text-align:right; white-space:nowrap;">
-                  <button class="button button-outline compact" style="margin-right:6px;" onclick="copyUserAccessLink('${esc(u.id)}', '${esc(u.email)}')">${icon('clipboard')} Copiar Convite/Acesso</button>
+                  <button class="button button-outline compact" style="margin-right:6px;" title="Definir ou trocar senha (derruba sessões antigas)" onclick="openAdminChangePasswordModal('${esc(u.id)}', '${esc(u.email)}', '${esc(u.name)}')">${icon('key')} Senha</button>
+                  <button class="button button-outline compact" style="margin-right:6px;" onclick="copyUserAccessLink('${esc(u.id)}', '${esc(u.email)}')">${icon('clipboard')} Copiar Acesso</button>
                   <button class="button button-outline compact" style="color:#d97706; margin-right:6px;" title="Bloquear acesso temporariamente" onclick="revokeUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('close')} Revogar</button>
                   <button class="button button-outline compact" style="color:var(--red);" title="Excluir permanentemente do sistema" onclick="deleteUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('trash')} Excluir</button>
                 </td>
               </tr>
-            `).join('')}
+            `;
+    }).join('')}
           </tbody>
         </table>
       </section>`;
@@ -4069,10 +4484,10 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
             <select id="inviteWorkforceSelect" onchange="handleSelectWorkforcePerson(this)" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:white; font-size:13px;">
               <option value="">— Selecione da lista de colaboradores ou digite abaixo —</option>
               ${uniquePeople.map(p => {
-                const personObj = workforce.find(w => w && w.name === p);
-                const comp = personObj?.company ? ` (${personObj.company})` : '';
-                return `<option value="${esc(p)}" data-company="${esc(personObj?.company || '')}">${esc(p)}${esc(comp)}</option>`;
-              }).join('')}
+      const personObj = workforce.find(w => w && w.name === p);
+      const comp = personObj?.company ? ` (${personObj.company})` : '';
+      return `<option value="${esc(p)}" data-company="${esc(personObj?.company || '')}">${esc(p)}${esc(comp)}</option>`;
+    }).join('')}
             </select>
             <small style="color:var(--muted); font-size:11px; margin-top:4px; display:block;">Ao escolher um nome na lista, o nome e a empresa são preenchidos automaticamente sem sumir a lista.</small>
           </div>
@@ -4087,9 +4502,9 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
           <div class="field full" style="margin-bottom:14px;">
             <label style="display:block; font-weight:700; margin-bottom:4px;">Nível de Acesso Autorizado <em>*</em></label>
             <select name="role" onchange="inviteDraft.role=this.value" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;">
-              <option value="operador" ${(inviteDraft.role||'operador')==='operador' ? 'selected' : ''}>Operador de Campo / Técnico</option>
-              <option value="engenheiro" ${(inviteDraft.role||'')==='engenheiro' ? 'selected' : ''}>Engenheiro / Fiscal de Obra</option>
-              <option value="gestor" ${(inviteDraft.role||'')==='gestor' ? 'selected' : ''}>Gestor de Obra (Acesso Total)</option>
+              <option value="operador" ${(inviteDraft.role || 'operador') === 'operador' ? 'selected' : ''}>Operador de Campo / Técnico</option>
+              <option value="engenheiro" ${(inviteDraft.role || '') === 'engenheiro' ? 'selected' : ''}>Engenheiro / Fiscal de Obra</option>
+              <option value="gestor" ${(inviteDraft.role || '') === 'gestor' ? 'selected' : ''}>Gestor de Obra (Acesso Total)</option>
             </select>
           </div>
 
@@ -4261,7 +4676,7 @@ async function deleteUserAccess(id, email) {
     } else if (targetEmail) {
       await supabaseRestRequest(`user_approvals?email=eq.${encodeURIComponent(targetEmail)}`, { method: 'DELETE' });
     }
-  } catch(e) {
+  } catch (e) {
     console.warn('Erro ao deletar usuário do Supabase:', e);
   }
 
@@ -4294,6 +4709,71 @@ async function updateApprovedUserRole(id, newRole, email) {
     toast(`Perfil de ${user.name} atualizado para ${accessRoleLabel(user.role)}.`);
     renderUserManagement();
   }
+}
+
+function openAdminChangePasswordModal(id, email, name) {
+  if (!isMasterUser()) {
+    toast('Apenas o Administrador Master pode definir ou alterar senhas de usuários.', true);
+    return;
+  }
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const cred = getUserCredential(cleanEmail);
+  const user = findUserApproval(id, cleanEmail);
+  const currentPass = cred?.password || user?.password || '';
+  modal(`
+    <form onsubmit="saveAdminUserPassword(event)">
+      ${modalHead('🔑 Definir / Alterar Senha de Acesso', `${esc(name || cleanEmail)} (${esc(cleanEmail)})`)}
+      <div class="modal-body" style="display:grid; gap:14px;">
+        <input type="hidden" name="id" value="${esc(id || '')}" />
+        <input type="hidden" name="email" value="${esc(cleanEmail)}" />
+        <input type="hidden" name="name" value="${esc(name || '')}" />
+        <div class="notice" style="background:#f0f7f3; border-color:#bce1cb; color:#0d4225;">
+          ${icon('shield')} Ao salvar uma nova senha, <strong>qualquer aparelho conectado com a senha anterior ou errada será desconectado automaticamente</strong>.
+        </div>
+        <div class="field full">
+          <label>Nova Senha de Acesso <em>*</em></label>
+          <div class="input-icon-wrapper has-trailing-btn">
+            <span class="input-leading-icon">${icon('lock')}</span>
+            <input type="text" id="adminTargetUserPassword" name="password" minlength="4" required value="${esc(currentPass)}" placeholder="Digite a nova senha (mín. 4 caracteres)" autofocus />
+          </div>
+          <small style="color:var(--muted); font-size:11px; margin-top:4px; display:block;">Informe esta senha ao colaborador para o próximo acesso.</small>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="button button-green">${icon('check')} Salvar Nova Senha e Derrubar Sessões Antigas</button>
+      </div>
+    </form>
+  `, 'modal-small');
+}
+
+async function saveAdminUserPassword(event) {
+  event.preventDefault();
+  if (!isMasterUser()) return;
+  const data = Object.fromEntries(new FormData(event.target));
+  const id = (data.id || '').trim();
+  const email = (data.email || '').trim().toLowerCase();
+  const password = String(data.password || '').trim();
+  if (!email || password.length < 4) {
+    toast('A senha deve ter pelo menos 4 caracteres.', true);
+    return;
+  }
+  await saveUserCredentialToSupabase(email, password);
+  const user = findUserApproval(id, email);
+  if (user) {
+    user.password = password;
+    user.updated_at = new Date().toISOString();
+    localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
+    await saveUserApprovalToSupabase(user);
+  }
+  if (currentUser && String(currentUser.email || '').trim().toLowerCase() === email) {
+    currentUser.authCredentialHash = await passwordSessionFingerprint(password);
+    currentUser.authSessionVersion = AUTH_SESSION_VERSION;
+    localStorage.setItem('obraflow_user', JSON.stringify(currentUser));
+  }
+  closeModal();
+  renderUserManagement();
+  toast(`Senha de ${data.name || email} atualizada! Aparelhos com a senha antiga serão desconectados.`);
 }
 
 function copyTextToClipboard(text, successMsg = 'Copiado para a área de transferência!') {
@@ -4654,7 +5134,7 @@ function renderDashboard() {
           <button class="button button-outline compact" onclick="location.hash='equipamentos'">Ver PTAs ${icon('arrow')}</button>
         </div>
         <div class="heights-grid">
-          ${Object.entries(heightBreakdown).sort((a,b) => a[0].localeCompare(b[0])).map(([heightLabel, stats]) => `
+          ${Object.entries(heightBreakdown).sort((a, b) => a[0].localeCompare(b[0])).map(([heightLabel, stats]) => `
             <div class="height-card">
               <div class="height-card-title">
                 <span class="height-tag">${heightLabel}</span>
@@ -4694,33 +5174,33 @@ function equipmentRow(eq) {
 }
 function activityItem(item) {
   const eq = equipments.find(e => e.id === item.equipmentId);
-  const config = item.action === 'withdraw' ? ['arrow','amber','retirou'] : item.action === 'return' ? ['return','green','devolveu'] : ['alert','blue','reportou avaria em'];
+  const config = item.action === 'withdraw' ? ['arrow', 'amber', 'retirou'] : item.action === 'return' ? ['return', 'green', 'devolveu'] : ['alert', 'blue', 'reportou avaria em'];
   return `<div class="activity-item"><span class="activity-icon ${config[1]}">${icon(config[0])}</span><div class="activity-content"><p><strong>${esc(item.person)}</strong> ${config[2]} <strong>${esc(eq?.code || 'equipamento')}</strong></p><small>${esc(item.company)} · ${dateTime(item.date)}</small></div></div>`;
 }
 
 function renderEquipments() {
-  const models=[...new Set(equipments.map(e=>e.model).filter(Boolean))].sort();
+  const models = [...new Set(equipments.map(e => e.model).filter(Boolean))].sort();
   document.getElementById('app').innerHTML = `
     ${pageHeader('Controle de PTAs e paleteiras', 'Consulte rapidamente quem está usando, onde está e quando será devolvida.', 'MÓDULO DE EQUIPAMENTOS', `<button class="button button-outline" onclick="openScanModal()">${icon('scan')} Ler QR</button><button class="button button-green" onclick="openEquipmentModal()">${icon('plus')} Cadastrar</button>`)}
     ${equipmentModuleTabs('equipamentos')}
-    <section class="control-summary"><span><b>${equipments.length}</b> equipamentos</span><span class="summary-green"><i></i><b>${equipments.filter(e=>e.status==='available').length}</b> disponíveis</span><span class="summary-amber"><i></i><b>${equipments.filter(e=>e.status==='in-use').length}</b> em uso</span><div class="summary-actions"><button onclick="syncFromSupabase().then(() => { renderEquipments(); toast('Equipamentos e paleteiras sincronizados com a nuvem!'); })">${icon('refresh')} Sincronizar</button><button onclick="openEquipmentImportModal()">${icon('download')} Atualizar PTAs</button><button onclick="printAllQRCodes()">${icon('print')} QR Codes</button></div></section>
+    <section class="control-summary"><span><b>${equipments.length}</b> equipamentos</span><span class="summary-green"><i></i><b>${equipments.filter(e => e.status === 'available').length}</b> disponíveis</span><span class="summary-amber"><i></i><b>${equipments.filter(e => e.status === 'in-use').length}</b> em uso</span><div class="summary-actions"><button onclick="syncFromSupabase().then(() => { renderEquipments(); toast('Equipamentos e paleteiras sincronizados com a nuvem!'); })">${icon('refresh')} Sincronizar</button><button onclick="openEquipmentImportModal()">${icon('download')} Atualizar PTAs</button><button onclick="printAllQRCodes()">${icon('print')} QR Codes</button></div></section>
     <div class="simple-filters">
       <label class="search-box">${icon('search')}<input id="assetSearch" type="search" placeholder="Buscar patrimônio, código AFF, empreiteiro, série..." oninput="filterAssets()"></label>
       <label class="filter-field"><span>Nº AF</span><input id="afFilter" type="search" placeholder="Filtrar AF..." oninput="filterAssets()"></label>
       <label class="filter-field"><span>Data</span><input type="date" id="dateFilter" onchange="filterAssets()"></label>
-      <label class="filter-field"><span>Modelo</span><select id="modelFilter" onchange="filterAssets()"><option value="">Todos</option>${models.map(model=>`<option>${esc(model)}</option>`).join('')}</select></label>
+      <label class="filter-field"><span>Modelo</span><select id="modelFilter" onchange="filterAssets()"><option value="">Todos</option>${models.map(model => `<option>${esc(model)}</option>`).join('')}</select></label>
       <label class="filter-field"><span>Tipo</span><select id="typeFilter" onchange="filterAssets()"><option value="">Todos</option><option>PTA Tesoura</option><option>PTA Articulada</option><option>PTA Mastro</option><option>Paleteira Elétrica</option></select></label>
       <label class="filter-field"><span>Status</span><select id="statusFilter" onchange="filterAssets()"><option value="">Todos</option><option value="available">Disponível</option><option value="in-use">Em uso</option><option value="maintenance">Indisponível</option></select></label>
     </div>
     <article class="panel compact-equipment-panel"><div class="table-wrap"><table class="data-table equipment-control-table"><thead><tr><th>Equipamento</th><th>codigo AFF</th><th>Empreiteiro</th><th>Modelo</th><th>Status</th><th>Em uso por</th><th>Local</th><th>Previsão de devolução</th><th>Checklist</th><th></th></tr></thead><tbody id="equipmentControlBody">${equipments.map(equipmentControlRow).join('')}</tbody></table></div><div class="no-filter-results" id="noFilterResults">Nenhum equipamento encontrado com estes filtros.</div></article>`;
 }
 function equipmentControlRow(eq) {
-  const latest=history.find(item=>item.equipmentId===eq.id&&item.inspection);
-  const dates=[eq.emissionDate||'',...history.filter(item=>item.equipmentId===eq.id).map(item=>item.date?.slice(0,10)||'')].join(' ');
-  return `<tr class="equipment-control-row" data-status="${eq.status}" data-type="${esc(eq.type)}" data-model="${esc(eq.model||'')}" data-af="${esc(eq.afNumber||'')}" data-dates="${dates}" data-search="${esc(`${eq.name} ${eq.code} ${eq.afNumber||''} ${eq.contractor||''} ${eq.serial||''} ${eq.model||''} ${eq.usage?.responsible||''} ${eq.usage?.company||''} ${eq.usage?.activity||''}`.toLowerCase())}"><td><div class="equipment-identity"><span>${equipmentIcon(eq)}</span><div><strong>${esc(eq.code)}</strong><small>${esc(eq.name)}</small></div></div></td><td>${eq.afNumber ? `<span class="af-badge">${esc(eq.afNumber)}</span>` : '<span class="muted-dash">—</span>'}</td><td><strong>${esc(eq.contractor||'—')}</strong></td><td><strong>${esc(eq.model||'—')}</strong><small class="table-sub">${esc(eq.battery ? `Bateria ${eq.battery}` : eq.brand||'')}</small></td><td>${statusBadge(eq.status)}</td><td>${eq.usage?`<strong>${esc(eq.usage.responsible)}</strong><small class="table-sub">${esc(eq.usage.company)}</small>`:'<span class="muted-dash">—</span>'}</td><td>${eq.usage?`<strong>${esc(eq.usage.dataHall)}</strong><small class="table-sub">${esc(eq.usage.location)}</small><small class="table-sub activity-sub">${esc(eq.usage.activity||'')}</small>`:'<span class="muted-dash">Pátio / Base</span>'}</td><td>${eq.usage?`<strong>${fullDate(eq.usage.expectedAt)}</strong>`:'<span class="muted-dash">—</span>'}</td><td>${latest?`<button class="table-action" onclick="openInspectionRecord('${latest.id}')">${icon('file')} Ver</button>`:'<span class="muted-dash">Sem registro</span>'}</td><td><div class="control-row-actions"><button class="icon-button" title="QR Code" onclick="openQRModal('${eq.id}')">${icon('qr')}</button><button class="icon-button" title="Editar equipamento" onclick="openEquipmentModal('${eq.id}')">${icon('edit')}</button><button class="icon-button danger-icon" style="color:var(--red);" title="Excluir PTA do sistema" onclick="deleteEquipment('${eq.id}')">${icon('trash')}</button><button class="button ${eq.status==='available'?'button-green':'button-outline'} compact" onclick="openEquipmentDetails('${eq.id}')">${eq.status==='available'?'Retirar':'Detalhes'}</button></div></td></tr>`;
+  const latest = history.find(item => item.equipmentId === eq.id && item.inspection);
+  const dates = [eq.emissionDate || '', ...history.filter(item => item.equipmentId === eq.id).map(item => item.date?.slice(0, 10) || '')].join(' ');
+  return `<tr class="equipment-control-row" data-status="${eq.status}" data-type="${esc(eq.type)}" data-model="${esc(eq.model || '')}" data-af="${esc(eq.afNumber || '')}" data-dates="${dates}" data-search="${esc(`${eq.name} ${eq.code} ${eq.afNumber || ''} ${eq.contractor || ''} ${eq.serial || ''} ${eq.model || ''} ${eq.usage?.responsible || ''} ${eq.usage?.company || ''} ${eq.usage?.activity || ''}`.toLowerCase())}"><td><div class="equipment-identity"><span>${equipmentIcon(eq)}</span><div><strong>${esc(eq.code)}</strong><small>${esc(eq.name)}</small></div></div></td><td>${eq.afNumber ? `<span class="af-badge">${esc(eq.afNumber)}</span>` : '<span class="muted-dash">—</span>'}</td><td><strong>${esc(eq.contractor || '—')}</strong></td><td><strong>${esc(eq.model || '—')}</strong><small class="table-sub">${esc(eq.battery ? `Bateria ${eq.battery}` : eq.brand || '')}</small></td><td>${statusBadge(eq.status)}</td><td>${eq.usage ? `<strong>${esc(eq.usage.responsible)}</strong><small class="table-sub">${esc(eq.usage.company)}</small>` : '<span class="muted-dash">—</span>'}</td><td>${eq.usage ? `<strong>${esc(eq.usage.dataHall)}</strong><small class="table-sub">${esc(eq.usage.location)}</small><small class="table-sub activity-sub">${esc(eq.usage.activity || '')}</small>` : '<span class="muted-dash">Pátio / Base</span>'}</td><td>${eq.usage ? `<strong>${fullDate(eq.usage.expectedAt)}</strong>` : '<span class="muted-dash">—</span>'}</td><td>${latest ? `<button class="table-action" onclick="openInspectionRecord('${latest.id}')">${icon('file')} Ver</button>` : '<span class="muted-dash">Sem registro</span>'}</td><td><div class="control-row-actions"><button class="icon-button" title="QR Code" onclick="openQRModal('${eq.id}')">${icon('qr')}</button><button class="icon-button" title="Editar equipamento" onclick="openEquipmentModal('${eq.id}')">${icon('edit')}</button><button class="icon-button danger-icon" style="color:var(--red);" title="Excluir PTA do sistema" onclick="deleteEquipment('${eq.id}')">${icon('trash')}</button><button class="button ${eq.status === 'available' ? 'button-green' : 'button-outline'} compact" onclick="openEquipmentDetails('${eq.id}')">${eq.status === 'available' ? 'Retirar' : 'Detalhes'}</button></div></td></tr>`;
 }
 function assetCard(eq) {
-  return `<article class="asset-card" data-status="${eq.status}" data-type="${esc(eq.type)}" data-search="${esc(`${eq.name} ${eq.code} ${eq.afNumber||''} ${eq.contractor||''} ${eq.brand} ${eq.model}`.toLowerCase())}"><div class="asset-card-top"><span class="asset-icon">${equipmentIcon(eq)}</span>${statusBadge(eq.status)}</div><h3>${esc(eq.name)}</h3><div class="asset-code">${esc(eq.code)} ${eq.afNumber ? `· <span class="af-badge">AFF: ${esc(eq.afNumber)}</span>` : ''} · ${esc(eq.contractor || eq.brand)} ${esc(eq.model)}</div><div class="asset-meta"><div><span>Localização</span><strong>${esc(eq.usage?.dataHall || 'Pátio / Base')}</strong></div><div><span>Responsável</span><strong>${esc(eq.usage?.responsible || 'Sem responsável')}</strong></div></div><div class="asset-actions"><button class="button button-outline" onclick="openQRModal('${eq.id}')">${icon('qr')} QR Code</button><button class="button ${eq.status === 'available' ? 'button-green' : 'button-dark'}" onclick="openEquipmentDetails('${eq.id}')">${eq.status === 'available' ? 'Liberar uso' : 'Ver detalhes'} ${icon('arrow')}</button></div></article>`;
+  return `<article class="asset-card" data-status="${eq.status}" data-type="${esc(eq.type)}" data-search="${esc(`${eq.name} ${eq.code} ${eq.afNumber || ''} ${eq.contractor || ''} ${eq.brand} ${eq.model}`.toLowerCase())}"><div class="asset-card-top"><span class="asset-icon">${equipmentIcon(eq)}</span>${statusBadge(eq.status)}</div><h3>${esc(eq.name)}</h3><div class="asset-code">${esc(eq.code)} ${eq.afNumber ? `· <span class="af-badge">AFF: ${esc(eq.afNumber)}</span>` : ''} · ${esc(eq.contractor || eq.brand)} ${esc(eq.model)}</div><div class="asset-meta"><div><span>Localização</span><strong>${esc(eq.usage?.dataHall || 'Pátio / Base')}</strong></div><div><span>Responsável</span><strong>${esc(eq.usage?.responsible || 'Sem responsável')}</strong></div></div><div class="asset-actions"><button class="button button-outline" onclick="openQRModal('${eq.id}')">${icon('qr')} QR Code</button><button class="button ${eq.status === 'available' ? 'button-green' : 'button-dark'}" onclick="openEquipmentDetails('${eq.id}')">${eq.status === 'available' ? 'Liberar uso' : 'Ver detalhes'} ${icon('arrow')}</button></div></article>`;
 }
 function filterAssets() {
   const search = document.getElementById('assetSearch').value.toLowerCase();
@@ -4729,36 +5209,36 @@ function filterAssets() {
   const type = document.getElementById('typeFilter').value;
   const model = document.getElementById('modelFilter').value;
   const date = document.getElementById('dateFilter').value;
-  let visible=0;
+  let visible = 0;
   document.querySelectorAll('.equipment-control-row').forEach(row => {
-    const show=(!search||row.dataset.search.includes(search))&&
-               (!af||(row.dataset.af||'').toLowerCase().includes(af))&&
-               (!status||row.dataset.status===status)&&
-               (!type||row.dataset.type===type)&&
-               (!model||row.dataset.model===model)&&
-               (!date||row.dataset.dates.includes(date));
-    row.style.display=show?'':'none';
-    if(show)visible++;
+    const show = (!search || row.dataset.search.includes(search)) &&
+      (!af || (row.dataset.af || '').toLowerCase().includes(af)) &&
+      (!status || row.dataset.status === status) &&
+      (!type || row.dataset.type === type) &&
+      (!model || row.dataset.model === model) &&
+      (!date || row.dataset.dates.includes(date));
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
   });
-  document.getElementById('noFilterResults').style.display=visible?'none':'block';
+  document.getElementById('noFilterResults').style.display = visible ? 'none' : 'block';
 }
 
 function openEquipmentImportModalLegacy() {
-  modal(`${modalHead('Atualizar PTAs por Excel','Utilize a planilha padrão OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · todas as abas serão verificadas</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source||'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt?`· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}`:''}</small></div></div><div class="import-columns"><span>NF</span><span>Data emissão</span><span>Código produto</span><span>Descrição</span><span>Patrimônio</span><span>Chassi</span><span>Horímetro</span><span>Unidade</span><span>Bateria</span><span>codigo AFF</span><span>Empreiteiro</span></div><div class="notice">${icon('alert')} A importação atualiza equipamentos pelo número de patrimônio e adiciona os novos. Status, responsável atual, localização e checklists são preservados. Equipamentos ausentes na planilha não são excluídos.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar planilha de PTAs atualizada</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-large');
+  modal(`${modalHead('Atualizar PTAs por Excel', 'Utilize a planilha padrão OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · todas as abas serão verificadas</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source || 'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt ? `· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}` : ''}</small></div></div><div class="import-columns"><span>NF</span><span>Data emissão</span><span>Código produto</span><span>Descrição</span><span>Patrimônio</span><span>Chassi</span><span>Horímetro</span><span>Unidade</span><span>Bateria</span><span>codigo AFF</span><span>Empreiteiro</span></div><div class="notice">${icon('alert')} A importação atualiza equipamentos pelo número de patrimônio e adiciona os novos. Status, responsável atual, localização e checklists são preservados. Equipamentos ausentes na planilha não são excluídos.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar planilha de PTAs atualizada</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`, 'modal-large');
 }
 
 function openEquipmentImportModal() {
-  modal(`${modalHead('Atualizar PTAs por Excel','Utilize sempre o modelo oficial OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · título na linha 1 e cabeçalhos na linha 3</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source||'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt?`· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}`:''}</small></div></div><div class="import-columns"><span>NF</span><span>Data Emissão</span><span>Descrição do Equipamento</span><span>Nº Série/Patrimônio</span><span>codigo AFF</span><span>Empreiteiro</span><span>Status</span></div><div class="notice">${icon('alert')} A importação sincroniza a lista oficial: atualiza os existentes, cadastra os novos e remove automaticamente do sistema as PTAs que foram excluídas da planilha.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar modelo oficial atualizado</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-large');
+  modal(`${modalHead('Atualizar PTAs por Excel', 'Utilize sempre o modelo oficial OMNIA DC01')}<div class="modal-body"><div class="upload-zone" onclick="document.getElementById('equipmentFile').click()"><span>${icon('lift')}</span><div><h3>Selecionar planilha de equipamentos</h3><p>Formatos .xlsx ou .xls · título na linha 1 e cabeçalhos na linha 3</p></div><button type="button" class="button button-outline compact">Escolher arquivo</button><input id="equipmentFile" type="file" accept=".xlsx,.xls" hidden onchange="handleEquipmentUpload(event)"></div><div class="upload-info"><span>${icon('check')}</span><div><strong>${equipments.length} equipamentos cadastrados atualmente</strong><small>${esc(equipmentImportMeta.source || 'Nenhuma planilha importada')} ${equipmentImportMeta.updatedAt ? `· ${new Intl.DateTimeFormat('pt-BR').format(new Date(equipmentImportMeta.updatedAt))}` : ''}</small></div></div><div class="import-columns"><span>NF</span><span>Data Emissão</span><span>Descrição do Equipamento</span><span>Nº Série/Patrimônio</span><span>codigo AFF</span><span>Empreiteiro</span><span>Status</span></div><div class="notice">${icon('alert')} A importação sincroniza a lista oficial: atualiza os existentes, cadastra os novos e remove automaticamente do sistema as PTAs que foram excluídas da planilha.</div></div><div class="modal-foot"><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar modelo oficial atualizado</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`, 'modal-large');
 }
 
 async function exportEquipmentsExcelLegacy() {
-  if(!await ensureExcelLibrary()) return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.',true);
-  
+  if (!await ensureExcelLibrary()) return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.', true);
+
   const selectedEquipments = getReportFilteredEquipments();
-  if(!selectedEquipments.length) return toast('Nenhum equipamento encontrado.',true);
-  
+  if (!selectedEquipments.length) return toast('Nenhum equipamento encontrado.', true);
+
   const titleRow = ['Relação de Equipamentos - Notas Fiscais de Remessa para Locação (Tecnogera)'];
-  
+
   const group08M = selectedEquipments.filter(e => /08m/i.test(e.name || e.model));
   const group10M = selectedEquipments.filter(e => /10m/i.test(e.name || e.model));
   const group12M = selectedEquipments.filter(e => /12m/i.test(e.name || e.model));
@@ -4782,36 +5262,36 @@ async function exportEquipmentsExcelLegacy() {
 
   if (group08M.length > 0) {
     sheetData.push(['PLATAFORMA TESOURA 08M']);
-    sheetData.push(['NF','Data Emissão','Código Produto','Descrição do Equipamento','Nº Série/Patrimônio','Nº Chassi/Identificação','Horímetro (HR)','Unidade','Tipo de Bateria','codigo AFF','Empreiteiro']);
+    sheetData.push(['NF', 'Data Emissão', 'Código Produto', 'Descrição do Equipamento', 'Nº Série/Patrimônio', 'Nº Chassi/Identificação', 'Horímetro (HR)', 'Unidade', 'Tipo de Bateria', 'codigo AFF', 'Empreiteiro']);
     group08M.forEach(eq => sheetData.push(mapRow(eq)));
-    sheetData.push(['','','','','','','','','TOTAL PLATAFORMA TESOURA 08M:', group08M.length]);
+    sheetData.push(['', '', '', '', '', '', '', '', 'TOTAL PLATAFORMA TESOURA 08M:', group08M.length]);
     sheetData.push([]);
   }
 
   if (group10M.length > 0) {
     sheetData.push(['PLATAFORMA TESOURA 10M']);
-    sheetData.push(['NF','Data Emissão','Código Produto','Descrição do Equipamento','Nº Série/Patrimônio','Nº Chassi/Identificação','Horímetro (HR)','Unidade','Tipo de Bateria','ident','Empreiteiro']);
+    sheetData.push(['NF', 'Data Emissão', 'Código Produto', 'Descrição do Equipamento', 'Nº Série/Patrimônio', 'Nº Chassi/Identificação', 'Horímetro (HR)', 'Unidade', 'Tipo de Bateria', 'ident', 'Empreiteiro']);
     group10M.forEach(eq => sheetData.push(mapRow(eq)));
-    sheetData.push(['','','','','','','','','TOTAL PLATAFORMA TESOURA 10M:', group10M.length]);
+    sheetData.push(['', '', '', '', '', '', '', '', 'TOTAL PLATAFORMA TESOURA 10M:', group10M.length]);
     sheetData.push([]);
   }
 
   if (group12M.length > 0) {
     sheetData.push(['PLATAFORMA TESOURA 12M']);
-    sheetData.push(['NF','Data Emissão','Código Produto','Descrição do Equipamento','Nº Série/Patrimônio','Nº Chassi/Identificação','Horímetro (HR)','Unidade','Tipo de Bateria','codigo AFF','Empreiteiro']);
+    sheetData.push(['NF', 'Data Emissão', 'Código Produto', 'Descrição do Equipamento', 'Nº Série/Patrimônio', 'Nº Chassi/Identificação', 'Horímetro (HR)', 'Unidade', 'Tipo de Bateria', 'codigo AFF', 'Empreiteiro']);
     group12M.forEach(eq => sheetData.push(mapRow(eq)));
-    sheetData.push(['','','','','','','','','TOTAL PLATAFORMA TESOURA 12M:', group12M.length]);
+    sheetData.push(['', '', '', '', '', '', '', '', 'TOTAL PLATAFORMA TESOURA 12M:', group12M.length]);
     sheetData.push([]);
   }
 
   if (groupOther.length > 0) {
     sheetData.push(['OUTROS EQUIPAMENTOS']);
-    sheetData.push(['NF','Data Emissão','Código Produto','Descrição do Equipamento','Nº Série/Patrimônio','Nº Chassi/Identificação','Horímetro (HR)','Unidade','Tipo de Bateria','codigo AFF','Empreiteiro']);
+    sheetData.push(['NF', 'Data Emissão', 'Código Produto', 'Descrição do Equipamento', 'Nº Série/Patrimônio', 'Nº Chassi/Identificação', 'Horímetro (HR)', 'Unidade', 'Tipo de Bateria', 'codigo AFF', 'Empreiteiro']);
     groupOther.forEach(eq => sheetData.push(mapRow(eq)));
     sheetData.push([]);
   }
 
-  sheetData.push(['','','','','','','','','TOTAL GERAL DE EQUIPAMENTOS:', selectedEquipments.length]);
+  sheetData.push(['', '', '', '', '', '', '', '', 'TOTAL GERAL DE EQUIPAMENTOS:', selectedEquipments.length]);
   sheetData.push([]);
   sheetData.push(['Observação: a bateria de Lítio demora 3 horas para carregar; a bateria de Chumbo demora 8 horas para carregar.']);
 
@@ -4829,30 +5309,30 @@ async function exportEquipmentsExcelLegacy() {
     { wch: 16 },
     { wch: 22 }
   ];
-  
+
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, 'Equipamentos');
-  XLSX.writeFile(book, `controle-ptas-omnia-${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(book, `controle-ptas-omnia-${new Date().toISOString().slice(0, 10)}.xlsx`);
   toast('Planilha de PTAs baixada com sucesso.');
 }
 
 async function exportEquipmentsExcel() {
-  if(!await ensureExcelLibrary()) return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.',true);
+  if (!await ensureExcelLibrary()) return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.', true);
 
-  const selectedEquipments = [...getReportFilteredEquipments()].sort((a,b) =>
+  const selectedEquipments = [...getReportFilteredEquipments()].sort((a, b) =>
     safeSort(a.name || a.model, b.name || b.model) || safeSort(a.code, b.code)
   );
-  if(!selectedEquipments.length) return toast('Nenhum equipamento encontrado.',true);
+  if (!selectedEquipments.length) return toast('Nenhum equipamento encontrado.', true);
 
   const formatEmissionDate = value => {
-    if(!value) return '';
+    if (!value) return '';
     const normalized = spreadsheetDate(value);
     return normalized ? normalized.split('-').reverse().join('/') : String(value);
   };
   const sheetData = [
     ['Relação de Equipamentos - Notas Fiscais de Remessa para Locação (Tecnogera)'],
     [],
-    ['NF','Data Emissão','Descrição do Equipamento','Nº Série/Patrimônio','codigo AFF','Empreiteiro','Status'],
+    ['NF', 'Data Emissão', 'Descrição do Equipamento', 'Nº Série/Patrimônio', 'codigo AFF', 'Empreiteiro', 'Status'],
     ...selectedEquipments.map(eq => [
       eq.invoice || '',
       formatEmissionDate(eq.emissionDate),
@@ -4865,21 +5345,21 @@ async function exportEquipmentsExcel() {
   ];
 
   const sheet = XLSX.utils.aoa_to_sheet(sheetData);
-  sheet['!merges'] = [{ s:{ r:0, c:0 }, e:{ r:0, c:6 } }];
-  sheet['!cols'] = [{wch:12},{wch:16},{wch:48},{wch:26},{wch:18},{wch:24},{wch:18}];
-  sheet['!rows'] = [{hpt:22},{hpt:8},{hpt:21}];
-  sheet['!autofilter'] = { ref:`A3:G${sheetData.length}` };
+  sheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
+  sheet['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 48 }, { wch: 26 }, { wch: 18 }, { wch: 24 }, { wch: 18 }];
+  sheet['!rows'] = [{ hpt: 22 }, { hpt: 8 }, { hpt: 21 }];
+  sheet['!autofilter'] = { ref: `A3:G${sheetData.length}` };
 
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, 'Equipamentos');
-  XLSX.writeFile(book, `controle-ptas-omnia-${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(book, `controle-ptas-omnia-${new Date().toISOString().slice(0, 10)}.xlsx`);
   toast('Planilha de PTAs baixada no modelo oficial.');
 }
 
 function spreadsheetDate(value) {
-  if(!value)return ''; if(value instanceof Date&&!isNaN(value))return value.toISOString().slice(0,10);
-  if(typeof value==='number'){const date=new Date(Math.round((value-25569)*86400*1000));return isNaN(date)?'':date.toISOString().slice(0,10);}
-  const text=String(value).trim(); const match=text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/); if(match){const year=match[3].length===2?`20${match[3]}`:match[3];return `${year}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;} return /^\d{4}-\d{2}-\d{2}/.test(text)?text.slice(0,10):'';
+  if (!value) return ''; if (value instanceof Date && !isNaN(value)) return value.toISOString().slice(0, 10);
+  if (typeof value === 'number') { const date = new Date(Math.round((value - 25569) * 86400 * 1000)); return isNaN(date) ? '' : date.toISOString().slice(0, 10); }
+  const text = String(value).trim(); const match = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/); if (match) { const year = match[3].length === 2 ? `20${match[3]}` : match[3]; return `${year}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`; } return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : '';
 }
 function normalizeSpreadsheetHeader(value) {
   return String(value || '')
@@ -4891,76 +5371,76 @@ function normalizeSpreadsheetHeader(value) {
 }
 function officialEquipmentColumn(header) {
   const value = normalizeSpreadsheetHeader(header);
-  if(value === 'nf' || value.includes('nota fiscal')) return 'invoice';
-  if(value.includes('data') && value.includes('emissao')) return 'emissionDate';
-  if(value.includes('descricao') && value.includes('equipamento')) return 'description';
-  if(value.includes('patrimonio') || (value.includes('serie') && !value.includes('descricao'))) return 'code';
-  if((value.includes('codigo') && (value.includes('aff') || value.includes('af'))) || value === 'aff' || value === 'af') return 'afNumber';
-  if(value.includes('empreiteiro') || value === 'empresa') return 'contractor';
-  if(value === 'status' || value === 'situacao') return 'status';
+  if (value === 'nf' || value.includes('nota fiscal')) return 'invoice';
+  if (value.includes('data') && value.includes('emissao')) return 'emissionDate';
+  if (value.includes('descricao') && value.includes('equipamento')) return 'description';
+  if (value.includes('patrimonio') || (value.includes('serie') && !value.includes('descricao'))) return 'code';
+  if ((value.includes('codigo') && (value.includes('aff') || value.includes('af'))) || value === 'aff' || value === 'af') return 'afNumber';
+  if (value.includes('empreiteiro') || value === 'empresa') return 'contractor';
+  if (value === 'status' || value === 'situacao') return 'status';
   return '';
 }
 function spreadsheetEquipmentStatus(value) {
   const status = normalizeSpreadsheetHeader(value);
-  if(status.includes('indisponivel') || status.includes('manutencao') || status.includes('bloqueado')) return 'maintenance';
-  if(status.includes('em uso') || status === 'uso') return 'in-use';
+  if (status.includes('indisponivel') || status.includes('manutencao') || status.includes('bloqueado')) return 'maintenance';
+  if (status.includes('em uso') || status === 'uso') return 'in-use';
   return 'available';
 }
 function equipmentSpreadsheetStatus(equipment) {
-  if(equipment?.usage || equipment?.status === 'in-use') return 'EM USO';
+  if (equipment?.usage || equipment?.status === 'in-use') return 'EM USO';
   return equipment?.status === 'maintenance' ? 'INDISPONÍVEL' : 'DISPONÍVEL';
 }
 function equipmentTypeFromDescription(description) {
-  if(/paleteira/i.test(description))return 'Paleteira Elétrica'; if(/articulada/i.test(description))return 'PTA Articulada'; if(/mastro/i.test(description))return 'PTA Mastro'; return 'PTA Tesoura';
+  if (/paleteira/i.test(description)) return 'Paleteira Elétrica'; if (/articulada/i.test(description)) return 'PTA Articulada'; if (/mastro/i.test(description)) return 'PTA Mastro'; return 'PTA Tesoura';
 }
 async function handleEquipmentUpload(event) {
-  const file=event.target.files?.[0]; if(!file)return;
-  if(!await ensureExcelLibrary()){event.target.value='';return toast('Não foi possível carregar o leitor de Excel. Verifique a internet e tente novamente.',true);}
+  const file = event.target.files?.[0]; if (!file) return;
+  if (!await ensureExcelLibrary()) { event.target.value = ''; return toast('Não foi possível carregar o leitor de Excel. Verifique a internet e tente novamente.', true); }
   try {
-    const bytes=await file.arrayBuffer(); const workbook=XLSX.read(bytes,{type:'array',cellDates:true}); const imported=[]; const seen=new Set();
-    workbook.SheetNames.forEach(sheetName=>{
-      const rows=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName],{header:1,defval:'',raw:true});
-      let colMap = { invoice:-1, emissionDate:-1, description:-1, code:-1, afNumber:-1, contractor:-1, status:-1, productCode:-1, serial:-1, hourmeter:-1, battery:-1 };
+    const bytes = await file.arrayBuffer(); const workbook = XLSX.read(bytes, { type: 'array', cellDates: true }); const imported = []; const seen = new Set();
+    workbook.SheetNames.forEach(sheetName => {
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '', raw: true });
+      let colMap = { invoice: -1, emissionDate: -1, description: -1, code: -1, afNumber: -1, contractor: -1, status: -1, productCode: -1, serial: -1, hourmeter: -1, battery: -1 };
       let headerRowIndex = -1;
-      for(let r=0; r<Math.min(15, rows.length); r++) {
+      for (let r = 0; r < Math.min(15, rows.length); r++) {
         const candidate = {};
         (rows[r] || []).forEach((cellVal, cIdx) => {
           const field = officialEquipmentColumn(cellVal);
-          if(field && candidate[field] === undefined) candidate[field] = cIdx;
+          if (field && candidate[field] === undefined) candidate[field] = cIdx;
         });
-        const required = ['invoice','emissionDate','description','code','afNumber','contractor','status'];
-        if(required.every(field => candidate[field] !== undefined)) {
+        const required = ['invoice', 'emissionDate', 'description', 'code', 'afNumber', 'contractor', 'status'];
+        if (required.every(field => candidate[field] !== undefined)) {
           colMap = { ...colMap, ...candidate };
           headerRowIndex = r;
           break;
         }
       }
-      if(headerRowIndex < 0) return;
-      for(let r=0; r<Math.min(15, rows.length); r++) {
+      if (headerRowIndex < 0) return;
+      for (let r = 0; r < Math.min(15, rows.length); r++) {
         const row = rows[r];
-        if(Array.isArray(row)) {
+        if (Array.isArray(row)) {
           row.forEach((cellVal, cIdx) => {
             const txt = String(cellVal).trim().toLowerCase();
-            if((/aff|codigo|ident|nº af/i.test(txt)) && !/descrição|produto|patrimônio/i.test(txt)) colMap.afNumber = cIdx;
-            if(/empreiteiro|empresa/i.test(txt)) colMap.contractor = cIdx;
-            if(/bateria/i.test(txt)) colMap.battery = cIdx;
-            if(/horímetro|hr/i.test(txt)) colMap.hourmeter = cIdx;
-            if(/chassi|identificação/i.test(txt)) colMap.serial = cIdx;
-            if(/patrimônio|série/i.test(txt)) colMap.code = cIdx;
-            if(/descrição/i.test(txt)) colMap.description = cIdx;
+            if ((/aff|codigo|ident|nº af/i.test(txt)) && !/descrição|produto|patrimônio/i.test(txt)) colMap.afNumber = cIdx;
+            if (/empreiteiro|empresa/i.test(txt)) colMap.contractor = cIdx;
+            if (/bateria/i.test(txt)) colMap.battery = cIdx;
+            if (/horímetro|hr/i.test(txt)) colMap.hourmeter = cIdx;
+            if (/chassi|identificação/i.test(txt)) colMap.serial = cIdx;
+            if (/patrimônio|série/i.test(txt)) colMap.code = cIdx;
+            if (/descrição/i.test(txt)) colMap.description = cIdx;
           });
         }
       }
-      rows.slice(headerRowIndex + 1).forEach(row=>{
-        const description=String(row[colMap.description]||'').replace(/\s+/g,' ').trim();
-        const code=String(row[colMap.code]||'').replace(/\s+/g,'').trim().toUpperCase();
-        if(!description||!code||/descrição do equipamento/i.test(description)||/série|patrimônio/i.test(code)||/^total/i.test(description))return;
-        const key=code.toUpperCase();
-        if(seen.has(key))return;
+      rows.slice(headerRowIndex + 1).forEach(row => {
+        const description = String(row[colMap.description] || '').replace(/\s+/g, ' ').trim();
+        const code = String(row[colMap.code] || '').replace(/\s+/g, '').trim().toUpperCase();
+        if (!description || !code || /descrição do equipamento/i.test(description) || /série|patrimônio/i.test(code) || /^total/i.test(description)) return;
+        const key = code.toUpperCase();
+        if (seen.has(key)) return;
         seen.add(key);
-        const name=description;
-        let afVal = String(row[colMap.afNumber]||'').trim();
-        let contractorVal = String(row[colMap.contractor]||'').trim();
+        const name = description;
+        let afVal = String(row[colMap.afNumber] || '').trim();
+        let contractorVal = String(row[colMap.contractor] || '').trim();
         if (/^[A-Za-z.\s]+$/.test(afVal) && /^\d+$/.test(contractorVal)) {
           const tmp = afVal;
           afVal = contractorVal;
@@ -4969,24 +5449,24 @@ async function handleEquipmentUpload(event) {
         const itemObj = {
           code,
           name,
-          type:equipmentTypeFromDescription(description),
-          brand:'Tecnogera',
-          model:description.replace(/^Plataforma\s+/i,''),
-          invoice:String(row[colMap.invoice]||'').trim(),
-          emissionDate:spreadsheetDate(row[colMap.emissionDate]),
-          afNumber:afVal,
-          contractor:contractorVal,
-          status:spreadsheetEquipmentStatus(row[colMap.status])
+          type: equipmentTypeFromDescription(description),
+          brand: 'Tecnogera',
+          model: description.replace(/^Plataforma\s+/i, ''),
+          invoice: String(row[colMap.invoice] || '').trim(),
+          emissionDate: spreadsheetDate(row[colMap.emissionDate]),
+          afNumber: afVal,
+          contractor: contractorVal,
+          status: spreadsheetEquipmentStatus(row[colMap.status])
         };
         imported.push(sanitizeEquipment(itemObj));
       });
     });
-    if(!imported.length) throw new Error('Planilha sem equipamentos válidos. Use o modelo oficial com os sete cabeçalhos na linha 3, incluindo Status.');
+    if (!imported.length) throw new Error('Planilha sem equipamentos válidos. Use o modelo oficial com os sete cabeçalhos na linha 3, incluindo Status.');
     let added = 0;
     let updated = 0;
     const importedAt = new Date().toISOString();
     const changedEquipments = [];
-    
+
     // Identifica equipamentos que não estão mais na nova planilha e sincroniza
     const importedCodes = new Set(imported.map(item => item.code.toUpperCase()));
     const removedEquipments = equipments.filter(e => !importedCodes.has(e.code.toUpperCase()));
@@ -5065,8 +5545,8 @@ async function handleEquipmentUpload(event) {
       }
     });
 
-    equipments.sort((a,b)=>safeSort(a.model||a.name, b.model||b.name)||safeSort(a.code, b.code));
-    equipmentImportMeta={source:file.name,updatedAt:new Date().toISOString(),total:imported.length};
+    equipments.sort((a, b) => safeSort(a.model || a.name, b.model || b.name) || safeSort(a.code, b.code));
+    equipmentImportMeta = { source: file.name, updatedAt: new Date().toISOString(), total: imported.length };
     saveLocalBackup();
     localDataRevision += 1;
     let shared = true;
@@ -5095,11 +5575,11 @@ async function handleEquipmentUpload(event) {
       ? `${updated} equipamento(s) atualizado(s), ${added} novo(s)${removedMsg} em todos os aparelhos.`
       : `${updated} equipamento(s) atualizado(s), ${added} novo(s)${removedMsg} salvos somente neste aparelho. Verifique a internet e importe novamente.`,
       !shared);
-  } catch(error){toast(error.message||'Não foi possível ler a planilha de equipamentos.',true);}
+  } catch (error) { toast(error.message || 'Não foi possível ler a planilha de equipamentos.', true); }
 }
 
 function renderMovements() {
-  const inspections = history.filter(item => item.inspection || (item.inspections && item.inspections.length > 0)); 
+  const inspections = history.filter(item => item.inspection || (item.inspections && item.inspections.length > 0));
   const people = [...new Set(inspections.map(item => item.person).filter(Boolean))].sort(safeSort);
   document.getElementById('app').innerHTML = `
     ${pageHeader('Checklists PEMT', 'Controle digital complementar ao formulário físico arquivado na pasta do colaborador.', 'CONTROLE DE PTAs E PALETEIRAS', `<button class="button button-outline" onclick="openBlankInspectionTemplate()">${icon('print')} Imprimir formulário físico</button><button class="button button-green" onclick="exportChecklistExcel()">${icon('download')} Baixar Excel</button>`)}
@@ -5136,11 +5616,11 @@ function renderMovements() {
           </thead>
           <tbody>
             ${inspections.map(item => {
-              const eq = equipments.find(e => e.id === item.equipmentId);
-              const list = (item.inspections && item.inspections.length > 0) ? item.inspections : (item.inspection ? [item.inspection] : []);
-              const failed = list.some(ins => inspectionHasFailure(ins));
-              const mainMode = list[0]?.mode || 'retirada';
-              return `<tr class="checklist-record-row" data-id="${item.id}" data-person="${esc(item.person)}" data-equipment="${item.equipmentId}" data-mode="${mainMode}" data-date="${item.date.slice(0,10)}">
+    const eq = equipments.find(e => e.id === item.equipmentId);
+    const list = (item.inspections && item.inspections.length > 0) ? item.inspections : (item.inspection ? [item.inspection] : []);
+    const failed = list.some(ins => inspectionHasFailure(ins));
+    const mainMode = list[0]?.mode || 'retirada';
+    return `<tr class="checklist-record-row" data-id="${item.id}" data-person="${esc(item.person)}" data-equipment="${item.equipmentId}" data-mode="${mainMode}" data-date="${item.date.slice(0, 10)}">
                 <td style="text-align: center;"><input type="checkbox" class="checklist-select-check" value="${item.id}" onchange="updateChecklistSelection()"></td>
                 <td>${fullDate(item.date)}</td>
                 <td><strong>${esc(eq?.code || '—')}</strong><small class="table-sub">${esc(eq?.model || '')}</small></td>
@@ -5152,7 +5632,7 @@ function renderMovements() {
                 <td><span class="physical-ok">${list.length} linha(s)</span></td>
                 <td><button class="table-action" onclick="openInspectionRecord('${item.id}')">${icon('download')} PDF / ver</button></td>
               </tr>`;
-            }).join('')}
+  }).join('')}
           </tbody>
         </table>
       </div>
@@ -5210,7 +5690,7 @@ function clearChecklistSelection() {
 function printSelectedChecklists() {
   const ids = getSelectedChecklistIds();
   if (!ids.length) return toast('Selecione pelo menos um checklist para imprimir.', true);
-  
+
   const selectedMovements = history.filter(item => ids.includes(item.id));
   const docsHtml = selectedMovements.map(m => {
     const eq = equipments.find(e => e.id === m.equipmentId) || { code: '—', name: 'Equipamento' };
@@ -5229,25 +5709,25 @@ function printSelectedChecklists() {
   document.querySelector('.modal-backdrop').classList.add('print-area', 'inspection-print-area', 'batch-print-area');
 }
 function filterChecklists() {
-  const person=document.getElementById('checkPerson').value; const equipment=document.getElementById('checkEquipment').value; const mode=document.getElementById('checkMode').value; const start=document.getElementById('checkStart').value; const end=document.getElementById('checkEnd').value; let visible=0;
-  document.querySelectorAll('.checklist-record-row').forEach(row=>{const show=(!person||row.dataset.person===person)&&(!equipment||row.dataset.equipment===equipment)&&(!mode||row.dataset.mode===mode)&&(!start||row.dataset.date>=start)&&(!end||row.dataset.date<=end);row.style.display=show?'':'none';if(show)visible++;});
-  const empty=document.getElementById('noChecklistResults'); if(empty)empty.style.display=document.querySelectorAll('.checklist-record-row').length&&!visible?'block':'none';
+  const person = document.getElementById('checkPerson').value; const equipment = document.getElementById('checkEquipment').value; const mode = document.getElementById('checkMode').value; const start = document.getElementById('checkStart').value; const end = document.getElementById('checkEnd').value; let visible = 0;
+  document.querySelectorAll('.checklist-record-row').forEach(row => { const show = (!person || row.dataset.person === person) && (!equipment || row.dataset.equipment === equipment) && (!mode || row.dataset.mode === mode) && (!start || row.dataset.date >= start) && (!end || row.dataset.date <= end); row.style.display = show ? '' : 'none'; if (show) visible++; });
+  const empty = document.getElementById('noChecklistResults'); if (empty) empty.style.display = document.querySelectorAll('.checklist-record-row').length && !visible ? 'block' : 'none';
 }
 function getFilteredInspections() {
-  const rows=[...document.querySelectorAll('.checklist-record-row')];
-  if(!rows.length)return getReportFilteredHistory(true);
-  const visibleIds=rows.filter(row=>row.style.display!=='none').map(row=>Number(row.dataset.id)); return history.filter(item=>visibleIds.includes(item.id)&&item.inspection);
+  const rows = [...document.querySelectorAll('.checklist-record-row')];
+  if (!rows.length) return getReportFilteredHistory(true);
+  const visibleIds = rows.filter(row => row.style.display !== 'none').map(row => Number(row.dataset.id)); return history.filter(item => visibleIds.includes(item.id) && item.inspection);
 }
 async function exportChecklistExcel() {
-  if(!await ensureExcelLibrary()) return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.',true);
-  const records=getFilteredInspections(); if(!records.length)return toast('Nenhum checklist selecionado pelos filtros.',true);
-  const headers=['Data','Tipo','Patrimônio','Modelo','Responsável','Empresa','Atividade','Data Hall','Local','Horímetro','Resultado','Via física arquivada',...checklistItems.map(item=>item.title),'Observações'];
-  const rows=records.map(item=>{const eq=equipments.find(e=>e.id===item.equipmentId);return [fullDate(item.date),item.inspection.mode==='devolucao'?'Devolução':'Retirada',eq?.code||'',eq?.model||'',item.person,item.company,item.activity||'',item.dataHall||item.place||'',item.location||'',item.inspection.hourmeter,inspectionHasFailure(item.inspection)?'Reprovado':'Aprovado',item.inspection.physicalFiled?'Sim':'Não',...item.inspection.answers,item.inspection.observations||''];});
-  const sheet=XLSX.utils.aoa_to_sheet([headers,...rows]); sheet['!cols']=headers.map((header,index)=>({wch:index>=11?18:Math.min(32,Math.max(12,header.length+2))})); const book=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book,sheet,'Checklists'); XLSX.writeFile(book,`checklists-obraflow-${new Date().toISOString().slice(0,10)}.xlsx`); toast(`${records.length} checklist(s) exportado(s) para Excel.`);
+  if (!await ensureExcelLibrary()) return toast('Não foi possível carregar o gerador de Excel. Verifique a internet e tente novamente.', true);
+  const records = getFilteredInspections(); if (!records.length) return toast('Nenhum checklist selecionado pelos filtros.', true);
+  const headers = ['Data', 'Tipo', 'Patrimônio', 'Modelo', 'Responsável', 'Empresa', 'Atividade', 'Data Hall', 'Local', 'Horímetro', 'Resultado', 'Via física arquivada', ...checklistItems.map(item => item.title), 'Observações'];
+  const rows = records.map(item => { const eq = equipments.find(e => e.id === item.equipmentId); return [fullDate(item.date), item.inspection.mode === 'devolucao' ? 'Devolução' : 'Retirada', eq?.code || '', eq?.model || '', item.person, item.company, item.activity || '', item.dataHall || item.place || '', item.location || '', item.inspection.hourmeter, inspectionHasFailure(item.inspection) ? 'Reprovado' : 'Aprovado', item.inspection.physicalFiled ? 'Sim' : 'Não', ...item.inspection.answers, item.inspection.observations || '']; });
+  const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]); sheet['!cols'] = headers.map((header, index) => ({ wch: index >= 11 ? 18 : Math.min(32, Math.max(12, header.length + 2)) })); const book = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book, sheet, 'Checklists'); XLSX.writeFile(book, `checklists-obraflow-${new Date().toISOString().slice(0, 10)}.xlsx`); toast(`${records.length} checklist(s) exportado(s) para Excel.`);
 }
 function openBlankInspectionTemplate() {
-  const eq={code:'',name:'',model:'',serial:''}; const movement={company:'',person:'',activity:'',dataHall:'',location:'',inspection:{mode:'retirada',inspectedAt:'',hourmeter:'',operatorSign:'',observations:'',answers:Array(checklistItems.length).fill('')}};
-  modal(`${modalHead('Modelo do formulário de verificação','FV-MAQ-ST · modelo em branco')}<div class="modal-body inspection-record">${printableInspection(eq,movement)}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('download')} Imprimir / salvar PDF</button></div>`,'modal-paper'); document.querySelector('.modal-backdrop').classList.add('print-area','inspection-print-area');
+  const eq = { code: '', name: '', model: '', serial: '' }; const movement = { company: '', person: '', activity: '', dataHall: '', location: '', inspection: { mode: 'retirada', inspectedAt: '', hourmeter: '', operatorSign: '', observations: '', answers: Array(checklistItems.length).fill('') } };
+  modal(`${modalHead('Modelo do formulário de verificação', 'FV-MAQ-ST · modelo em branco')}<div class="modal-body inspection-record">${printableInspection(eq, movement)}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('download')} Imprimir / salvar PDF</button></div>`, 'modal-paper'); document.querySelector('.modal-backdrop').classList.add('print-area', 'inspection-print-area');
 }
 
 function packingSlipStatus(status) {
@@ -5281,14 +5761,14 @@ function nextSimpleOutputNumber() {
 
 function packingPeopleOptions() {
   return [...new Map(workforce.filter(person => person?.name).map(person => [person.name, person])).values()]
-    .sort((a,b) => safeSort(a.name,b.name))
+    .sort((a, b) => safeSort(a.name, b.name))
     .map(person => `<option value="${esc(person.name)}">${esc([person.company, person.role].filter(Boolean).join(' · '))}</option>`)
     .join('');
 }
 
 function packingPersonSelect(name, selected = '', label = 'Pessoa') {
   const people = [...new Map(workforce.filter(person => person?.name).map(person => [String(person.name).trim().toLocaleUpperCase('pt-BR'), person])).values()]
-    .sort((a,b) => safeSort(a.name,b.name));
+    .sort((a, b) => safeSort(a.name, b.name));
   const selectedKey = String(selected || '').trim().toLocaleUpperCase('pt-BR');
   const hasSelected = people.some(person => String(person.name).trim().toLocaleUpperCase('pt-BR') === selectedKey);
   const legacy = selected && !hasSelected ? `<option value="${esc(selected)}" selected>${esc(selected)} — usuário atual</option>` : '';
@@ -5342,7 +5822,7 @@ function collectMaterialOutputItems(form) {
 }
 
 function openSimpleOutputModal(importSpreadsheet = false) {
-  modal(`<form onsubmit="submitSimpleOutput(event)">${modalHead('Registrar saída simples','Retirada interna com rubrica obrigatória de quem recebe')}
+  modal(`<form onsubmit="submitSimpleOutput(event)">${modalHead('Registrar saída simples', 'Retirada interna com rubrica obrigatória de quem recebe')}
     <div class="modal-body">
       <div class="section-title"><span>${icon('swap')}</span><div><h3>Dados da retirada</h3><small>A pessoa que retirar o material deve confirmar a entrega com uma rubrica</small></div></div>
       <div class="form-grid packing-header-grid">
@@ -5396,7 +5876,7 @@ function packingItemFields(item = {}, index = 0) {
     <span class="packing-item-index">${String(index + 1).padStart(2, '0')}</span>
     <label><span>Código</span><input name="itemCode" placeholder="Ex.: MAT-001" value="${esc(item.code || '')}"></label>
     <label class="packing-description"><span>Descrição do material <em>*</em></span><input name="itemDescription" required placeholder="Ex.: Tubo aço carbono 2 pol." value="${esc(item.description || '')}"></label>
-    <label><span>Unidade</span><select name="itemUnit">${['un','pç','m','kg','cx','kit','rolo'].map(unit => `<option ${item.unit===unit?'selected':''}>${unit}</option>`).join('')}</select></label>
+    <label><span>Unidade</span><select name="itemUnit">${['un', 'pç', 'm', 'kg', 'cx', 'kit', 'rolo'].map(unit => `<option ${item.unit === unit ? 'selected' : ''}>${unit}</option>`).join('')}</select></label>
     <label><span>Quantidade <em>*</em></span><input name="itemQuantity" type="number" inputmode="decimal" min="0.01" step="0.01" required value="${esc(item.quantity || 1)}"></label>
     <label class="packing-observation"><span>Observação</span><input name="itemObservation" placeholder="Lote, marca ou referência" value="${esc(item.observation || '')}"></label>
     <button type="button" class="icon-button packing-remove" title="Remover item" onclick="removePackingItem(this)">${icon('trash')}</button>
@@ -5422,7 +5902,7 @@ function renumberPackingItems() {
 }
 
 function openPackingSlipModal(importSpreadsheet = false) {
-  modal(`<form onsubmit="submitPackingSlip(event)">${modalHead('Novo romaneio de materiais','Documento formal com assinatura, foto e dados de transporte')}
+  modal(`<form onsubmit="submitPackingSlip(event)">${modalHead('Novo romaneio de materiais', 'Documento formal com assinatura, foto e dados de transporte')}
     <div class="modal-body">
       <div class="section-title"><span>${icon('truck')}</span><div><h3>Identificação e transporte</h3><small>Os nomes vêm do cadastro Empresas & Efetivo</small></div></div>
       <div class="form-grid packing-header-grid">
@@ -5458,7 +5938,7 @@ async function submitPackingSlip(event) {
     return openSignatureModal();
   }
   let photos = [];
-  try { photos = JSON.parse(data.get('packingPhotosData') || '[]'); } catch(e) {}
+  try { photos = JSON.parse(data.get('packingPhotosData') || '[]'); } catch (e) { }
   if (!photos.length) return toast('Adicione pelo menos uma foto da retirada ou do material.', true);
 
   const items = collectMaterialOutputItems(form);
@@ -5495,14 +5975,14 @@ function renderPackingSlips() {
     <div class="packing-filters">
       <label class="search-box">${icon('search')}<input id="packingSearch" type="search" placeholder="Buscar número, material, destino ou responsável..." oninput="filterPackingSlips()"></label>
       <label class="filter-field"><span>Tipo</span><select id="packingTypeFilter" onchange="filterPackingSlips()"><option value="">Todos</option><option value="output">Saída simples</option><option value="packing_slip">Romaneio</option></select></label>
-      <label class="filter-field"><span>Produto no relatório</span><select id="packingMaterialFilter" onchange="filterPackingSlips()"><option value="">Todos os produtos</option>${[...materialOptions.values()].sort((a,b) => safeSort(a.code || a.description, b.code || b.description)).map(item => `<option value="${esc(item.code || item.description)}">${esc(item.code ? `${item.code} — ${item.description}` : item.description)}</option>`).join('')}</select></label>
+      <label class="filter-field"><span>Produto no relatório</span><select id="packingMaterialFilter" onchange="filterPackingSlips()"><option value="">Todos os produtos</option>${[...materialOptions.values()].sort((a, b) => safeSort(a.code || a.description, b.code || b.description)).map(item => `<option value="${esc(item.code || item.description)}">${esc(item.code ? `${item.code} — ${item.description}` : item.description)}</option>`).join('')}</select></label>
       <label class="filter-field"><span>Pessoa</span><input id="packingPersonFilter" list="packingPersonOptions" oninput="filterPackingSlips()" placeholder="Todas"></label>
       <label class="filter-field"><span>Data inicial</span><input id="packingStart" type="date" onchange="filterPackingSlips()"></label>
       <label class="filter-field"><span>Data final</span><input id="packingEnd" type="date" onchange="filterPackingSlips()"></label>
     </div>
     <div class="packing-filter-hint">${icon('check')} Ao escolher um produto, a planilha e a impressão incluirão somente esse produto — mesmo que o documento tenha outros itens.</div>
     <article class="panel packing-panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Documento</th><th>Tipo</th><th>Data de saída</th><th>Origem → destino</th><th>Responsáveis</th><th>Material e quantidade</th><th>Status</th><th></th></tr></thead><tbody>
-      ${packingSlips.map(slip => `<tr class="packing-record-row" data-id="${esc(slip.id)}" data-date="${String(slip.issuedAt || '').slice(0,10)}" data-search="${esc(`${slip.number} ${slip.origin} ${slip.destination} ${slip.sentBy} ${slip.requestedBy} ${(slip.items||[]).map(item=>`${item.code} ${item.description}`).join(' ')}`.toLowerCase())}"><td><strong class="document-number">${esc(slip.number)}</strong><small class="table-sub">${slip.recordType === 'output' ? 'Retirada interna' : esc(slip.vehicle || slip.carrier || 'Transporte não informado')}</small></td><td>${materialDocumentType(slip)}</td><td>${fullDate(slip.issuedAt)}</td><td><strong>${esc(slip.origin)}</strong><small class="table-sub">${icon('arrow')} ${esc(slip.destination)}</small></td><td><strong>${esc(slip.sentBy)}</strong><small class="table-sub">Retirou/recebeu: ${esc(slip.requestedBy)}</small></td><td><strong>${slip.items?.length || 0} item(ns)</strong><small class="table-sub packing-quantities">${(slip.items || []).map(item => `${esc(item.code || 'Avulso')} · ${esc(item.description)}: ${materialQuantity(item.quantity)} ${esc(item.unit || 'UN')}`).join('<br>')}</small></td><td>${slip.recordType === 'output' ? '<span class="status available">Registrado</span>' : packingSlipStatus(slip.status)}</td><td><div style="display:flex;gap:4px;"><button class="table-action" onclick="openPackingSlipRecord('${slip.id}')">${icon('file')} Abrir</button><button class="table-action" style="color:var(--red);" title="Excluir documento" onclick="deletePackingSlipRecord('${slip.id}')">${icon('trash')}</button></div></td></tr>`).join('')}
+      ${packingSlips.map(slip => `<tr class="packing-record-row" data-id="${esc(slip.id)}" data-date="${String(slip.issuedAt || '').slice(0, 10)}" data-search="${esc(`${slip.number} ${slip.origin} ${slip.destination} ${slip.sentBy} ${slip.requestedBy} ${(slip.items || []).map(item => `${item.code} ${item.description}`).join(' ')}`.toLowerCase())}"><td><strong class="document-number">${esc(slip.number)}</strong><small class="table-sub">${slip.recordType === 'output' ? 'Retirada interna' : esc(slip.vehicle || slip.carrier || 'Transporte não informado')}</small></td><td>${materialDocumentType(slip)}</td><td>${fullDate(slip.issuedAt)}</td><td><strong>${esc(slip.origin)}</strong><small class="table-sub">${icon('arrow')} ${esc(slip.destination)}</small></td><td><strong>${esc(slip.sentBy)}</strong><small class="table-sub">Retirou/recebeu: ${esc(slip.requestedBy)}</small></td><td><strong>${slip.items?.length || 0} item(ns)</strong><small class="table-sub packing-quantities">${(slip.items || []).map(item => `${esc(item.code || 'Avulso')} · ${esc(item.description)}: ${materialQuantity(item.quantity)} ${esc(item.unit || 'UN')}`).join('<br>')}</small></td><td>${slip.recordType === 'output' ? '<span class="status available">Registrado</span>' : packingSlipStatus(slip.status)}</td><td><div style="display:flex;gap:4px;"><button class="table-action" onclick="openPackingSlipRecord('${slip.id}')">${icon('file')} Abrir</button><button class="table-action" style="color:var(--red);" title="Excluir documento" onclick="deletePackingSlipRecord('${slip.id}')">${icon('trash')}</button></div></td></tr>`).join('')}
     </tbody></table></div>${packingSlips.length ? '' : `<div class="empty-state"><div><span>${icon('truck')}</span><h2>Nenhuma saída registrada</h2><p>Registre uma saída e escolha se será material, romaneio, ferramenta ou EPI.</p><button class="button button-green" onclick="openUnifiedOutputMenu()">${icon('plus')} Nova saída</button></div></div>`}<div class="no-filter-results" id="noPackingResults">Nenhum documento encontrado com estes filtros.</div></article>`;
 }
 
@@ -5526,7 +6006,7 @@ function getFilteredPackingSlips() {
   const start = document.getElementById('packingStart')?.value || '';
   const end = document.getElementById('packingEnd')?.value || '';
   return packingSlips.filter(slip => {
-    const date = String(slip.issuedAt || '').slice(0,10);
+    const date = String(slip.issuedAt || '').slice(0, 10);
     const materialText = (slip.items || []).map(item => `${item.code || ''} ${item.description || ''}`).join(' ').toLocaleLowerCase('pt-BR');
     const peopleText = `${slip.sentBy || ''} ${slip.requestedBy || ''} ${slip.createdBy || ''}`.toLocaleLowerCase('pt-BR');
     const allText = `${slip.number || ''} ${slip.origin || ''} ${slip.destination || ''} ${peopleText} ${materialText}`.toLocaleLowerCase('pt-BR');
@@ -5555,18 +6035,18 @@ async function exportFilteredPackingSlipsExcel() {
   const entries = getFilteredPackingItems();
   if (!slips.length || !entries.length) return toast('Nenhum produto encontrado com os filtros selecionados.', true);
   if (!await ensureExcelLibrary()) return toast('Gerador de planilha indisponível. Verifique a conexão.', true);
-  const rows = [['DOCUMENTO','TIPO','DATA DA SAÍDA','CÓDIGO','MATERIAL','QUANTIDADE','UNIDADE','RESPONSÁVEL PELO REGISTRO','PESSOA QUE RETIROU / RECEBEU','DESTINO','OBSERVAÇÃO']];
+  const rows = [['DOCUMENTO', 'TIPO', 'DATA DA SAÍDA', 'CÓDIGO', 'MATERIAL', 'QUANTIDADE', 'UNIDADE', 'RESPONSÁVEL PELO REGISTRO', 'PESSOA QUE RETIROU / RECEBEU', 'DESTINO', 'OBSERVAÇÃO']];
   entries.forEach(({ slip, item }) => rows.push([
     slip.number || '', slip.recordType === 'output' ? 'Saída simples' : 'Romaneio', slip.issuedAt ? new Date(slip.issuedAt) : '', item.code || 'AVULSO', item.description || '',
     materialNumber(item.quantity), item.unit || 'UN', slip.sentBy || '', slip.requestedBy || '', slip.destination || '', item.observation || ''
   ]));
   const sheet = XLSX.utils.aoa_to_sheet(rows);
-  sheet['!cols'] = [18,16,21,18,42,14,12,28,28,32,34].map(wch => ({ wch }));
+  sheet['!cols'] = [18, 16, 21, 18, 42, 14, 12, 28, 28, 32, 34].map(wch => ({ wch }));
   for (let row = 2; row <= rows.length; row++) if (sheet[`C${row}`]?.v) sheet[`C${row}`].z = 'dd/mm/yyyy hh:mm';
   sheet['!autofilter'] = { ref: `A1:K${rows.length}` };
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, 'Saídas filtradas');
-  XLSX.writeFile(book, `saidas-filtradas-${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(book, `saidas-filtradas-${new Date().toISOString().slice(0, 10)}.xlsx`);
   toast(`${entries.length} item(ns) de ${slips.length} documento(s) exportado(s).`);
 }
 
@@ -5601,10 +6081,10 @@ function printFilteredPackingSlips() {
   ]);
   const totalQuantity = entries.reduce((total, entry) => total + materialNumber(entry.item.quantity), 0);
   const summary = `<span><b>${slips.length}</b> documento(s)</span><span><b>${rows.length}</b> linha(s) de material</span><span><b>${materialQuantity(totalQuantity)}</b> quantidade total</span>`;
-  const content = `<section class="report-section"><h2>Saídas consolidadas</h2>${reportTable(['Data','Documento','Tipo','Código','Material','Quantidade','Un.','Pessoa','Destino'], rows, 'Nenhuma saída encontrada.')}</section>`;
+  const content = `<section class="report-section"><h2>Saídas consolidadas</h2>${reportTable(['Data', 'Documento', 'Tipo', 'Código', 'Material', 'Quantidade', 'Un.', 'Pessoa', 'Destino'], rows, 'Nenhuma saída encontrada.')}</section>`;
   const report = reportDocument('Relatório consolidado de saídas e romaneios', packingFiltersCaption(), content, summary);
   modal(`${modalHead('Relatório consolidado', `${slips.length} documento(s) reunidos em um único relatório`)}<div class="modal-body report-preview">${report}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir / salvar PDF</button></div>`, 'modal-paper');
-  document.querySelector('.modal-backdrop')?.classList.add('print-area','report-print-area');
+  document.querySelector('.modal-backdrop')?.classList.add('print-area', 'report-print-area');
 }
 
 function printablePackingSlip(slip) {
@@ -5614,9 +6094,9 @@ function printablePackingSlip(slip) {
   return `<article class="packing-document">
     <header class="packing-document-head"><div class="report-logos"><img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling"><img src="assets/afonso-franca-logo.png" alt="Afonso França Engenharia"></div><div><small>CONTROLE DE MATERIAIS · DC01</small><h1>${documentTitle}</h1><p>${documentSubtitle}</p></div><aside><strong>${esc(slip.number)}</strong><span>${isSimple ? '<span class="status available">Registrado</span>' : packingSlipStatus(slip.status)}</span></aside></header>
     <section class="packing-document-meta"><span><small>Saída</small><strong>${fullDate(slip.issuedAt)}</strong></span><span><small>Origem</small><strong>${esc(slip.origin)}</strong></span><span><small>Destino</small><strong>${esc(slip.destination)}</strong></span><span><small>Tipo</small><strong>${isSimple ? 'Saída simples' : 'Romaneio'}</strong></span><span><small>Responsável pelo registro</small><strong>${esc(slip.sentBy)}</strong></span><span><small>${isSimple ? 'Pessoa que retirou' : 'Solicitante / recebedor'}</small><strong>${esc(slip.requestedBy)}</strong></span><span><small>${isSimple ? 'Registro' : 'Transportadora / motorista'}</small><strong>${isSimple ? 'Retirada interna' : esc(slip.carrier || '—')}</strong></span><span><small>${isSimple ? 'Emissor' : 'Veículo / placa'}</small><strong>${isSimple ? esc(slip.createdBy || slip.sentBy) : esc(slip.vehicle || '—')}</strong></span></section>
-    <table class="packing-document-table"><thead><tr><th>Item</th><th>Código</th><th>Descrição do material</th><th>Un.</th><th>Qtd. retirada</th><th>Observação</th></tr></thead><tbody>${(slip.items || []).map((item,index)=>`<tr><td>${index+1}</td><td>${esc(item.code||'AVULSO')}</td><td>${esc(item.description)}</td><td>${esc(item.unit || 'UN')}</td><td><strong>${materialQuantity(item.quantity)}</strong></td><td>${esc(item.observation || '')}</td></tr>`).join('')}</tbody></table>
+    <table class="packing-document-table"><thead><tr><th>Item</th><th>Código</th><th>Descrição do material</th><th>Un.</th><th>Qtd. retirada</th><th>Observação</th></tr></thead><tbody>${(slip.items || []).map((item, index) => `<tr><td>${index + 1}</td><td>${esc(item.code || 'AVULSO')}</td><td>${esc(item.description)}</td><td>${esc(item.unit || 'UN')}</td><td><strong>${materialQuantity(item.quantity)}</strong></td><td>${esc(item.observation || '')}</td></tr>`).join('')}</tbody></table>
     ${slip.notes ? `<div class="packing-document-notes"><strong>Observações do envio</strong><p>${esc(slip.notes)}</p></div>` : ''}
-    ${!isSimple && (slip.photos || []).length ? `<section class="packing-photo-record"><strong>Fotos da retirada</strong><div>${slip.photos.map((photo,index) => `<figure><img src="${esc(photo)}" alt="Foto ${index+1} da retirada"><figcaption>Foto ${index+1}</figcaption></figure>`).join('')}</div></section>` : ''}
+    ${!isSimple && (slip.photos || []).length ? `<section class="packing-photo-record"><strong>Fotos da retirada</strong><div>${slip.photos.map((photo, index) => `<figure><img src="${esc(photo)}" alt="Foto ${index + 1} da retirada"><figcaption>Foto ${index + 1}</figcaption></figure>`).join('')}</div></section>` : ''}
     ${isSimple ? `<section class="packing-signatures simple-output-signatures"><span>${slip.signature ? `<img src="${esc(slip.signature)}" alt="Rubrica de quem retirou">` : '<br><br>________________________________'}<br>${esc(slip.requestedBy || 'Pessoa que retirou')}<small>Rubrica do recebedor</small></span><span><br><br>________________________________<br>${esc(slip.sentBy || 'Responsável pelo registro')}<small>Responsável pelo almoxarifado</small></span></section>` : `<section class="packing-signatures"><span>${slip.signature ? `<img src="${esc(slip.signature)}" alt="Assinatura de quem retirou">` : '<br><br>________________________________'}<br>Responsável pela retirada</span><span><br><br>________________________________<br>Transportador</span><span><br><br>________________________________<br>Controle da obra</span></section>`}
     <footer class="report-footer">Documento gerado pelo ObraFlow · Gestão HVAC · ${fullDate(new Date().toISOString())}</footer>
   </article>`;
@@ -5627,7 +6107,7 @@ function openPackingSlipRecord(id) {
   if (!slip) return toast('Documento de saída não encontrado.', true);
   const label = slip.recordType === 'output' ? 'Saída' : 'Romaneio';
   modal(`${modalHead(`${label} ${esc(slip.number)}`, `${slip.items?.length || 0} item(ns) · ${esc(slip.destination)}`)}<div class="modal-body report-preview">${printablePackingSlip(slip)}</div><div class="modal-foot"><button type="button" class="button button-outline danger-button" style="color:var(--red);border-color:var(--red-soft);" onclick="deletePackingSlipRecord('${slip.id}')">${icon('trash')} Excluir documento</button><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir / salvar PDF</button></div>`, 'modal-paper');
-  document.querySelector('.modal-backdrop').classList.add('print-area','packing-slip-print-area');
+  document.querySelector('.modal-backdrop').classList.add('print-area', 'packing-slip-print-area');
 }
 
 function nextReceivingInspectionNumber() {
@@ -5648,12 +6128,12 @@ function equipmentChecklistRows(record = null, editable = true) {
     const option = (value, label) => editable
       ? `<label><input type="radio" name="equipmentCheck${index}" value="${value}" required><span>${label}</span></label>`
       : (answer.result === value ? 'X' : '');
-    return `${groupRow}<tr><td>${index + 1}</td><td>${esc(item.title)}</td><td>${option('good','BOM')}</td><td>${option('repair_yes','SIM')}</td><td>${option('repair_no','NÃO')}</td><td>${option('na','N.A')}</td><td>${editable?`<input name="equipmentNote${index}" placeholder="Observação">`:esc(answer.observation || '')}</td></tr>`;
+    return `${groupRow}<tr><td>${index + 1}</td><td>${esc(item.title)}</td><td>${option('good', 'BOM')}</td><td>${option('repair_yes', 'SIM')}</td><td>${option('repair_no', 'NÃO')}</td><td>${option('na', 'N.A')}</td><td>${editable ? `<input name="equipmentNote${index}" placeholder="Observação">` : esc(answer.observation || '')}</td></tr>`;
   }).join('');
 }
 
 function openReceivingInspection() {
-  modal(`<form onsubmit="submitReceivingInspection(event)">${modalHead('Preencher formulário oficial','FOR.ALM-5-1 · Check List de Equipamentos · Revisão 01')}<div class="modal-body receiving-official-wrap">
+  modal(`<form onsubmit="submitReceivingInspection(event)">${modalHead('Preencher formulário oficial', 'FOR.ALM-5-1 · Check List de Equipamentos · Revisão 01')}<div class="modal-body receiving-official-wrap">
     <section class="equipment-receiving-sheet">
       <header class="equipment-receiving-head"><img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling"><h2>CHECK LIST DE EQUIPAMENTOS</h2><div><strong>Doc: FOR.ALM-5-1</strong><span>Data: 17/06/2026</span><span>Revisão: 01</span><span>Página 1 de 1</span></div></header>
       <div class="equipment-receiving-fields">
@@ -5682,7 +6162,7 @@ async function submitReceivingInspection(event) {
   const form = event.target;
   const data = Object.fromEntries(new FormData(form));
   if (!data.operatorSign) return toast('Registre a assinatura do inspetor.', true);
-  const answers = equipmentReceivingChecklistItems.map((item,index) => ({ title: item.title, group: item.group, result: data[`equipmentCheck${index}`], observation: data[`equipmentNote${index}`] || '' }));
+  const answers = equipmentReceivingChecklistItems.map((item, index) => ({ title: item.title, group: item.group, result: data[`equipmentCheck${index}`], observation: data[`equipmentNote${index}`] || '' }));
   const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rec-${Date.now()}`;
   const record = {
     id, number: nextReceivingInspectionNumber(), templateCode: 'FOR.ALM-5-1', templateRevision: '01', templateDate: '17/06/2026',
@@ -5694,7 +6174,7 @@ async function submitReceivingInspection(event) {
   receivingInspections.unshift(record);
   const synced = await persistReceivingInspection(record);
   closeModal(); location.hash = 'formularios'; render();
-  toast(`${record.number} salvo${synced?' e sincronizado':' neste aparelho'}.`, record.conclusion === 'blocked');
+  toast(`${record.number} salvo${synced ? ' e sincronizado' : ' neste aparelho'}.`, record.conclusion === 'blocked');
 }
 
 function receivingResultLabel(value) {
@@ -5704,10 +6184,10 @@ function receivingResultLabel(value) {
 function printableReceivingInspection(record) {
   return `<article class="equipment-receiving-sheet printable-receiving">
     <header class="equipment-receiving-head"><img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling"><h2>CHECK LIST DE EQUIPAMENTOS</h2><div><strong>Doc: ${esc(record.templateCode)}</strong><span>Data: ${esc(record.templateDate)}</span><span>Revisão: ${esc(record.templateRevision)}</span><span>Página 1 de 1</span></div></header>
-    <div class="equipment-receiving-fields record-fields"><span><small>Operação</small><strong>${record.operation==='retorno'?'OBRA RETORNO':'OBRA ENVIO'}</strong></span><span><small>Centro de custo</small><strong>${esc(record.costCenter)}</strong></span><span><small>Controle</small><strong>${esc(record.control)}</strong></span><span><small>Equipamento</small><strong>${esc(record.equipment)}</strong></span><span class="wide-field"><small>Fabricante / modelo</small><strong>${esc(record.manufacturerModel)}</strong></span><span><small>Data e hora</small><strong>${fullDate(record.inspectedAt)}</strong></span><span class="wide-field"><small>Inspecionado por</small><strong>${esc(record.inspectedBy)}</strong></span></div>
-    <table class="equipment-check-table"><colgroup><col class="item-col"><col><col class="answer-col"><col class="answer-col"><col class="answer-col"><col class="answer-col"><col class="notes-col"></colgroup><thead><tr><th rowspan="2">Item</th><th rowspan="2">Itens vistoriados</th><th rowspan="2">Bom</th><th colspan="2">Reparo</th><th rowspan="2">N.A.</th><th rowspan="2">Observações</th></tr><tr><th>Sim</th><th>Não</th></tr></thead><tbody>${record.answers.map((answer,index)=>`${index===0||record.answers[index-1].group!==answer.group?`<tr class="equipment-check-group"><th colspan="7">${esc(answer.group)}</th></tr>`:''}<tr><td>${index+1}</td><td>${esc(answer.title)}</td><td>${answer.result==='good'?'X':''}</td><td>${answer.result==='repair_yes'?'X':''}</td><td>${answer.result==='repair_no'?'X':''}</td><td>${answer.result==='na'?'X':''}</td><td>${esc(answer.observation || '')}</td></tr>`).join('')}</tbody></table>
+    <div class="equipment-receiving-fields record-fields"><span><small>Operação</small><strong>${record.operation === 'retorno' ? 'OBRA RETORNO' : 'OBRA ENVIO'}</strong></span><span><small>Centro de custo</small><strong>${esc(record.costCenter)}</strong></span><span><small>Controle</small><strong>${esc(record.control)}</strong></span><span><small>Equipamento</small><strong>${esc(record.equipment)}</strong></span><span class="wide-field"><small>Fabricante / modelo</small><strong>${esc(record.manufacturerModel)}</strong></span><span><small>Data e hora</small><strong>${fullDate(record.inspectedAt)}</strong></span><span class="wide-field"><small>Inspecionado por</small><strong>${esc(record.inspectedBy)}</strong></span></div>
+    <table class="equipment-check-table"><colgroup><col class="item-col"><col><col class="answer-col"><col class="answer-col"><col class="answer-col"><col class="answer-col"><col class="notes-col"></colgroup><thead><tr><th rowspan="2">Item</th><th rowspan="2">Itens vistoriados</th><th rowspan="2">Bom</th><th colspan="2">Reparo</th><th rowspan="2">N.A.</th><th rowspan="2">Observações</th></tr><tr><th>Sim</th><th>Não</th></tr></thead><tbody>${record.answers.map((answer, index) => `${index === 0 || record.answers[index - 1].group !== answer.group ? `<tr class="equipment-check-group"><th colspan="7">${esc(answer.group)}</th></tr>` : ''}<tr><td>${index + 1}</td><td>${esc(answer.title)}</td><td>${answer.result === 'good' ? 'X' : ''}</td><td>${answer.result === 'repair_yes' ? 'X' : ''}</td><td>${answer.result === 'repair_no' ? 'X' : ''}</td><td>${answer.result === 'na' ? 'X' : ''}</td><td>${esc(answer.observation || '')}</td></tr>`).join('')}</tbody></table>
     <div class="equipment-comments record-comments"><strong>Comentários</strong><p>${esc(record.comments || '—')}</p></div>
-    <div class="receiving-record-footer"><span><small>Responsável pelo equipamento</small><strong>${esc(record.equipmentResponsible)}</strong></span><span><small>Condição final</small><strong>${record.conclusion==='operational'?'EM CONDIÇÕES DE OPERAR SEM RISCO':'NÃO TEM CONDIÇÕES DE OPERAR'}</strong></span><span><small>Local</small><strong>${esc(record.location)}</strong></span><span class="signature-record"><small>Assinatura do inspetor</small><img src="${record.inspectorSignature}" alt="Assinatura"></span></div>
+    <div class="receiving-record-footer"><span><small>Responsável pelo equipamento</small><strong>${esc(record.equipmentResponsible)}</strong></span><span><small>Condição final</small><strong>${record.conclusion === 'operational' ? 'EM CONDIÇÕES DE OPERAR SEM RISCO' : 'NÃO TEM CONDIÇÕES DE OPERAR'}</strong></span><span><small>Local</small><strong>${esc(record.location)}</strong></span><span class="signature-record"><small>Assinatura do inspetor</small><img src="${record.inspectorSignature}" alt="Assinatura"></span></div>
   </article>`;
 }
 
@@ -5715,7 +6195,7 @@ function openReceivingInspectionRecord(id) {
   const record = receivingInspections.find(item => String(item.id) === String(id));
   if (!record) return toast('Checklist não encontrado.', true);
   modal(`${modalHead(`${record.templateCode} · Revisão ${record.templateRevision}`, `${record.number} · ${esc(record.equipment || record.control || 'Recebimento')}`)}<div class="modal-body report-preview">${printableReceivingInspection(record)}</div><div class="modal-foot"><button type="button" class="button button-outline danger-button" style="color:var(--red);border-color:var(--red-soft);" onclick="deleteReceivingInspectionRecord('${record.id}')">${icon('trash')} Excluir lançamento</button><button class="button button-outline" onclick="closeModal()">Fechar</button><a class="button button-outline" href="assets/formularios/FOR-ALM-5.1-check-list-de-equipamentos-rev01.xlsx" download>${icon('download')} Modelo original</a><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir / salvar PDF</button></div>`, 'modal-paper');
-  document.querySelector('.modal-backdrop').classList.add('print-area','receiving-print-area');
+  document.querySelector('.modal-backdrop').classList.add('print-area', 'receiving-print-area');
 }
 
 function formsHubRecords() {
@@ -5725,12 +6205,12 @@ function formsHubRecords() {
   });
   receivingInspections
     .filter(record => !['entrada_nf', 'entrada_planilha', 'entrada_manual'].includes(record?.operation))
-    .forEach(record => records.push({ type: 'recebimento', date: record.inspectedAt, number: record.number, title: `${record.templateCode} · Check List de Equipamentos`, subtitle: `${record.equipment} · ${record.inspectedBy}`, status: record.conclusion==='blocked'?'divergence':'received', id: record.id, revision: record.templateRevision }));
+    .forEach(record => records.push({ type: 'recebimento', date: record.inspectedAt, number: record.number, title: `${record.templateCode} · Check List de Equipamentos`, subtitle: `${record.equipment} · ${record.inspectedBy}`, status: record.conclusion === 'blocked' ? 'divergence' : 'received', id: record.id, revision: record.templateRevision }));
   history.filter(item => item.inspection).forEach(item => {
     const eq = equipments.find(equipment => equipment.id === item.equipmentId);
-    records.push({ type: 'pemt', date: item.inspection.inspectedAt || item.date, number: eq?.code || item.equipmentCode || 'PEMT', title: 'Inspeção PEMT', subtitle: `${item.person || 'Responsável'} · ${item.company || ''}`, status: inspectionHasFailure(item.inspection)?'divergence':'received', id: item.id });
+    records.push({ type: 'pemt', date: item.inspection.inspectedAt || item.date, number: eq?.code || item.equipmentCode || 'PEMT', title: 'Inspeção PEMT', subtitle: `${item.person || 'Responsável'} · ${item.company || ''}`, status: inspectionHasFailure(item.inspection) ? 'divergence' : 'received', id: item.id });
   });
-  return records.sort((a,b) => Date.parse(b.date || 0) - Date.parse(a.date || 0));
+  return records.sort((a, b) => Date.parse(b.date || 0) - Date.parse(a.date || 0));
 }
 
 function formTemplateCard(template) {
@@ -5740,11 +6220,11 @@ function formTemplateCard(template) {
       ? `<button class="button button-green" onclick="openMaterialActionMenu('packing_slip')">${icon('plus')} Novo romaneio</button>`
       : `<button class="button button-outline" onclick="openBlankInspectionTemplate()">${icon('print')} Imprimir modelo</button>`;
   const download = template.file ? `<a class="button button-outline" href="${template.file}" download>${icon('download')} Baixar ${template.format}</a>` : '';
-  return `<article class="form-template-card" data-template-search="${esc(`${template.code} ${template.title} ${template.category}`.toLowerCase())}"><div class="form-template-top"><span>${icon(template.digital==='romaneio'?'truck':template.digital==='pemt'?'lift':'clipboard')}</span><b>${esc(template.category)}</b></div><div><small>${esc(template.code)}</small><h2>${esc(template.title)}</h2><p>${esc(template.description)}</p><div class="form-version"><span>Revisão <strong>${esc(template.revision)}</strong></span>${template.issuedAt?`<span>Emissão <strong>${esc(template.issuedAt)}</strong></span>`:''}<span>Formato <strong>${esc(template.format)}</strong></span></div></div><div class="form-template-actions">${action}${download}</div></article>`;
+  return `<article class="form-template-card" data-template-search="${esc(`${template.code} ${template.title} ${template.category}`.toLowerCase())}"><div class="form-template-top"><span>${icon(template.digital === 'romaneio' ? 'truck' : template.digital === 'pemt' ? 'lift' : 'clipboard')}</span><b>${esc(template.category)}</b></div><div><small>${esc(template.code)}</small><h2>${esc(template.title)}</h2><p>${esc(template.description)}</p><div class="form-version"><span>Revisão <strong>${esc(template.revision)}</strong></span>${template.issuedAt ? `<span>Emissão <strong>${esc(template.issuedAt)}</strong></span>` : ''}<span>Formato <strong>${esc(template.format)}</strong></span></div></div><div class="form-template-actions">${action}${download}</div></article>`;
 }
 
 function formPhotoFieldHTML(name, label, { multiple = true, required = false } = {}) {
-  return `<section class="form-photo-field"><div><strong>${esc(label)}</strong><small>Use a câmera ou selecione ${multiple?'uma ou mais fotos':'uma foto'}.</small></div><label class="button button-outline">${icon('plus')} Adicionar foto<input type="file" name="${esc(name)}" accept="image/*" capture="environment" ${multiple?'multiple':''} ${required?'required':''} hidden onchange="prepareFormPhotos(this)"></label><input type="hidden" name="${esc(name)}Data"><div class="form-photo-preview"></div></section>`;
+  return `<section class="form-photo-field"><div><strong>${esc(label)}</strong><small>Use a câmera ou selecione ${multiple ? 'uma ou mais fotos' : 'uma foto'}.</small></div><label class="button button-outline">${icon('plus')} Adicionar foto<input type="file" name="${esc(name)}" accept="image/*" capture="environment" ${multiple ? 'multiple' : ''} ${required ? 'required' : ''} hidden onchange="prepareFormPhotos(this)"></label><input type="hidden" name="${esc(name)}Data"><div class="form-photo-preview"></div></section>`;
 }
 
 async function prepareFormPhotos(input) {
@@ -5753,7 +6233,7 @@ async function prepareFormPhotos(input) {
   const hidden = input.closest('.form-photo-field')?.querySelector(`input[name="${CSS.escape(input.name)}Data"]`);
   const preview = input.closest('.form-photo-field')?.querySelector('.form-photo-preview');
   if (hidden) hidden.value = JSON.stringify(data);
-  if (preview) preview.innerHTML = data.map((source,index) => `<figure><img src="${source}" alt="Foto ${index+1}"><figcaption>Foto ${index+1}</figcaption></figure>`).join('');
+  if (preview) preview.innerHTML = data.map((source, index) => `<figure><img src="${source}" alt="Foto ${index + 1}"><figcaption>Foto ${index + 1}</figcaption></figure>`).join('');
 }
 
 function compressFormPhoto(file) {
@@ -5785,7 +6265,7 @@ function renderFormsHub() {
     <section class="form-catalog">${formLibrary.map(formTemplateCard).join('')}</section>
     <section class="forms-library-head"><div><h2>Formulários registrados</h2><p>${records.length} documento(s) disponíveis para consulta</p></div></section>
     <div class="forms-filters"><label class="search-box">${icon('search')}<input id="formsSearch" type="search" placeholder="Buscar documento, número ou responsável..." oninput="filterFormsHub()"></label><label class="filter-field"><span>Tipo</span><select id="formsType" onchange="filterFormsHub()"><option value="">Todos</option><option value="romaneio">Saídas / Romaneios</option><option value="recebimento">Inspeção de recebimento</option><option value="pemt">Inspeção PEMT</option></select></label><label class="filter-field"><span>Data inicial</span><input type="date" id="formsStart" onchange="filterFormsHub()"></label><label class="filter-field"><span>Data final</span><input type="date" id="formsEnd" onchange="filterFormsHub()"></label></div>
-    <article class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Data</th><th>Formulário</th><th>Documento / ativo</th><th>Referência</th><th>Resultado</th><th></th></tr></thead><tbody>${records.map(record=>`<tr class="form-record-row" data-type="${record.type}" data-date="${String(record.date||'').slice(0,10)}" data-search="${esc(`${record.title} ${record.number} ${record.subtitle}`.toLowerCase())}"><td>${fullDate(record.date)}</td><td><strong>${esc(record.title)}</strong><small class="table-sub">${record.revision?`Revisão ${esc(record.revision)} · `:''}${record.type==='pemt'?'Equipamentos':record.type==='recebimento'?'Almoxarifado · Recebimento':'Almoxarifado · Expedição'}</small></td><td><strong class="document-number">${esc(record.number)}</strong></td><td>${esc(record.subtitle)}</td><td>${record.type==='romaneio'?(record.recordType==='output'?'<span class="status available">Registrado</span>':packingSlipStatus(record.status)):`<span class="status ${record.status==='divergence'?'maintenance':'available'}">${record.status==='divergence'?'Não liberado':'Conforme'}</span>`}</td><td><div style="display:flex;gap:4px;"><button class="table-action" onclick="${record.type==='pemt'?`openInspectionRecord('${record.id}')`:record.type==='recebimento'?`openReceivingInspectionRecord('${record.id}')`:`openPackingSlipRecord('${record.id}')`}">${icon('file')} Abrir</button>${record.type==='recebimento'?`<button class="table-action" style="color:var(--red);" title="Excluir" onclick="deleteReceivingInspectionRecord('${record.id}')">${icon('trash')}</button>`:record.type==='romaneio'?`<button class="table-action" style="color:var(--red);" title="Excluir" onclick="deletePackingSlipRecord('${record.id}')">${icon('trash')}</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>${records.length?'':`<div class="empty-state"><div><span>${icon('clipboard')}</span><h2>Nenhum formulário registrado</h2><p>Os documentos emitidos aparecerão aqui automaticamente.</p></div></div>`}<div class="no-filter-results" id="noFormsResults">Nenhum formulário encontrado com estes filtros.</div></article>`;
+    <article class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Data</th><th>Formulário</th><th>Documento / ativo</th><th>Referência</th><th>Resultado</th><th></th></tr></thead><tbody>${records.map(record => `<tr class="form-record-row" data-type="${record.type}" data-date="${String(record.date || '').slice(0, 10)}" data-search="${esc(`${record.title} ${record.number} ${record.subtitle}`.toLowerCase())}"><td>${fullDate(record.date)}</td><td><strong>${esc(record.title)}</strong><small class="table-sub">${record.revision ? `Revisão ${esc(record.revision)} · ` : ''}${record.type === 'pemt' ? 'Equipamentos' : record.type === 'recebimento' ? 'Almoxarifado · Recebimento' : 'Almoxarifado · Expedição'}</small></td><td><strong class="document-number">${esc(record.number)}</strong></td><td>${esc(record.subtitle)}</td><td>${record.type === 'romaneio' ? (record.recordType === 'output' ? '<span class="status available">Registrado</span>' : packingSlipStatus(record.status)) : `<span class="status ${record.status === 'divergence' ? 'maintenance' : 'available'}">${record.status === 'divergence' ? 'Não liberado' : 'Conforme'}</span>`}</td><td><div style="display:flex;gap:4px;"><button class="table-action" onclick="${record.type === 'pemt' ? `openInspectionRecord('${record.id}')` : record.type === 'recebimento' ? `openReceivingInspectionRecord('${record.id}')` : `openPackingSlipRecord('${record.id}')`}">${icon('file')} Abrir</button>${record.type === 'recebimento' ? `<button class="table-action" style="color:var(--red);" title="Excluir" onclick="deleteReceivingInspectionRecord('${record.id}')">${icon('trash')}</button>` : record.type === 'romaneio' ? `<button class="table-action" style="color:var(--red);" title="Excluir" onclick="deletePackingSlipRecord('${record.id}')">${icon('trash')}</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>${records.length ? '' : `<div class="empty-state"><div><span>${icon('clipboard')}</span><h2>Nenhum formulário registrado</h2><p>Os documentos emitidos aparecerão aqui automaticamente.</p></div></div>`}<div class="no-filter-results" id="noFormsResults">Nenhum formulário encontrado com estes filtros.</div></article>`;
 }
 
 function filterFormsHub() {
@@ -5861,19 +6341,23 @@ function workforceAttendanceValue(person, date) {
 }
 
 function workforceAttendanceCell(person, date) {
-  const value = workforceAttendanceValue(person, date);
+  const isFuture = date > currentLocalDateISO();
+  const value = isFuture ? '' : workforceAttendanceValue(person, date);
   const presentation = attendancePresentation(value);
   const encodedKey = encodeURIComponent(workforcePersonKey(person)).replace(/'/g, '%27');
-  const canEdit = isMasterUser();
-  const title = canEdit
-    ? `${presentation.title} · clique para alterar`
-    : `${presentation.title} (Apenas Master pode alterar)`;
+  const canEdit = isMasterUser() && !isFuture;
+  const title = isFuture
+    ? `Data futura (${date.split('-').reverse().join('/')}) — o lançamento só é liberado no próprio dia`
+    : canEdit
+      ? `${presentation.title} · clique para alterar`
+      : `${presentation.title} (Apenas Master pode alterar)`;
   const disabledAttr = canEdit ? '' : 'disabled aria-disabled="true"';
-  return `<button type="button" class="attendance-cell ${presentation.state} ${canEdit ? '' : 'read-only'}" data-value="${presentation.value}" data-date="${date}" title="${title}" ${disabledAttr} onclick="cycleWorkforceAttendance('${encodedKey}','${date}',this)">${presentation.label}</button>`;
+  const clickAttr = canEdit ? `onclick="cycleWorkforceAttendance('${encodedKey}','${date}',this)"` : '';
+  return `<button type="button" class="attendance-cell ${presentation.state} ${canEdit ? '' : 'read-only'} ${isFuture ? 'future-day' : ''}" data-value="${presentation.value}" data-date="${date}" title="${title}" ${disabledAttr} ${clickAttr}>${presentation.label}</button>`;
 }
 
 function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
-  const companies = [...new Set(workforce.map(person => person?.company).filter(Boolean))].sort(safeSort);
+  const companies = getRegisteredWorkforceCompanies();
   let totalDay = 0;
   let totalNight = 0;
   let totalNoShift = 0;
@@ -5881,7 +6365,7 @@ function renderWorkforceQuadroTableHTML(date = workforceSummaryDate) {
   let totalGeral = 0;
 
   const rows = companies.map(company => {
-    const people = workforce.filter(person => person?.company === company);
+    const people = workforce.filter(person => companyComparisonKey(person?.company) === companyComparisonKey(company));
     const dayCount = people.filter(person => workforceAttendanceValue(person, date) === 'D').length;
     const nightCount = people.filter(person => workforceAttendanceValue(person, date) === 'N').length;
     const noShiftCount = people.filter(person => workforceAttendanceValue(person, date) === '1').length;
@@ -5948,10 +6432,11 @@ function workforceDailySummaryHTML(date = workforceSummaryDate) {
 
 function renderWorkforceDailyCardsHTML(companies) {
   const date = workforceSummaryDate;
-  const canEdit = isMasterUser();
+  const isFuture = date > currentLocalDateISO();
+  const canEdit = isMasterUser() && !isFuture;
   const cards = workforce.map(person => {
     const encodedKey = encodeURIComponent(workforcePersonKey(person)).replace(/'/g, '%27');
-    const val = workforceAttendanceValue(person, date);
+    const val = isFuture ? '' : workforceAttendanceValue(person, date);
     const presentation = attendancePresentation(val);
     const actionsHTML = canEdit ? `
         <div class="workforce-mobile-card-actions">
@@ -5962,7 +6447,7 @@ function renderWorkforceDailyCardsHTML(companies) {
           <button type="button" class="mobile-att-btn att-clear" onclick="setWorkforceAttendance('${encodedKey}', '${date}', '')" title="Limpar marcação">✕</button>
         </div>` : `
         <div class="workforce-mobile-card-actions read-only" style="opacity:0.75; font-size:11px; color:var(--muted); padding-top:4px;">
-          <span style="display:inline-flex; align-items:center; gap:4px;">🔒 Apenas perfil Master pode alterar</span>
+          <span style="display:inline-flex; align-items:center; gap:4px;">${isFuture ? '📅 Data futura — preenchimento liberado apenas no próprio dia' : '🔒 Apenas perfil Master pode alterar'}</span>
         </div>`;
     return `
       <div class="workforce-mobile-card" data-person-key="${encodedKey}" data-company="${esc(person.company)}" data-search="${esc(normalizeWorkforceSearch(`${person.name} ${person.company} ${person.role || ''}`))}">
@@ -6023,11 +6508,24 @@ function setWorkforceAttendance(encodedKey, date, value, callerButton = null) {
     toast('Apenas usuários com perfil Master podem alterar a presença do efetivo.', true);
     return;
   }
+  if (date > currentLocalDateISO()) {
+    toast('Não é permitido lançar presença em datas futuras.', true);
+    return;
+  }
   const key = decodeURIComponent(encodedKey);
   const normalizedValue = normalizeAttendanceValue(value);
   if (!workforceAttendance[key]) workforceAttendance[key] = {};
-  if (normalizedValue) workforceAttendance[key][date] = normalizedValue;
-  else delete workforceAttendance[key][date];
+  if (normalizedValue) {
+    workforceAttendance[key][date] = normalizedValue;
+    if (workforceClearedAttendance[key]) {
+      delete workforceClearedAttendance[key][date];
+      if (!Object.keys(workforceClearedAttendance[key]).length) delete workforceClearedAttendance[key];
+    }
+  } else {
+    delete workforceAttendance[key][date];
+    if (!workforceClearedAttendance[key]) workforceClearedAttendance[key] = {};
+    workforceClearedAttendance[key][date] = new Date().toISOString();
+  }
   if (!Object.keys(workforceAttendance[key]).length) delete workforceAttendance[key];
   workforceControlMeta = { updatedAt: new Date().toISOString() };
   workforceDataRevision++;
@@ -6036,15 +6534,12 @@ function setWorkforceAttendance(encodedKey, date, value, callerButton = null) {
 
   const presentation = attendancePresentation(normalizedValue);
 
-  // Atualiza visualmente a célula da tabela mensal de forma cirúrgica e imediata.
-  // Prioriza o botão passado diretamente (evita querySelector frágil com onclick*);
-  // caso contrário busca pela linha da pessoa na tabela e encontra a célula da data.
   const cellBtn = callerButton instanceof HTMLElement && callerButton.classList.contains('attendance-cell')
     ? callerButton
     : (() => {
-        const row = document.querySelector(`.workforce-control-row[data-person-key="${encodedKey}"]`);
-        return row ? row.querySelector(`button.attendance-cell[data-date="${date}"]`) : null;
-      })();
+      const row = document.querySelector(`.workforce-control-row[data-person-key="${encodedKey}"]`);
+      return row ? row.querySelector(`button.attendance-cell[data-date="${date}"]`) : null;
+    })();
   if (cellBtn) {
     cellBtn.dataset.value = presentation.value;
     cellBtn.className = `attendance-cell ${presentation.state}`;
@@ -6052,7 +6547,6 @@ function setWorkforceAttendance(encodedKey, date, value, callerButton = null) {
     cellBtn.title = `${presentation.title} · clique para alterar`;
   }
 
-  // Atualiza visualmente o card mobile/diário de forma cirúrgica (sem perder rolagem)
   const card = document.querySelector(`.workforce-mobile-card[data-person-key="${encodedKey}"]`);
   if (card) {
     card.querySelectorAll('.mobile-att-btn').forEach(btn => btn.classList.remove('active'));
@@ -6067,14 +6561,13 @@ function setWorkforceAttendance(encodedKey, date, value, callerButton = null) {
     }
   }
 
-  // A edição de outra coluna não deve trocar silenciosamente a data do resumo.
-  // O quadro superior sempre representa apenas a data selecionada/destacada.
   if (date === workforceSummaryDate) updateWorkforceSummaryUI(date);
   filterWorkforceControl();
 }
 
 function renderWorkforceControl(companies) {
   const dates = workforceMonthDates();
+  const todayIso = currentLocalDateISO();
   const tableWidth = 145 + 235 + 72 + (dates.length * 44);
   const mobileTableWidth = 140 + (dates.length * 44);
   const rows = workforce.map(person => {
@@ -6083,11 +6576,11 @@ function renderWorkforceControl(companies) {
       <td class="workforce-sticky-company">${esc(person.company)}</td>
       <td class="workforce-sticky-person"><strong>${esc(person.name)}</strong><small><span class="mobile-company-tag">${esc(person.company)} · </span>${esc(person.role || '—')}</small></td>
       <td class="workforce-col-vinculo" title="${esc(person.status || '')}">${esc(person.status === 'DIRETA' ? 'DIR' : person.status === 'INDIRETA' ? 'IND' : person.status === 'TERCEIRO' ? 'TER' : person.status || '—')}</td>
-      ${dates.map(date => `<td data-attendance-date="${date}" class="${date === workforceSummaryDate ? 'selected-day' : ''}">${workforceAttendanceCell(person, date)}</td>`).join('')}
+      ${dates.map(date => `<td data-attendance-date="${date}" class="${date === workforceSummaryDate ? 'selected-day' : ''} ${date > todayIso ? 'future-day-col' : ''}">${workforceAttendanceCell(person, date)}</td>`).join('')}
     </tr>`;
   }).join('');
-  const totals = dates.map(date => `<td class="attendance-total ${date === workforceSummaryDate ? 'selected-day' : ''}" data-total-date="${date}">${workforce.filter(person => isPresentAttendanceValue(workforceAttendanceValue(person, date))).length}</td>`).join('');
-  
+  const totals = dates.map(date => `<td class="attendance-total ${date === workforceSummaryDate ? 'selected-day' : ''}" data-total-date="${date}">${date > todayIso ? '—' : workforce.filter(person => isPresentAttendanceValue(workforceAttendanceValue(person, date))).length}</td>`).join('');
+
   const formattedSummaryDate = new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`));
 
   return `<section class="workforce-control-panel">
@@ -6105,11 +6598,11 @@ function renderWorkforceControl(companies) {
       <span><i class="absent">0</i>Ausente</span>
       <span><i class="off">F</i>Folga</span>
       <span><i class="empty">·</i>Sem marcação</span>
-      <small><b>D e N contam como presença.</b> O P identifica uma marcação antiga: escolha D ou N para informar o turno. O filtro usa a data selecionada no resumo ou no cabeçalho da grade.</small>
+      <small><b>D e N contam como presença.</b> Datas futuras permanecem bloqueadas automaticamente para evitar marcações indevidas em dias posteriores.</small>
     </div>
     <div class="workforce-daily-head">
       <div><strong>Resumo do dia selecionado</strong><small id="workforceDailySummaryDescription">${formattedSummaryDate} · diurno, noturno, presentes e cadastrados por empresa</small></div>
-      <input type="date" id="workforceSummaryDate" value="${workforceSummaryDate}" onchange="changeWorkforceSummaryDate(this.value)">
+      <input type="date" id="workforceSummaryDate" max="${todayIso}" value="${workforceSummaryDate}" onchange="changeWorkforceSummaryDate(this.value)">
     </div>
     <div class="workforce-daily-summary" id="workforceDailySummary">${workforceDailySummaryHTML()}</div>
     
@@ -6130,11 +6623,12 @@ function renderWorkforceControl(companies) {
               <th class="workforce-sticky-person">Nome / função</th>
               <th class="workforce-col-vinculo">Vínculo</th>
               ${dates.map(date => {
-                const label = workforceDayLabel(date);
-                const isSelected = date === workforceSummaryDate;
-                const isWeekend = ['sáb','dom'].includes(label.weekday);
-                return `<th class="${isWeekend ? 'weekend' : ''} ${isSelected ? 'selected-day' : ''}" data-date-col="${date}" title="Selecionar dia ${label.day}" onclick="changeWorkforceSummaryDate('${date}')"><span>${label.day}</span><small>${label.weekday}</small></th>`;
-              }).join('')}
+    const label = workforceDayLabel(date);
+    const isSelected = date === workforceSummaryDate;
+    const isWeekend = ['sáb', 'dom'].includes(label.weekday);
+    const isFuture = date > todayIso;
+    return `<th class="${isWeekend ? 'weekend' : ''} ${isSelected ? 'selected-day' : ''} ${isFuture ? 'future-day-col' : ''}" data-date-col="${date}" title="${isFuture ? `Dia ${label.day} (Data futura)` : `Selecionar dia ${label.day}`}" onclick="${isFuture ? `toast('Datas futuras ainda não possuem fechamento de efetivo.', true)` : `changeWorkforceSummaryDate('${date}')`}"><span>${label.day}</span><small>${label.weekday}</small></th>`;
+  }).join('')}
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -6153,19 +6647,327 @@ function renderWorkforceControl(companies) {
   </section>`;
 }
 
+let workforceDirectoryCompanyFilter = '';
+
 function renderWorkforceDirectory(companies) {
   const canEdit = isMasterUser();
-  return `<div class="simple-filters workforce-filters"><label class="search-box">${icon('search')}<input id="workforceSearch" type="search" placeholder="Buscar nome, função, contato ou empresa..." oninput="filterWorkforce()"></label><label class="filter-field"><span>Empresa</span><select id="workforceCompany" onchange="filterWorkforce()"><option value="">Todas</option>${companies.map(company=>`<option>${esc(company)}</option>`).join('')}</select></label></div><article class="panel"><div class="panel-head"><div><h2>Pessoas cadastradas</h2><p>Fonte única para responsáveis de equipamentos, rádios e checklists</p></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Nome</th><th>Empresa</th><th>Função</th><th>Vínculo</th><th>Contato</th>${canEdit ? '<th></th>' : ''}</tr></thead><tbody>${workforce.map((person,index)=>`<tr class="workforce-row" data-person-key="${encodeURIComponent(workforcePersonKey(person)).replace(/'/g,'%27')}" data-company="${esc(person?.company||'')}" data-search="${esc(normalizeWorkforceSearch(`${person?.name||''} ${person?.company||''} ${person?.role||''} ${person?.phone||''}`))}"><td><strong>${esc(person?.name||'')}</strong></td><td>${esc(person?.company||'')}</td><td>${esc(person?.role||'—')}</td><td>${esc(person?.status||'—')}</td><td>${esc(person?.phone||'—')}</td>${canEdit ? `<td><div class="control-row-actions"><button class="icon-button" title="Editar" onclick="openPersonModal(${index})">${icon('edit')}</button><button class="icon-button" title="Excluir" onclick="deletePerson(${index})">${icon('trash')}</button></div></td>` : ''}</tr>`).join('')}</tbody></table></div><div class="no-filter-results" id="noWorkforceResults">Nenhuma pessoa encontrada.</div></article>`;
+  return `
+    <div class="simple-filters workforce-filters">
+      <label class="search-box">${icon('search')}<input id="workforceSearch" type="search" placeholder="Buscar nome, função, contato ou empresa..." oninput="filterWorkforce()"></label>
+      <label class="filter-field"><span>Empresa</span><select id="workforceCompany" onchange="workforceDirectoryCompanyFilter=this.value; filterWorkforce()"><option value="">Todas (${companies.length})</option>${companies.map(company => `<option value="${esc(company)}" ${workforceDirectoryCompanyFilter === company ? 'selected' : ''}>${esc(company)}</option>`).join('')}</select></label>
+    </div>
+    <article class="panel">
+      <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2>Pessoas cadastradas (${workforce.length})</h2>
+          <p>O cadastro de pessoas utiliza exclusivamente as empresas já cadastradas na aba "Cadastro de empresas".</p>
+        </div>
+        ${canEdit ? `
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="button button-outline compact" onclick="setWorkforceView('companies')">${icon('building')} Gerenciar empresas (${companies.length})</button>
+            <button type="button" class="button button-green compact" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>
+          </div>
+        ` : ''}
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Nome</th><th>Empresa</th><th>Função</th><th>Vínculo</th><th>Contato</th>${canEdit ? '<th>Ações</th>' : ''}</tr>
+          </thead>
+          <tbody>
+            ${workforce.map((person, index) => `<tr class="workforce-row" data-person-key="${encodeURIComponent(workforcePersonKey(person)).replace(/'/g, '%27')}" data-company="${esc(person?.company || '')}" data-search="${esc(normalizeWorkforceSearch(`${person?.name || ''} ${person?.company || ''} ${person?.role || ''} ${person?.phone || ''}`))}"><td><strong>${esc(person?.name || '')}</strong></td><td><span class="badge" style="background:#f0f7f3; color:#17613f; font-weight:700; padding:3px 8px; border-radius:6px;">${esc(person?.company || '')}</span></td><td>${esc(person?.role || '—')}</td><td>${esc(person?.status || '—')}</td><td>${esc(person?.phone || '—')}</td>${canEdit ? `<td><div class="control-row-actions"><button class="icon-button" title="Editar" onclick="openPersonModal(${index})">${icon('edit')}</button><button class="icon-button" title="Excluir" onclick="deletePerson(${index})">${icon('trash')}</button></div></td>` : ''}</tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="no-filter-results" id="noWorkforceResults">Nenhuma pessoa encontrada.</div>
+    </article>`;
+}
+
+function renderWorkforceCompaniesView(companies) {
+  const canEdit = isMasterUser();
+  const date = workforceSummaryDate;
+  const rowsHTML = companies.map(company => {
+    const people = workforce.filter(p => companyComparisonKey(p?.company) === companyComparisonKey(company));
+    const dayCount = people.filter(p => workforceAttendanceValue(p, date) === 'D').length;
+    const nightCount = people.filter(p => workforceAttendanceValue(p, date) === 'N').length;
+    const noShiftCount = people.filter(p => workforceAttendanceValue(p, date) === '1').length;
+    const presentCount = dayCount + nightCount + noShiftCount;
+    return `
+      <tr class="company-directory-row" data-search="${esc(normalizeWorkforceSearch(company))}">
+        <td>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="width:32px; height:32px; border-radius:8px; background:#e7f5ee; color:#17613f; display:grid; place-items:center;">${icon('building')}</span>
+            <div>
+              <strong style="font-size:13px; color:var(--ink);">${esc(company)}</strong>
+              <small style="display:block; color:var(--muted); font-size:10px;">Empresa oficial cadastrada na obra</small>
+            </div>
+          </div>
+        </td>
+        <td style="text-align:center;"><strong>${people.length}</strong> colaborador(es)</td>
+        <td style="text-align:center;">${dayCount}</td>
+        <td style="text-align:center;">${nightCount}</td>
+        <td style="text-align:center;"><strong style="color:var(--green-dark);">${presentCount}</strong></td>
+        <td style="text-align:right; white-space:nowrap;">
+          <button type="button" class="button button-outline compact" onclick="openCompanyPeopleList('${esc(company)}')">${icon('user')} Ver pessoas (${people.length})</button>
+          ${canEdit ? `
+            <button type="button" class="button button-outline compact" style="margin-left:4px;" title="Renomear ou unificar empresa" onclick="openCompanyModal('${esc(company)}')">${icon('edit')} Editar / Unificar</button>
+            <button type="button" class="button button-outline compact" style="margin-left:4px; color:var(--red);" title="Excluir empresa" onclick="deleteWorkforceCompany('${esc(company)}')">${icon('trash')}</button>
+          ` : ''}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <article class="panel" style="margin-bottom:16px;">
+      <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div>
+          <h2>Cadastro Oficial de Empresas (${companies.length})</h2>
+          <p>Cadastre primeiro as empresas aqui. O cadastro de pessoas só permite escolher empresas desta lista oficial, evitando duplicidades.</p>
+        </div>
+        ${canEdit ? `<button type="button" class="button button-green" onclick="openCompanyModal()">${icon('plus')} Nova empresa</button>` : ''}
+      </div>
+
+      ${canEdit ? `
+        <form onsubmit="submitQuickCompanyAdd(event)" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; padding:14px 18px; background:#f4faf7; border-bottom:1px solid var(--line);">
+          <div class="field" style="flex:1; min-width:240px; margin:0;">
+            <label style="font-size:11px; font-weight:700; color:#17613f; margin-bottom:4px; display:block;">Cadastrar nova empresa rapidamente</label>
+            <input type="text" id="quickCompanyNameInput" name="companyName" required placeholder="Digite o nome oficial da empresa (ex.: NOVA EMPREITEIRA LTDA)..." style="width:100%; height:40px; padding:0 12px; border:1px solid #9fd4b6; border-radius:8px; background:white; font-size:13px;" />
+          </div>
+          <button type="submit" class="button button-green" style="height:40px;">${icon('check')} Cadastrar Empresa</button>
+        </form>
+      ` : ''}
+
+      <div style="padding:12px 18px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+        <label class="search-box" style="flex:1; min-width:220px; max-width:420px;">${icon('search')}<input id="companyDirectorySearch" type="search" placeholder="Buscar empresa cadastrada..." oninput="filterCompanyDirectory()"></label>
+        <small style="color:var(--muted); font-size:11px;">Para juntar duas empresas ou corrigir o nome de uma empresa existente, clique em <strong>Editar / Unificar</strong>.</small>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Empresa</th>
+              <th style="text-align:center;">Efetivo Cadastrado</th>
+              <th style="text-align:center;">Diurno (Hoje)</th>
+              <th style="text-align:center;">Noturno (Hoje)</th>
+              <th style="text-align:center;">Presentes (Hoje)</th>
+              <th style="text-align:right;">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHTML || '<tr><td colspan="6" style="text-align:center;">Nenhuma empresa cadastrada.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  `;
+}
+
+function filterCompanyDirectory() {
+  const q = normalizeWorkforceSearch(document.getElementById('companyDirectorySearch')?.value);
+  document.querySelectorAll('.company-directory-row').forEach(row => {
+    row.style.display = (!q || row.dataset.search.includes(q)) ? '' : 'none';
+  });
+}
+
+function openCompanyPeopleList(company) {
+  workforceDirectoryCompanyFilter = company;
+  workforceView = 'directory';
+  renderCompanies();
+  filterWorkforce();
+}
+
+function openCompanyModal(existingCompany = null, returnToPersonIndex = undefined) {
+  if (!isMasterUser()) {
+    toast('Apenas usuários com perfil Master podem gerenciar empresas.', true);
+    return;
+  }
+  const companies = getRegisteredWorkforceCompanies();
+  const isEditing = Boolean(existingCompany);
+  const peopleCount = isEditing
+    ? workforce.filter(p => companyComparisonKey(p?.company) === companyComparisonKey(existingCompany)).length
+    : 0;
+  const otherCompanies = companies.filter(c => companyComparisonKey(c) !== companyComparisonKey(existingCompany || ''));
+  const returnArg = returnToPersonIndex === undefined ? 'undefined' : (returnToPersonIndex === null ? 'null' : Number(returnToPersonIndex));
+
+  modal(`
+    <form onsubmit="saveWorkforceCompany(event, ${isEditing ? `'${esc(existingCompany)}'` : 'null'}, ${returnArg})">
+      ${modalHead(isEditing ? 'Editar ou Unificar Empresa' : 'Cadastrar Nova Empresa', isEditing ? `${existingCompany} · ${peopleCount} colaborador(es) vinculado(s)` : 'Adicione a empresa à lista oficial para liberar o cadastro de colaboradores')}
+      <div class="modal-body" style="display:grid; gap:14px;">
+        <div class="field full">
+          <label>Nome Oficial da Empresa <em>*</em></label>
+          <input type="text" name="companyName" required value="${esc(existingCompany || '')}" placeholder="Ex.: HEATING COOLING" autofocus />
+          <small style="color:var(--muted); font-size:11px; margin-top:4px; display:block;">
+            ${isEditing
+      ? 'Ao alterar o nome, todos os colaboradores e o histórico de presença desta empresa serão atualizados automaticamente.'
+      : 'Após cadastrar a empresa, ela ficará disponível na lista suspensa do Cadastro de Pessoas.'}
+          </small>
+        </div>
+        ${isEditing && otherCompanies.length > 0 ? `
+          <div class="field full" style="padding:12px; background:#f8faf9; border:1px solid var(--line); border-radius:8px;">
+            <label style="font-weight:700; font-size:12px; display:block; margin-bottom:6px;">Ou unificar com outra empresa já existente (opcional)</label>
+            <select name="mergeTarget" onchange="if(this.value) this.form.elements.companyName.value = this.value;" style="width:100%; height:40px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:white;">
+              <option value="">— Manter como empresa própria (apenas renomear acima) —</option>
+              ${otherCompanies.map(c => `<option value="${esc(c)}">Transferir e unificar dentro de: ${esc(c)}</option>`).join('')}
+            </select>
+            <small style="color:var(--muted); font-size:11px; margin-top:4px; display:block;">Se você escolher uma empresa acima, todos os colaboradores e presenças de "${esc(existingCompany)}" serão unificados nela.</small>
+          </div>
+        ` : ''}
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="button button-green">${icon('check')} ${isEditing ? 'Salvar e Atualizar Efetivo' : 'Cadastrar Empresa'}</button>
+      </div>
+    </form>
+  `, 'modal-small');
+}
+
+async function submitQuickCompanyAdd(event) {
+  event.preventDefault();
+  const input = document.getElementById('quickCompanyNameInput');
+  const rawName = (input?.value || '').replace(/\s+/g, ' ').trim();
+  if (!rawName) return;
+  await registerOrRenameWorkforceCompany(null, rawName);
+  if (input) input.value = '';
+}
+
+async function saveWorkforceCompany(event, existingCompany = null, returnToPersonIndex = undefined) {
+  event.preventDefault();
+  const data = Object.fromEntries(new FormData(event.target));
+  const targetName = String(data.mergeTarget || data.companyName || '').replace(/\s+/g, ' ').trim();
+  if (!targetName) return toast('Informe o nome da empresa.', true);
+  const savedCompany = await registerOrRenameWorkforceCompany(existingCompany, targetName);
+  if (!savedCompany) return;
+  closeModal();
+  if (returnToPersonIndex !== undefined) {
+    openPersonModal(returnToPersonIndex, savedCompany);
+  } else {
+    renderCompanies();
+  }
+}
+
+async function registerOrRenameWorkforceCompany(oldCompany, rawNewCompany) {
+  if (!isMasterUser()) {
+    toast('Apenas usuários com perfil Master podem alterar empresas.', true);
+    return null;
+  }
+  const cleanNew = String(rawNewCompany || '').replace(/\s+/g, ' ').trim();
+  if (!cleanNew) {
+    toast('Informe um nome válido para a empresa.', true);
+    return null;
+  }
+  const newKey = companyComparisonKey(cleanNew);
+  if (!newKey) {
+    toast('Nome de empresa inválido.', true);
+    return null;
+  }
+  const companies = getRegisteredWorkforceCompanies();
+  const existingMatch = companies.find(c => companyComparisonKey(c) === newKey);
+
+  if (!oldCompany) {
+    if (existingMatch) {
+      toast(`Esta empresa já está cadastrada como "${existingMatch}".`, true);
+      return existingMatch;
+    }
+    if (workforceDeletedCompanies) delete workforceDeletedCompanies[newKey];
+    if (workforceCompanyRenames) delete workforceCompanyRenames[newKey];
+    workforceCompanies = [...new Set([...companies, cleanNew])].sort(safeSort);
+    workforceDataRevision++;
+    workforceControlMeta = { updatedAt: new Date().toISOString() };
+    saveLocalBackup();
+    renderCompanies();
+    await persistWorkforceControlRemote();
+    toast(`Empresa "${cleanNew}" cadastrada com sucesso!`);
+    return cleanNew;
+  }
+
+  const oldKey = companyComparisonKey(oldCompany);
+  const finalCompanyName = existingMatch && companyComparisonKey(existingMatch) !== oldKey ? existingMatch : cleanNew;
+  const finalKey = companyComparisonKey(finalCompanyName);
+
+  if (!workforceCompanyRenames || typeof workforceCompanyRenames !== 'object') workforceCompanyRenames = {};
+  workforceCompanyRenames[oldKey] = finalCompanyName;
+  Object.keys(workforceCompanyRenames).forEach(k => {
+    if (companyComparisonKey(workforceCompanyRenames[k]) === oldKey) {
+      workforceCompanyRenames[k] = finalCompanyName;
+    }
+  });
+  if (workforceDeletedCompanies) delete workforceDeletedCompanies[finalKey];
+
+  const now = new Date().toISOString();
+  const changedPeople = [];
+  workforce = workforce.map(person => {
+    if (companyComparisonKey(person?.company) === oldKey) {
+      const oldPersonKey = `${String(person.company || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR')}|${String(person.name || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR')}`;
+      const updatedPerson = { ...person, company: finalCompanyName, updatedAt: now };
+      const newPersonKey = workforcePersonKey(updatedPerson);
+      if (oldPersonKey !== newPersonKey && workforceAttendance[oldPersonKey]) {
+        workforceAttendance[newPersonKey] = { ...(workforceAttendance[oldPersonKey] || {}), ...(workforceAttendance[newPersonKey] || {}) };
+        delete workforceAttendance[oldPersonKey];
+      }
+      changedPeople.push(updatedPerson);
+      return updatedPerson;
+    }
+    return person;
+  });
+
+  workforceCompanies = companies
+    .filter(c => companyComparisonKey(c) !== oldKey)
+    .concat([finalCompanyName]);
+  workforceCompanies = [...new Set(workforceCompanies.map(normalizeCompanyName).filter(Boolean))].sort(safeSort);
+  workforce = normalizeWorkforcePeople(workforce);
+  workforceAttendance = normalizeWorkforceAttendanceMap(workforceAttendance);
+  workforceDataRevision++;
+  workforceMeta = { source: 'Gestão de empresas', updatedAt: now };
+  workforceControlMeta = { updatedAt: now };
+  saveLocalBackup();
+  renderCompanies();
+  await Promise.all([
+    persistWorkforceControlRemote(),
+    changedPeople.length ? persistWorkforcePeopleRowsRemote(changedPeople) : Promise.resolve(true)
+  ]);
+  toast(`Empresa atualizada para "${finalCompanyName}" (${changedPeople.length} colaborador(es) vinculados).`);
+  return finalCompanyName;
+}
+
+async function deleteWorkforceCompany(company) {
+  if (!isMasterUser()) {
+    toast('Apenas usuários com perfil Master podem excluir empresas.', true);
+    return;
+  }
+  const targetKey = companyComparisonKey(company);
+  const linkedPeople = workforce.filter(p => companyComparisonKey(p?.company) === targetKey);
+  if (linkedPeople.length > 0) {
+    toast(`A empresa "${company}" possui ${linkedPeople.length} colaborador(es) cadastrado(s). Use "Editar / Unificar" para transferi-los ou remova os colaboradores antes de excluir a empresa.`, true);
+    return;
+  }
+  if (!confirm(`Deseja remover a empresa "${company}" da lista oficial de empresas cadastradas?`)) return;
+  if (!workforceDeletedCompanies || typeof workforceDeletedCompanies !== 'object') workforceDeletedCompanies = {};
+  workforceDeletedCompanies[targetKey] = new Date().toISOString();
+  workforceCompanies = workforceCompanies.filter(c => companyComparisonKey(c) !== targetKey);
+  workforceDataRevision++;
+  workforceControlMeta = { updatedAt: new Date().toISOString() };
+  saveLocalBackup();
+  renderCompanies();
+  await persistWorkforceControlRemote();
+  toast(`Empresa "${company}" removida da lista.`);
 }
 
 function renderCompanies() {
   workforce = normalizeWorkforcePeople(workforce);
-  const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
+  workforceAttendance = normalizeWorkforceAttendanceMap(workforceAttendance);
+  const companies = getRegisteredWorkforceCompanies();
+  workforceCompanies = companies;
   if (!workforceSummaryDate.startsWith(workforceControlMonth)) workforceSummaryDate = `${workforceControlMonth}-01`;
   const presentToday = workforce.filter(person => isPresentAttendanceValue(workforceAttendanceValue(person, workforceSummaryDate))).length;
   const dayToday = workforce.filter(person => workforceAttendanceValue(person, workforceSummaryDate) === 'D').length;
   const nightToday = workforce.filter(person => workforceAttendanceValue(person, workforceSummaryDate) === 'N').length;
-  const view = workforceView === 'directory' ? renderWorkforceDirectory(companies) : renderWorkforceControl(companies);
+  const view = workforceView === 'directory'
+    ? renderWorkforceDirectory(companies)
+    : workforceView === 'companies'
+      ? renderWorkforceCompaniesView(companies)
+      : renderWorkforceControl(companies);
   const canEdit = isMasterUser();
   const masterBadge = canEdit
     ? `<span class="badge" style="background:#e7f5ee; color:#206b49; font-weight:700; font-size:11px; padding:6px 10px; border-radius:6px; display:inline-flex; align-items:center; gap:4px;">🔒 Modo Edição Master</span>`
@@ -6173,31 +6975,34 @@ function renderCompanies() {
   const headerActions = `
     ${masterBadge}
     <button class="button button-outline" onclick="syncWorkforceFromSupabase().then(() => { renderCompanies(); toast('Marcações e efetivo sincronizados com a nuvem!'); })">${icon('refresh')} Sincronizar</button>
+    ${canEdit ? `<button class="button button-outline" onclick="openCompanyModal()">${icon('building')} Cadastrar empresa</button>` : ''}
     ${canEdit ? `<button class="button button-outline" onclick="openWorkforceModal()">${icon('plus')} Cadastro em massa</button>` : ''}
     <button class="button button-outline" onclick="openWorkforceCopyModal()">${icon('clipboard')} Copiar relação</button>
     <button class="button button-outline" onclick="openWorkforcePDF()">${icon('download')} Baixar PDF</button>
     <button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Baixar Excel</button>
     ${canEdit ? `<button class="button button-green" onclick="openPersonModal()">${icon('plus')} Adicionar pessoa</button>` : ''}
   `;
-  document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Controle o cadastro e a presença diária da equipe dentro do app.', 'CADASTRO CENTRAL', headerActions)}<section class="workforce-summary"><div><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas</small></p></div><div><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div><span>${icon('check')}</span><p><strong>${presentToday}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`))} · ${dayToday} diurno · ${nightToday} noturno</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source||'Cadastro manual')}</strong><span>${workforceMeta.updatedAt?`${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}`:''}</span></p></div></section><div class="workforce-tabs"><button class="${workforceView === 'control' ? 'active' : ''}" onclick="setWorkforceView('control')">${icon('chart')} Controle diário</button><button class="${workforceView === 'directory' ? 'active' : ''}" onclick="setWorkforceView('directory')">${icon('user')} Cadastro de pessoas</button></div>${view}`;
-  
+  document.getElementById('app').innerHTML = `${pageHeader('Empresas & efetivo', 'Controle o cadastro oficial de empresas, colaboradores e a presença diária da equipe.', 'CADASTRO CENTRAL', headerActions)}<section class="workforce-summary"><div style="cursor:pointer;" title="Gerenciar empresas cadastradas" onclick="setWorkforceView('companies')"><span>${icon('building')}</span><p><strong>${companies.length}</strong><small>Empresas cadastradas</small></p></div><div style="cursor:pointer;" title="Ver cadastro de pessoas" onclick="setWorkforceView('directory')"><span>${icon('user')}</span><p><strong>${workforce.length}</strong><small>Pessoas cadastradas</small></p></div><div style="cursor:pointer;" title="Ver controle diário de presença" onclick="setWorkforceView('control')"><span>${icon('check')}</span><p><strong>${presentToday}</strong><small>Presentes em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${workforceSummaryDate}T12:00:00`))} · ${dayToday} diurno · ${nightToday} noturno</small></p></div><div class="workforce-source"><p><small>Última atualização</small><strong>${esc(workforceMeta.source || 'Cadastro manual')}</strong><span>${workforceMeta.updatedAt ? `${new Intl.DateTimeFormat('pt-BR').format(new Date(workforceMeta.updatedAt))}` : ''}</span></p></div></section><div class="workforce-tabs"><button class="${workforceView === 'control' ? 'active' : ''}" onclick="setWorkforceView('control')">${icon('chart')} Controle diário</button><button class="${workforceView === 'directory' ? 'active' : ''}" onclick="setWorkforceView('directory')">${icon('user')} Cadastro de pessoas (${workforce.length})</button><button class="${workforceView === 'companies' ? 'active' : ''}" onclick="setWorkforceView('companies')">${icon('building')} Cadastro de empresas (${companies.length})</button></div>${view}`;
+
   if (workforceView === 'control' && workforceControlSubView === 'table') {
     filterWorkforceControl();
     scrollToSelectedDateColumn(workforceSummaryDate);
   } else if (workforceView === 'control') {
     filterWorkforceControl();
+  } else if (workforceView === 'directory') {
+    filterWorkforce();
   }
 }
 
 function setWorkforceView(view) {
-  workforceView = view === 'directory' ? 'directory' : 'control';
+  workforceView = ['directory', 'companies'].includes(view) ? view : 'control';
   renderCompanies();
 }
 
 function filterWorkforce() {
-  const search=normalizeWorkforceSearch(document.getElementById('workforceSearch')?.value); const company=document.getElementById('workforceCompany')?.value || ''; let visible=0;
-  document.querySelectorAll('.workforce-row').forEach(row=>{const show=(!search||row.dataset.search.includes(search))&&(!company||row.dataset.company===company);row.style.display=show?'':'none';if(show)visible++;});
-  const empty = document.getElementById('noWorkforceResults'); if (empty) empty.style.display=visible?'none':'block';
+  const search = normalizeWorkforceSearch(document.getElementById('workforceSearch')?.value); const company = document.getElementById('workforceCompany')?.value || ''; let visible = 0;
+  document.querySelectorAll('.workforce-row').forEach(row => { const show = (!search || row.dataset.search.includes(search)) && (!company || row.dataset.company === company); row.style.display = show ? '' : 'none'; if (show) visible++; });
+  const empty = document.getElementById('noWorkforceResults'); if (empty) empty.style.display = visible ? 'none' : 'block';
 }
 
 function currentWorkforceFilterSelection() {
@@ -6279,11 +7084,11 @@ function openWorkforceCopyModal() {
   workforceShareFilteredSnapshot = currentWorkforceFilterSelection();
   const filtered = workforceShareFilteredSnapshot;
   const companies = [...new Set(filtered.people.map(person => person?.company).filter(Boolean))].sort(safeSort);
-  modal(`${modalHead('Copiar relação para WhatsApp','Os nomes serão copiados junto com a função de cada colaborador')}<div class="modal-body">
-    <div class="field"><label>Relação a copiar</label><select id="workforceShareCompany" onchange="updateWorkforceSharePreview()"><option value="__FILTERED__">Resultado visível dos filtros · ${filtered.people.length} pessoa(s)</option>${companies.map(company=>`<option value="${esc(company)}">Somente ${esc(company)} · ${filtered.people.filter(person=>person?.company===company).length} pessoa(s) filtrada(s)</option>`).join('')}</select></div>
+  modal(`${modalHead('Copiar relação para WhatsApp', 'Os nomes serão copiados junto com a função de cada colaborador')}<div class="modal-body">
+    <div class="field"><label>Relação a copiar</label><select id="workforceShareCompany" onchange="updateWorkforceSharePreview()"><option value="__FILTERED__">Resultado visível dos filtros · ${filtered.people.length} pessoa(s)</option>${companies.map(company => `<option value="${esc(company)}">Somente ${esc(company)} · ${filtered.people.filter(person => person?.company === company).length} pessoa(s) filtrada(s)</option>`).join('')}</select></div>
     <div class="workforce-share-preview"><div><span>${icon('clipboard')}</span><strong>Prévia da mensagem</strong></div><textarea id="workforceShareText" readonly onclick="this.select()"></textarea></div>
     <div class="notice" id="workforceShareScopeSummary">${icon('check')} <strong>${filtered.people.length} pessoa(s) visível(is) nos filtros atuais.</strong> A relação traz nome, função e, quando houver mais de uma, a empresa.</div>
-  </div><div class="modal-foot" style="flex-wrap:wrap;"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-outline" onclick="openSelectedWorkforceCompanyPDF()">${icon('download')} PDF da relação</button><button class="button button-outline" onclick="openWorkforceWhatsApp()">Abrir WhatsApp</button><button class="button button-green" onclick="copyWorkforceCompanyNames()">${icon('clipboard')} Copiar relação</button></div>`,'modal-small');
+  </div><div class="modal-foot" style="flex-wrap:wrap;"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-outline" onclick="openSelectedWorkforceCompanyPDF()">${icon('download')} PDF da relação</button><button class="button button-outline" onclick="openWorkforceWhatsApp()">Abrir WhatsApp</button><button class="button button-green" onclick="copyWorkforceCompanyNames()">${icon('clipboard')} Copiar relação</button></div>`, 'modal-small');
   updateWorkforceSharePreview();
 }
 
@@ -6383,7 +7188,7 @@ function changeWorkforceSummaryDate(date) {
   }
   saveLocalBackup();
   updateWorkforceSummaryUI(date);
-  
+
   if (workforceControlSubView === 'daily') {
     const cardsWrap = document.querySelector('.workforce-mobile-cards-wrap');
     if (cardsWrap) {
@@ -6411,6 +7216,11 @@ function cycleWorkforceAttendance(encodedKey, date, button) {
     toast('Apenas usuários com perfil Master podem alterar a presença do efetivo.', true);
     return;
   }
+  const todayISO = currentLocalDateISO();
+  if (date > todayISO) {
+    toast('Não é permitido lançar presença em datas futuras.', true);
+    return;
+  }
   const key = decodeURIComponent(encodedKey);
   const current = workforceAttendance[key]?.[date] || '';
   const order = ['', 'D', 'N', '0', 'FOLGA'];
@@ -6420,26 +7230,38 @@ function cycleWorkforceAttendance(encodedKey, date, button) {
   // a célula de forma imediata e precisa, sem depender de querySelector frágil.
   setWorkforceAttendance(encodedKey, date, next, button);
 }
-function openPersonModal(index=null) {
+function openPersonModal(index = null, preselectedCompany = '') {
   if (!isMasterUser()) {
     toast('Apenas usuários com perfil Master podem adicionar ou editar pessoas no efetivo.', true);
     return;
   }
-  const person=index===null?null:workforce[index]; const companies=[...new Set(workforce.map(item=>item?.company).filter(Boolean))].sort(safeSort);
-  modal(`<form onsubmit="savePerson(event,${index===null?'null':index})">${modalHead(person?'Editar pessoa':'Adicionar pessoa','Cadastro individual do efetivo da obra')}<div class="modal-body"><div class="form-grid"><div class="field full"><label>Empresa <em>*</em></label><input name="company" required list="companySuggestions" placeholder="Selecione ou digite uma nova empresa" value="${esc(person?.company||'')}"><datalist id="companySuggestions">${companies.map(company=>`<option value="${esc(company)}"></option>`).join('')}</datalist></div><div class="field full"><label>Nome completo <em>*</em></label><input name="name" required placeholder="Nome da pessoa" value="${esc(person?.name||'')}"></div><div class="field"><label>Função <em>*</em></label><input name="role" required placeholder="Ex.: Operador de PTA" value="${esc(person?.role||'')}"></div><div class="field"><label>Vínculo / status</label><select name="status"><option value="">Não informado</option><option value="DIRETA" ${person?.status==='DIRETA'?'selected':''}>Direta</option><option value="INDIRETA" ${person?.status==='INDIRETA'?'selected':''}>Indireta</option><option value="TERCEIRO" ${person?.status==='TERCEIRO'?'selected':''}>Terceiro</option></select></div><div class="field"><label>Perfil de Acesso</label><select name="accessRole"><option value="operator" ${person?.accessRole!=='admin'?'selected':''}>Operador / Campo (Sem acesso administrativo)</option><option value="admin" ${person?.accessRole==='admin'?'selected':''}>Gestor / Administrador (Acesso completo)</option></select></div><div class="field"><label>PIN de Acesso (Gestão)</label><input name="pin" maxlength="8" placeholder="Ex.: 1234" value="${esc(person?.pin||'')}"></div><div class="field full"><label>Telefone</label><input name="phone" placeholder="(85) 99999-9999" value="${esc(person?.phone||'')}"></div></div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Salvar pessoa</button></div></form>`,'modal-small');
+  const person = index === null ? null : workforce[index];
+  const companies = getRegisteredWorkforceCompanies();
+  const currentCompany = normalizeCompanyName(preselectedCompany || person?.company || '');
+  const companyOptions = [...companies];
+  if (currentCompany && !companyOptions.some(c => companyComparisonKey(c) === companyComparisonKey(currentCompany))) {
+    companyOptions.push(currentCompany);
+    companyOptions.sort(safeSort);
+  }
+  modal(`<form onsubmit="savePerson(event,${index === null ? 'null' : index})">${modalHead(person ? 'Editar pessoa' : 'Adicionar pessoa', 'Cadastro individual do efetivo da obra')}<div class="modal-body"><div class="form-grid"><div class="field full"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;"><label style="margin:0;">Empresa <em>*</em></label><button type="button" class="button button-outline compact" style="min-height:26px;padding:2px 10px;font-size:0.75rem;" onclick="openCompanyModal(null, ${index === null ? 'null' : index})">${icon('plus')} Cadastrar nova empresa</button></div><select name="company" required><option value="" disabled ${!currentCompany ? 'selected' : ''}>Selecione uma empresa cadastrada...</option>${companyOptions.map(company => `<option value="${esc(company)}" ${companyComparisonKey(company) === companyComparisonKey(currentCompany) ? 'selected' : ''}>${esc(company)}</option>`).join('')}</select><small style="color:#64748b;font-size:0.75rem;margin-top:4px;display:block;">Só é permitido vincular pessoas a empresas já cadastradas no sistema.</small></div><div class="field full"><label>Nome completo <em>*</em></label><input name="name" required placeholder="Nome da pessoa" value="${esc(person?.name || '')}"></div><div class="field"><label>Função <em>*</em></label><input name="role" required placeholder="Ex.: Operador de PTA" value="${esc(person?.role || '')}"></div><div class="field"><label>Vínculo / status</label><select name="status"><option value="">Não informado</option><option value="DIRETA" ${person?.status === 'DIRETA' ? 'selected' : ''}>Direta</option><option value="INDIRETA" ${person?.status === 'INDIRETA' ? 'selected' : ''}>Indireta</option><option value="TERCEIRO" ${person?.status === 'TERCEIRO' ? 'selected' : ''}>Terceiro</option></select></div><div class="field"><label>Perfil de Acesso</label><select name="accessRole"><option value="operator" ${person?.accessRole !== 'admin' ? 'selected' : ''}>Operador / Campo (Sem acesso administrativo)</option><option value="admin" ${person?.accessRole === 'admin' ? 'selected' : ''}>Gestor / Administrador (Acesso completo)</option></select></div><div class="field"><label>PIN de Acesso (Gestão)</label><input name="pin" maxlength="8" placeholder="Ex.: 1234" value="${esc(person?.pin || '')}"></div><div class="field full"><label>Telefone</label><input name="phone" placeholder="(85) 99999-9999" value="${esc(person?.phone || '')}"></div></div></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Salvar pessoa</button></div></form>`, 'modal-small');
 }
-async function savePerson(event,index) {
+async function savePerson(event, index) {
   event.preventDefault();
   if (!isMasterUser()) {
     toast('Apenas usuários com perfil Master podem salvar alterações no efetivo.', true);
     return;
   }
-  const data=Object.fromEntries(new FormData(event.target)); Object.keys(data).forEach(key=>data[key]=String(data[key]).replace(/\s+/g,' ').trim());
-  const duplicate=workforce.some((person,i)=>i!==index&&workforcePersonKey(person)===workforcePersonKey(data)); if(duplicate)return toast('Esta pessoa já está cadastrada nesta empresa.',true);
+  const data = Object.fromEntries(new FormData(event.target)); Object.keys(data).forEach(key => data[key] = String(data[key]).replace(/\s+/g, ' ').trim());
+  data.company = normalizeCompanyName(data.company);
+  const registeredCompanies = getRegisteredWorkforceCompanies();
+  if (!data.company || !registeredCompanies.some(c => companyComparisonKey(c) === companyComparisonKey(data.company))) {
+    return toast('Selecione uma empresa já cadastrada na lista ou cadastre a empresa primeiro.', true);
+  }
+  const duplicate = workforce.some((person, i) => i !== index && workforcePersonKey(person) === workforcePersonKey(data)); if (duplicate) return toast('Esta pessoa já está cadastrada nesta empresa.', true);
   const previous = index === null ? null : workforce[index];
   const previousKey = previous ? workforcePersonKey(previous) : '';
   data.updatedAt = new Date().toISOString();
-  if(index===null) { data.id=crypto.randomUUID(); workforce.push(data); } else { workforce[index]={...previous,...data}; }
+  if (index === null) { data.id = crypto.randomUUID(); workforce.push(data); } else { workforce[index] = { ...previous, ...data }; }
   const nextPerson = index === null ? data : workforce[index];
   // Um cadastro manual explícito permite restaurar uma pessoa removida antes.
   clearWorkforcePersonDeletion(nextPerson);
@@ -6449,7 +7271,7 @@ async function savePerson(event,index) {
     delete workforceAttendance[previousKey];
   }
   workforceDataRevision++;
-  workforce=normalizeWorkforcePeople(workforce); workforceMeta={source:'Cadastro manual',updatedAt:data.updatedAt}; workforceControlMeta={updatedAt:data.updatedAt}; saveLocalBackup();
+  workforce = normalizeWorkforcePeople(workforce); workforceMeta = { source: 'Cadastro manual', updatedAt: data.updatedAt }; workforceControlMeta = { updatedAt: data.updatedAt }; saveLocalBackup();
   // A pessoa deve aparecer imediatamente na lista e na busca. A gravação
   // remota continua em segundo plano sem prender a atualização da tela.
   closeModal();
@@ -6462,7 +7284,7 @@ async function savePerson(event,index) {
   const shared = snapshotShared && rowShared;
   toast(shared ? `${personMessage(index)} Sincronização concluída.` : `${personMessage(index)} Salvo neste aparelho e aguardando sincronização.`, !shared);
 }
-function personMessage(index) { return index===null?'Pessoa adicionada ao efetivo.':'Cadastro atualizado.'; }
+function personMessage(index) { return index === null ? 'Pessoa adicionada ao efetivo.' : 'Cadastro atualizado.'; }
 async function deletePerson(index) {
   if (!isMasterUser()) {
     toast('Apenas usuários com perfil Master podem excluir pessoas do efetivo.', true);
@@ -6495,8 +7317,8 @@ function openWorkforceModal() {
     toast('Apenas usuários com perfil Master podem acessar o cadastro em massa.', true);
     return;
   }
-  const companies=[...new Set(workforce.map(person=>person?.company).filter(Boolean))].sort(safeSort);
-  modal(`${modalHead('Cadastro em massa do efetivo','Escolha entre importar uma planilha ou colar vários nomes')}<div class="modal-body">
+  const companies = getRegisteredWorkforceCompanies();
+  modal(`${modalHead('Cadastro em massa do efetivo', 'Escolha entre importar uma planilha ou colar vários nomes')}<div class="modal-body">
     <div class="bulk-workforce-grid">
       <article class="bulk-workforce-card">
         <div class="bulk-workforce-card-head"><span>${icon('download')}</span><div><small>OPÇÃO 1</small><h3>Importar planilha</h3><p>Ideal para atualizar várias empresas, funções, contatos e presenças.</p></div></div>
@@ -6507,7 +7329,16 @@ function openWorkforceModal() {
       <form class="bulk-workforce-card bulk-workforce-manual" onsubmit="saveBulkWorkforce(event)">
         <div class="bulk-workforce-card-head"><span>${icon('clipboard')}</span><div><small>OPÇÃO 2</small><h3>Colar ou digitar nomes</h3><p>Cadastre uma empresa inteira sem preparar uma planilha.</p></div></div>
         <div class="form-grid">
-          <div class="field full"><label>Empresa <em>*</em></label><input name="company" required list="bulkCompanySuggestions" placeholder="Ex.: HEATING COOLING"><datalist id="bulkCompanySuggestions">${companies.map(company=>`<option value="${esc(company)}"></option>`).join('')}</datalist></div>
+          <div class="field full">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
+              <label style="margin:0;">Empresa cadastrada <em>*</em></label>
+              <button type="button" class="button button-outline compact" style="min-height:26px;padding:2px 10px;font-size:0.75rem;" onclick="closeModal(); setWorkforceView('companies');">${icon('building')} Gerenciar empresas</button>
+            </div>
+            <select name="company" required>
+              <option value="" disabled selected>Selecione uma empresa cadastrada...</option>
+              ${companies.map(company => `<option value="${esc(company)}">${esc(company)}</option>`).join('')}
+            </select>
+          </div>
           <div class="field"><label>Função padrão</label><input name="defaultRole" oninput="previewBulkWorkforce()" placeholder="Ex.: Montador"></div>
           <div class="field"><label>Vínculo padrão</label><select name="status"><option value="">Não informado</option><option value="DIRETA">Direta</option><option value="INDIRETA">Indireta</option><option value="TERCEIRO">Terceiro</option></select></div>
           <div class="field full"><label>Lista de pessoas <em>*</em></label><textarea id="bulkWorkforceNames" name="people" required rows="9" oninput="previewBulkWorkforce()" placeholder="Um nome por linha\n\nOu use: Nome; Função; Telefone\nJoão da Silva; Montador; (85) 99999-9999\nMaria Souza; Supervisora; (85) 98888-8888"></textarea><small class="bulk-format-hint">Aceita texto simples, lista numerada ou conteúdo colado do Excel. Separe campos por ponto e vírgula ou TAB.</small></div>
@@ -6516,9 +7347,9 @@ function openWorkforceModal() {
         <button class="button button-green bulk-save-button" type="submit">${icon('check')} Cadastrar lista</button>
       </form>
     </div>
-    <div class="upload-info"><span>${icon('check')}</span><div><strong>${workforce.length} pessoas em ${companies.length} empresas atualmente</strong><small>${esc(workforceMeta.source||'Cadastro central')}</small></div></div>
-    <div class="company-chips">${companies.map(company=>`<span>${esc(company)} <b>${workforce.filter(person=>person?.company===company).length}</b></span>`).join('')}</div>
-  </div><div class="modal-foot" style="flex-wrap:wrap;"><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Baixar Excel atual</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`,'modal-inspection');
+    <div class="upload-info"><span>${icon('check')}</span><div><strong>${workforce.length} pessoas em ${companies.length} empresas cadastradas</strong><small>${esc(workforceMeta.source || 'Cadastro central')}</small></div></div>
+    <div class="company-chips">${companies.map(company => `<span>${esc(company)} <b>${workforce.filter(person => companyComparisonKey(person?.company) === companyComparisonKey(company)).length}</b></span>`).join('')}</div>
+  </div><div class="modal-foot" style="flex-wrap:wrap;"><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Baixar Excel atual</button><button class="button button-green" onclick="closeModal()">Fechar</button></div>`, 'modal-inspection');
 }
 
 function parseBulkWorkforceText(value, defaultRole = '') {
@@ -6559,11 +7390,14 @@ async function saveBulkWorkforce(event) {
   }
   const form = event.currentTarget;
   const data = new FormData(form);
-  const company = String(data.get('company') || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR');
+  const company = normalizeCompanyName(data.get('company'));
+  const registeredCompanies = getRegisteredWorkforceCompanies();
+  if (!company || !registeredCompanies.some(c => companyComparisonKey(c) === companyComparisonKey(company))) {
+    return toast('Selecione uma empresa já cadastrada para o cadastro em massa.', true);
+  }
   const defaultRole = String(data.get('defaultRole') || '').replace(/\s+/g, ' ').trim();
   const status = String(data.get('status') || '').trim();
   const people = parseBulkWorkforceText(data.get('people'), defaultRole);
-  if (!company) return toast('Informe a empresa para o cadastro em massa.', true);
   if (!people.length) return toast('Cole ou digite ao menos um nome válido.', true);
 
   const submitButton = form.querySelector('button[type="submit"]');
@@ -6656,6 +7490,7 @@ function parseWorkforceSpreadsheet(rows) {
   const importedByKey = new Map();
   const importedAttendance = {};
   const importedDates = new Set();
+  const todayISO = currentLocalDateISO();
   let inheritedDateColumns = new Map();
   headers.forEach((header, headerPosition) => {
     const end = headers[headerPosition + 1]?.index ?? rows.length;
@@ -6665,11 +7500,12 @@ function parseWorkforceSpreadsheet(rows) {
     if (dateColumns.size) inheritedDateColumns = new Map(dateColumns);
     for (let rowIndex = header.index + 1; rowIndex < end; rowIndex++) {
       const row = rows[rowIndex] || [];
-      const company = String(row[header.map.company] || '').replace(/\s+/g, ' ').trim();
+      const rawCompany = String(row[header.map.company] || '').replace(/\s+/g, ' ').trim();
       const name = String(row[header.map.name] || '').replace(/\s+/g, ' ').trim();
-      const companyHeader = normalizeSpreadsheetHeader(company);
+      const companyHeader = normalizeSpreadsheetHeader(rawCompany);
       const nameHeader = normalizeSpreadsheetHeader(name);
-      if (!company || !name || name.length < 4 || companyHeader === 'empresa' || companyHeader === 'total' || companyHeader.startsWith('total ') || nameHeader === 'nome' || nameHeader.startsWith('total de efetivos')) continue;
+      if (!rawCompany || !name || name.length < 4 || companyHeader === 'empresa' || companyHeader === 'total' || companyHeader.startsWith('total ') || nameHeader === 'nome' || nameHeader.startsWith('total de efetivos')) continue;
+      const company = normalizeCompanyName(rawCompany);
       const key = workforcePersonKey(company, name);
       const auxRole = String(row[header.map.roles[0]] || '').replace(/\s+/g, ' ').trim();
       const role = String(row[header.map.roles[1]] || row[header.map.roles[0]] || '').replace(/\s+/g, ' ').trim();
@@ -6693,6 +7529,7 @@ function parseWorkforceSpreadsheet(rows) {
         pin: pin || previous.pin || ''
       });
       dateColumns.forEach((date, column) => {
+        if (date > todayISO) return;
         const marker = normalizeAttendanceValue(row[column]);
         if (!marker) return;
         importedDates.add(date);
@@ -6734,22 +7571,22 @@ async function downloadWorkforceImportTemplate() {
 }
 
 async function handleWorkforceUpload(event) {
-  const file=event.target.files?.[0]; if(!file) return;
+  const file = event.target.files?.[0]; if (!file) return;
   if (!isMasterUser()) {
     event.target.value = '';
     toast('Apenas usuários com perfil Master podem importar planilhas de efetivo.', true);
     return;
   }
-  if(!await ensureExcelLibrary()) { event.target.value=''; return toast('Não foi possível carregar o leitor de Excel. Verifique a internet e tente novamente.',true); }
+  if (!await ensureExcelLibrary()) { event.target.value = ''; return toast('Não foi possível carregar o leitor de Excel. Verifique a internet e tente novamente.', true); }
   try {
     // Sincroniza marcações e cadastro remotos mais recentes do Supabase antes de mesclar a planilha
     await syncWorkforceFromSupabase();
 
-    const bytes=await file.arrayBuffer(); const workbook=XLSX.read(bytes,{type:'array',cellDates:true});
-    let sheetName=''; let rows=[];
+    const bytes = await file.arrayBuffer(); const workbook = XLSX.read(bytes, { type: 'array', cellDates: true });
+    let sheetName = ''; let rows = [];
     for (const candidate of [...workbook.SheetNames].reverse()) {
-      const candidateRows=XLSX.utils.sheet_to_json(workbook.Sheets[candidate],{header:1,defval:'',raw:true});
-      if (candidateRows.some(row => workforceSpreadsheetHeader(row))) { sheetName=candidate; rows=candidateRows; break; }
+      const candidateRows = XLSX.utils.sheet_to_json(workbook.Sheets[candidate], { header: 1, defval: '', raw: true });
+      if (candidateRows.some(row => workforceSpreadsheetHeader(row))) { sheetName = candidate; rows = candidateRows; break; }
     }
     if (!sheetName) throw new Error('Nenhuma aba possui os cabeçalhos EMPRESA e NOME do controle de efetivo.');
     const imported = parseWorkforceSpreadsheet(rows);
@@ -6784,15 +7621,15 @@ async function handleWorkforceUpload(event) {
     });
 
     workforceDataRevision++;
-    workforceMeta={source:file.name,updatedAt:importedAt};
-    workforceControlMeta={updatedAt:importedAt};
+    workforceMeta = { source: file.name, updatedAt: importedAt };
+    workforceControlMeta = { updatedAt: importedAt };
     const latestDate = imported.dates[imported.dates.length - 1];
     if (latestDate) {
       workforceControlMonth = latestDate.slice(0, 7);
       workforceSummaryDate = latestDate;
     }
     saveLocalBackup();
-    workforceView='control'; renderCompanies(); openWorkforceModal();
+    workforceView = 'control'; renderCompanies(); openWorkforceModal();
     const [snapshotShared] = await Promise.all([
       persistWorkforceControlRemote(),
       persistWorkforcePeopleRowsRemote(imported.people.map(person => existingMap.get(workforcePersonKey(person))).filter(Boolean))
@@ -6801,8 +7638,8 @@ async function handleWorkforceUpload(event) {
     toast(shared
       ? `${addedCount} pessoa(s) adicionada(s), ${updatedCount} atualizada(s) e ${imported.dates.length} dia(s) mesclados em todos os aparelhos.`
       : `${addedCount} pessoa(s) adicionada(s) e ${updatedCount} atualizada(s) neste aparelho. A sincronização ficará pendente.`, !shared);
-  } catch(error) { toast(error.message||'Não foi possível ler esta planilha.',true); }
-  finally { event.target.value=''; }
+  } catch (error) { toast(error.message || 'Não foi possível ler esta planilha.', true); }
+  finally { event.target.value = ''; }
 }
 
 async function exportWorkforceExcel() {
@@ -6867,7 +7704,7 @@ async function exportWorkforceExcel() {
   const header = ['EMPRESA', 'NOME', 'FUNÇÃO', 'STATUS', ...dates.map(date => new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(new Date(`${date}T12:00:00`)).toLocaleUpperCase('pt-BR'))];
   const headerRow = worksheet.addRow(header);
   while (headerRow.number < 7) worksheet.insertRow(headerRow.number, []);
-  
+
   const actualHeader = worksheet.getRow(7);
   actualHeader.values = header;
   actualHeader.height = 30;
@@ -6913,7 +7750,7 @@ async function exportWorkforceExcel() {
   worksheet.addRow([]);
   const quadroHeaderTitle = worksheet.addRow(['QUADRO DE EFETIVO DIÁRIO X GERAL']);
   quadroHeaderTitle.font = { bold: true, size: 12, color: { argb: 'FF173C2C' } };
-  
+
   const quadroHeader = worksheet.addRow(['EMPRESA', 'DIURNO', 'NOTURNO', 'SEM TURNO', 'TOTAL PRESENTE', 'GERAL']);
   quadroHeader.height = 24;
   quadroHeader.eachCell(cell => {
@@ -6981,11 +7818,11 @@ async function exportWorkforceExcel() {
   }
   summary.addRow([]);
   summary.addRow([]);
-  
+
   const sumTitle = summary.addRow(['QUADRO RESUMO DE EFETIVOS POR EMPRESA']);
   sumTitle.font = { bold: true, size: 14, color: { argb: 'FF173C2C' } };
   summary.mergeCells(3, 1, 3, 6);
-  
+
   const sumHeader = summary.addRow(['EMPRESA', 'DIURNO', 'NOTURNO', 'SEM TURNO', 'TOTAL PRESENTE', 'GERAL']);
   sumHeader.height = 24;
   sumHeader.eachCell(cell => {
@@ -7040,104 +7877,104 @@ async function exportWorkforceExcel() {
   toast(`Planilha com Quadro e Logo exportada com sucesso.`);
 }
 function renderLocations() {
-  const halls = Array.from({length:10},(_,i)=>`Data Hall ${String(i+1).padStart(2,'0')}`);
-  document.getElementById('app').innerHTML = `${pageHeader('Locais & Data Halls', 'Visão da distribuição de equipamentos por área da obra.', 'MAPA OPERACIONAL')}<section class="equipment-cards">${halls.map(h=>{const items=equipments.filter(e=>e.usage?.dataHall===h);return `<article class="asset-card"><div class="asset-card-top"><span class="asset-icon">${icon('location')}</span><span class="status ${items.length?'in-use':'available'}">${items.length?`${items.length} ativo${items.length>1?'s':''}`:'Livre'}</span></div><h3>${h}</h3><div class="asset-code">Área operacional monitorada</div><div class="asset-meta"><div><span>Em operação</span><strong>${items.length}</strong></div><div><span>Empresas</span><strong>${new Set(items.map(e=>e.usage?.company)).size}</strong></div></div>${items.map(e=>`<div class="primary-text"><strong>${esc(e.code)} · ${esc(e.name)}</strong><small>${esc(e.usage.responsible)}</small></div>`).join('')}</article>`;}).join('')}</section>`;
+  const halls = Array.from({ length: 10 }, (_, i) => `Data Hall ${String(i + 1).padStart(2, '0')}`);
+  document.getElementById('app').innerHTML = `${pageHeader('Locais & Data Halls', 'Visão da distribuição de equipamentos por área da obra.', 'MAPA OPERACIONAL')}<section class="equipment-cards">${halls.map(h => { const items = equipments.filter(e => e.usage?.dataHall === h); return `<article class="asset-card"><div class="asset-card-top"><span class="asset-icon">${icon('location')}</span><span class="status ${items.length ? 'in-use' : 'available'}">${items.length ? `${items.length} ativo${items.length > 1 ? 's' : ''}` : 'Livre'}</span></div><h3>${h}</h3><div class="asset-code">Área operacional monitorada</div><div class="asset-meta"><div><span>Em operação</span><strong>${items.length}</strong></div><div><span>Empresas</span><strong>${new Set(items.map(e => e.usage?.company)).size}</strong></div></div>${items.map(e => `<div class="primary-text"><strong>${esc(e.code)} · ${esc(e.name)}</strong><small>${esc(e.usage.responsible)}</small></div>`).join('')}</article>`; }).join('')}</section>`;
 }
 function renderReports() {
-  const totalUses = history.filter(h=>h.action==='withdraw').length;
-  document.getElementById('app').innerHTML = `${pageHeader('Relatórios', 'Baixe documentos completos em PDF ou planilhas para conferência.', 'CENTRAL DE DOCUMENTOS')}<section class="metrics-grid">${metric('RETIRADAS REGISTRADAS',totalUses,'no histórico','blue','swap',100)}${metric('CHECKLISTS CONCLUÍDOS',history.filter(h=>h.inspection).length,'formulários digitais','green','check',100)}${metric('TAXA DE DISPONIBILIDADE',`${Math.round(equipments.filter(e=>e.status==='available').length/Math.max(1,equipments.length)*100)}%`,'da frota','green','chart',Math.round(equipments.filter(e=>e.status==='available').length/Math.max(1,equipments.length)*100))}${metric('EM USO',equipments.filter(e=>e.status==='in-use').length,'equipamentos agora','amber','lift',Math.round(equipments.filter(e=>e.status==='in-use').length/Math.max(1,equipments.length)*100))}</section><section class="report-grid"><article class="report-card"><span>${icon('swap')}</span><div><h2>Uso e movimentações das PTAs</h2><p>Quem está usando, empresa, atividade, Data Hall, local, retirada, previsão de devolução e histórico.</p></div><div class="report-actions"><button class="button button-dark" onclick="openReportPDF('usage')">${icon('download')} Baixar PDF</button><button class="button button-outline" onclick="exportCSV()">${icon('download')} Baixar planilha</button></div></article><article class="report-card"><span>${icon('file')}</span><div><h2>Checklists PEMT</h2><p>Relação de inspeções, resultado, via física, equipamento, responsável, empresa e localização.</p></div><div class="report-actions"><button class="button button-dark" onclick="openReportPDF('checklists')">${icon('download')} Baixar PDF</button><button class="button button-outline" onclick="exportChecklistExcel()">${icon('download')} Baixar Excel</button></div></article><article class="report-card"><span>${icon('lift')}</span><div><h2>Cadastro de PTAs e paleteiras</h2><p>Inventário completo com patrimônio, modelo, chassi, horímetro, bateria, empreiteiro e status.</p></div><div class="report-actions"><button class="button button-dark" onclick="openReportPDF('equipment')">${icon('download')} Baixar PDF</button><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar Excel</button></div></article><article class="report-card"><span>${icon('user')}</span><div><h2>Empresas e efetivo</h2><p>Lista completa de colaboradores com empresa, função, vínculo e telefone cadastrado.</p></div><div class="report-actions"><button class="button button-dark" onclick="openReportPDF('workforce')">${icon('download')} Baixar PDF</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Baixar Excel</button></div></article></section><div class="report-tip">${icon('file')} Ao clicar em <strong>Baixar PDF</strong>, use a opção <strong>Salvar como PDF</strong> na janela de impressão do navegador.</div>`;
-  document.querySelector('.report-grid').insertAdjacentHTML('beforebegin',reportFiltersHTML());
+  const totalUses = history.filter(h => h.action === 'withdraw').length;
+  document.getElementById('app').innerHTML = `${pageHeader('Relatórios', 'Baixe documentos completos em PDF ou planilhas para conferência.', 'CENTRAL DE DOCUMENTOS')}<section class="metrics-grid">${metric('RETIRADAS REGISTRADAS', totalUses, 'no histórico', 'blue', 'swap', 100)}${metric('CHECKLISTS CONCLUÍDOS', history.filter(h => h.inspection).length, 'formulários digitais', 'green', 'check', 100)}${metric('TAXA DE DISPONIBILIDADE', `${Math.round(equipments.filter(e => e.status === 'available').length / Math.max(1, equipments.length) * 100)}%`, 'da frota', 'green', 'chart', Math.round(equipments.filter(e => e.status === 'available').length / Math.max(1, equipments.length) * 100))}${metric('EM USO', equipments.filter(e => e.status === 'in-use').length, 'equipamentos agora', 'amber', 'lift', Math.round(equipments.filter(e => e.status === 'in-use').length / Math.max(1, equipments.length) * 100))}</section><section class="report-grid"><article class="report-card"><span>${icon('swap')}</span><div><h2>Uso e movimentações das PTAs</h2><p>Quem está usando, empresa, atividade, Data Hall, local, retirada, previsão de devolução e histórico.</p></div><div class="report-actions"><button class="button button-dark" onclick="openReportPDF('usage')">${icon('download')} Baixar PDF</button><button class="button button-outline" onclick="exportCSV()">${icon('download')} Baixar planilha</button></div></article><article class="report-card"><span>${icon('file')}</span><div><h2>Checklists PEMT</h2><p>Relação de inspeções, resultado, via física, equipamento, responsável, empresa e localização.</p></div><div class="report-actions"><button class="button button-dark" onclick="openReportPDF('checklists')">${icon('download')} Baixar PDF</button><button class="button button-outline" onclick="exportChecklistExcel()">${icon('download')} Baixar Excel</button></div></article><article class="report-card"><span>${icon('lift')}</span><div><h2>Cadastro de PTAs e paleteiras</h2><p>Inventário completo com patrimônio, modelo, chassi, horímetro, bateria, empreiteiro e status.</p></div><div class="report-actions"><button class="button button-dark" onclick="openReportPDF('equipment')">${icon('download')} Baixar PDF</button><button class="button button-outline" onclick="exportEquipmentsExcel()">${icon('download')} Baixar Excel</button></div></article><article class="report-card"><span>${icon('user')}</span><div><h2>Empresas e efetivo</h2><p>Lista completa de colaboradores com empresa, função, vínculo e telefone cadastrado.</p></div><div class="report-actions"><button class="button button-dark" onclick="openReportPDF('workforce')">${icon('download')} Baixar PDF</button><button class="button button-outline" onclick="exportWorkforceExcel()">${icon('download')} Baixar Excel</button></div></article></section><div class="report-tip">${icon('file')} Ao clicar em <strong>Baixar PDF</strong>, use a opção <strong>Salvar como PDF</strong> na janela de impressão do navegador.</div>`;
+  document.querySelector('.report-grid').insertAdjacentHTML('beforebegin', reportFiltersHTML());
   updateReportFilterSummary();
 }
 
 function reportFiltersHTML() {
-  const unique=values=>[...new Set(values.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  const companies=unique([...workforce.map(person=>person.company),...history.map(item=>item.company),...equipments.map(eq=>eq.usage?.company)]);
-  const people=unique([...workforce.map(person=>person.name),...history.map(item=>item.person),...equipments.map(eq=>eq.usage?.responsible)]);
-  const types=unique(equipments.map(eq=>eq.type));
-  const halls=unique([...history.map(item=>item.dataHall||item.place),...equipments.map(eq=>eq.usage?.dataHall)]);
-  const options=items=>items.map(item=>`<option value="${esc(item)}">${esc(item)}</option>`).join('');
-  return `<section class="report-filter-panel"><div class="report-filter-head"><div><span>${icon('search')}</span><div><h2>Filtrar antes de baixar</h2><p>Os filtros abaixo serão aplicados aos PDFs e às planilhas.</p></div></div><button class="button button-outline compact" onclick="clearReportFilters()">Limpar filtros</button></div><div class="report-filter-grid"><label class="filter-field"><span>Empresa</span><select id="reportCompany" onchange="updateReportFilterSummary()"><option value="">Todas</option>${options(companies)}</select></label><label class="filter-field"><span>Pessoa / responsável</span><select id="reportPerson" onchange="updateReportFilterSummary()"><option value="">Todas</option>${options(people)}</select></label><label class="filter-field"><span>Equipamento</span><select id="reportEquipment" onchange="updateReportFilterSummary()"><option value="">Todos</option>${equipments.map(eq=>`<option value="${eq.id}">${esc(eq.code)} — ${esc(eq.model||eq.name)}</option>`).join('')}</select></label><label class="filter-field"><span>Status atual</span><select id="reportStatus" onchange="updateReportFilterSummary()"><option value="">Todos</option><option value="in-use">Em uso</option><option value="available">Disponível</option><option value="maintenance">Indisponível</option></select></label><label class="filter-field"><span>Tipo de equipamento</span><select id="reportType" onchange="updateReportFilterSummary()"><option value="">Todos</option>${options(types)}</select></label><label class="filter-field"><span>Data Hall / área</span><select id="reportHall" onchange="updateReportFilterSummary()"><option value="">Todos</option>${options(halls)}</select></label><label class="filter-field"><span>Resultado do checklist</span><select id="reportResult" onchange="updateReportFilterSummary()"><option value="">Todos</option><option value="approved">Aprovado</option><option value="failed">Reprovado</option></select></label><label class="filter-field"><span>Data inicial</span><input id="reportStart" type="date" onchange="updateReportFilterSummary()"></label><label class="filter-field"><span>Data final</span><input id="reportEnd" type="date" onchange="updateReportFilterSummary()"></label></div><div class="report-filter-summary" id="reportFilterSummary"></div></section>`;
+  const unique = values => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const companies = unique([...workforce.map(person => person.company), ...history.map(item => item.company), ...equipments.map(eq => eq.usage?.company)]);
+  const people = unique([...workforce.map(person => person.name), ...history.map(item => item.person), ...equipments.map(eq => eq.usage?.responsible)]);
+  const types = unique(equipments.map(eq => eq.type));
+  const halls = unique([...history.map(item => item.dataHall || item.place), ...equipments.map(eq => eq.usage?.dataHall)]);
+  const options = items => items.map(item => `<option value="${esc(item)}">${esc(item)}</option>`).join('');
+  return `<section class="report-filter-panel"><div class="report-filter-head"><div><span>${icon('search')}</span><div><h2>Filtrar antes de baixar</h2><p>Os filtros abaixo serão aplicados aos PDFs e às planilhas.</p></div></div><button class="button button-outline compact" onclick="clearReportFilters()">Limpar filtros</button></div><div class="report-filter-grid"><label class="filter-field"><span>Empresa</span><select id="reportCompany" onchange="updateReportFilterSummary()"><option value="">Todas</option>${options(companies)}</select></label><label class="filter-field"><span>Pessoa / responsável</span><select id="reportPerson" onchange="updateReportFilterSummary()"><option value="">Todas</option>${options(people)}</select></label><label class="filter-field"><span>Equipamento</span><select id="reportEquipment" onchange="updateReportFilterSummary()"><option value="">Todos</option>${equipments.map(eq => `<option value="${eq.id}">${esc(eq.code)} — ${esc(eq.model || eq.name)}</option>`).join('')}</select></label><label class="filter-field"><span>Status atual</span><select id="reportStatus" onchange="updateReportFilterSummary()"><option value="">Todos</option><option value="in-use">Em uso</option><option value="available">Disponível</option><option value="maintenance">Indisponível</option></select></label><label class="filter-field"><span>Tipo de equipamento</span><select id="reportType" onchange="updateReportFilterSummary()"><option value="">Todos</option>${options(types)}</select></label><label class="filter-field"><span>Data Hall / área</span><select id="reportHall" onchange="updateReportFilterSummary()"><option value="">Todos</option>${options(halls)}</select></label><label class="filter-field"><span>Resultado do checklist</span><select id="reportResult" onchange="updateReportFilterSummary()"><option value="">Todos</option><option value="approved">Aprovado</option><option value="failed">Reprovado</option></select></label><label class="filter-field"><span>Data inicial</span><input id="reportStart" type="date" onchange="updateReportFilterSummary()"></label><label class="filter-field"><span>Data final</span><input id="reportEnd" type="date" onchange="updateReportFilterSummary()"></label></div><div class="report-filter-summary" id="reportFilterSummary"></div></section>`;
 }
 function reportFilterValues() {
-  const value=id=>document.getElementById(id)?.value||'';
-  return {company:value('reportCompany'),person:value('reportPerson'),equipment:value('reportEquipment'),status:value('reportStatus'),type:value('reportType'),hall:value('reportHall'),result:value('reportResult'),start:value('reportStart'),end:value('reportEnd')};
+  const value = id => document.getElementById(id)?.value || '';
+  return { company: value('reportCompany'), person: value('reportPerson'), equipment: value('reportEquipment'), status: value('reportStatus'), type: value('reportType'), hall: value('reportHall'), result: value('reportResult'), start: value('reportStart'), end: value('reportEnd') };
 }
-function reportDateMatches(value,start,end) {
-  if(!start&&!end)return true; if(!value)return false; const date=String(value).slice(0,10); return (!start||date>=start)&&(!end||date<=end);
+function reportDateMatches(value, start, end) {
+  if (!start && !end) return true; if (!value) return false; const date = String(value).slice(0, 10); return (!start || date >= start) && (!end || date <= end);
 }
 function getReportFilteredEquipments() {
-  const f=reportFilterValues();
-  return equipments.filter(eq=>(!f.equipment||eq.id===f.equipment)&&(!f.status||eq.status===f.status)&&(!f.type||eq.type===f.type)&&(!f.company||eq.usage?.company===f.company)&&(!f.person||eq.usage?.responsible===f.person)&&(!f.hall||eq.usage?.dataHall===f.hall));
+  const f = reportFilterValues();
+  return equipments.filter(eq => (!f.equipment || eq.id === f.equipment) && (!f.status || eq.status === f.status) && (!f.type || eq.type === f.type) && (!f.company || eq.usage?.company === f.company) && (!f.person || eq.usage?.responsible === f.person) && (!f.hall || eq.usage?.dataHall === f.hall));
 }
-function getReportFilteredHistory(inspectionOnly=false) {
-  const f=reportFilterValues();
-  return history.filter(item=>{const eq=equipments.find(e=>e.id===item.equipmentId);return (!inspectionOnly||item.inspection)&&(!f.company||item.company===f.company)&&(!f.person||item.person===f.person)&&(!f.equipment||item.equipmentId===f.equipment)&&(!f.status||eq?.status===f.status)&&(!f.type||eq?.type===f.type)&&(!f.hall||(item.dataHall||item.place)===f.hall)&&reportDateMatches(item.date,f.start,f.end)&&(!f.result||(item.inspection&&(f.result==='failed')===inspectionHasFailure(item.inspection)));});
+function getReportFilteredHistory(inspectionOnly = false) {
+  const f = reportFilterValues();
+  return history.filter(item => { const eq = equipments.find(e => e.id === item.equipmentId); return (!inspectionOnly || item.inspection) && (!f.company || item.company === f.company) && (!f.person || item.person === f.person) && (!f.equipment || item.equipmentId === f.equipment) && (!f.status || eq?.status === f.status) && (!f.type || eq?.type === f.type) && (!f.hall || (item.dataHall || item.place) === f.hall) && reportDateMatches(item.date, f.start, f.end) && (!f.result || (item.inspection && (f.result === 'failed') === inspectionHasFailure(item.inspection))); });
 }
 function getReportFilteredWorkforce() {
-  const f=reportFilterValues(); return workforce.filter(person=>(!f.company||person.company===f.company)&&(!f.person||person.name===f.person));
+  const f = reportFilterValues(); return workforce.filter(person => (!f.company || person.company === f.company) && (!f.person || person.name === f.person));
 }
 function reportFilterCaption() {
-  const f=reportFilterValues(); const parts=[];
-  const selected=(id,value)=>document.querySelector(`#${id} option[value="${CSS.escape(value)}"]`)?.textContent||value;
-  if(f.company)parts.push(`Empresa: ${f.company}`); if(f.person)parts.push(`Pessoa: ${f.person}`); if(f.equipment)parts.push(`Equipamento: ${selected('reportEquipment',f.equipment)}`); if(f.status)parts.push(`Status: ${selected('reportStatus',f.status)}`); if(f.type)parts.push(`Tipo: ${f.type}`); if(f.hall)parts.push(`Local: ${f.hall}`); if(f.result)parts.push(`Checklist: ${selected('reportResult',f.result)}`); if(f.start)parts.push(`De: ${new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC'}).format(new Date(`${f.start}T00:00:00Z`))}`); if(f.end)parts.push(`Até: ${new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC'}).format(new Date(`${f.end}T00:00:00Z`))}`);
+  const f = reportFilterValues(); const parts = [];
+  const selected = (id, value) => document.querySelector(`#${id} option[value="${CSS.escape(value)}"]`)?.textContent || value;
+  if (f.company) parts.push(`Empresa: ${f.company}`); if (f.person) parts.push(`Pessoa: ${f.person}`); if (f.equipment) parts.push(`Equipamento: ${selected('reportEquipment', f.equipment)}`); if (f.status) parts.push(`Status: ${selected('reportStatus', f.status)}`); if (f.type) parts.push(`Tipo: ${f.type}`); if (f.hall) parts.push(`Local: ${f.hall}`); if (f.result) parts.push(`Checklist: ${selected('reportResult', f.result)}`); if (f.start) parts.push(`De: ${new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(`${f.start}T00:00:00Z`))}`); if (f.end) parts.push(`Até: ${new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(`${f.end}T00:00:00Z`))}`);
   return parts.join(' · ');
 }
 function updateReportFilterSummary() {
-  const target=document.getElementById('reportFilterSummary'); if(!target)return;
-  const equipmentCount=getReportFilteredEquipments().length; const movements=getReportFilteredHistory().length; const checklists=getReportFilteredHistory(true).length; const people=getReportFilteredWorkforce().length; const caption=reportFilterCaption();
-  target.innerHTML=`<span>${icon('check')} <strong>${caption?'Filtros aplicados':'Sem filtros: todos os registros'}</strong></span><span>${equipmentCount} equipamento(s) · ${movements} movimentação(ões) · ${checklists} checklist(s) · ${people} pessoa(s)</span>`;
+  const target = document.getElementById('reportFilterSummary'); if (!target) return;
+  const equipmentCount = getReportFilteredEquipments().length; const movements = getReportFilteredHistory().length; const checklists = getReportFilteredHistory(true).length; const people = getReportFilteredWorkforce().length; const caption = reportFilterCaption();
+  target.innerHTML = `<span>${icon('check')} <strong>${caption ? 'Filtros aplicados' : 'Sem filtros: todos os registros'}</strong></span><span>${equipmentCount} equipamento(s) · ${movements} movimentação(ões) · ${checklists} checklist(s) · ${people} pessoa(s)</span>`;
 }
 function clearReportFilters() {
-  document.querySelectorAll('.report-filter-grid select,.report-filter-grid input').forEach(field=>field.value=''); updateReportFilterSummary();
+  document.querySelectorAll('.report-filter-grid select,.report-filter-grid input').forEach(field => field.value = ''); updateReportFilterSummary();
 }
 
 function reportStatus(eq) {
-  return eq.status==='in-use'?'EM USO':eq.status==='maintenance'?'INDISPONÍVEL':'DISPONÍVEL';
+  return eq.status === 'in-use' ? 'EM USO' : eq.status === 'maintenance' ? 'INDISPONÍVEL' : 'DISPONÍVEL';
 }
 function reportAction(action) {
-  return action==='withdraw'?'RETIRADA':action==='return'?'DEVOLUÇÃO':'OCORRÊNCIA / AVARIA';
+  return action === 'withdraw' ? 'RETIRADA' : action === 'return' ? 'DEVOLUÇÃO' : 'OCORRÊNCIA / AVARIA';
 }
-function reportTable(headers, rows, emptyText='Nenhum registro encontrado.') {
-  if(!rows.length)return `<div class="report-empty">${esc(emptyText)}</div>`;
-  return `<table class="report-table"><thead><tr>${headers.map(header=>`<th>${esc(header)}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(value=>`<td>${esc(value??'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+function reportTable(headers, rows, emptyText = 'Nenhum registro encontrado.') {
+  if (!rows.length) return `<div class="report-empty">${esc(emptyText)}</div>`;
+  return `<table class="report-table"><thead><tr>${headers.map(header => `<th>${esc(header)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(value => `<td>${esc(value ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 }
-function reportDocument(title, subtitle, content, summary='') {
-  const issued=new Intl.DateTimeFormat('pt-BR',{dateStyle:'long',timeStyle:'short'}).format(new Date());
-  return `<article class="report-document"><header class="report-document-head"><div class="report-logos"><img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling"><img src="assets/afonso-franca-logo.png" alt="Afonso França Engenharia"></div><div><small>OBRAFLOW · DATA CENTER FORTALEZA</small><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div><aside><strong>Emitido em</strong><span>${esc(issued)}</span></aside></header>${summary?`<div class="report-summary">${summary}</div>`:''}${content}<footer class="report-footer">Documento gerado pelo ObraFlow · Gestão HVAC · ${esc(issued)}</footer></article>`;
+function reportDocument(title, subtitle, content, summary = '') {
+  const issued = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date());
+  return `<article class="report-document"><header class="report-document-head"><div class="report-logos"><img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling"><img src="assets/afonso-franca-logo.png" alt="Afonso França Engenharia"></div><div><small>OBRAFLOW · DATA CENTER FORTALEZA</small><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div><aside><strong>Emitido em</strong><span>${esc(issued)}</span></aside></header>${summary ? `<div class="report-summary">${summary}</div>` : ''}${content}<footer class="report-footer">Documento gerado pelo ObraFlow · Gestão HVAC · ${esc(issued)}</footer></article>`;
 }
-function openReportPDF(type, filtered=false, workforceCompany='', workforceSelection=null, workforceFilterDescription='') {
-  let title='Relatório'; let subtitle=''; let content=''; let summary='';
-  if(type==='usage') {
-    title='Utilização e movimentações de PTAs'; subtitle='Situação atual da frota e histórico operacional';
-    const selectedEquipments=getReportFilteredEquipments(); const selectedHistory=getReportFilteredHistory();
-    const currentRows=selectedEquipments.map(eq=>[eq.code,eq.model||eq.name,reportStatus(eq),eq.usage?.responsible||'—',eq.usage?.company||'—',eq.usage?.activity||'—',eq.usage?`${eq.usage.dataHall||''} · ${eq.usage.location||''}`:'Pátio / Base',eq.usage?.startedAt?fullDate(eq.usage.startedAt):'—',eq.usage?.expectedAt?fullDate(eq.usage.expectedAt):'—']);
-    const historyRows=selectedHistory.map(item=>{const eq=equipments.find(e=>e.id===item.equipmentId);return [fullDate(item.date),eq?.code||'—',reportAction(item.action),item.person||'—',item.company||'—',item.activity||'—',`${item.dataHall||item.place||'—'}${item.location?` · ${item.location}`:''}`];});
-    summary=`<span><b>${selectedEquipments.length}</b> equipamentos</span><span><b>${selectedEquipments.filter(e=>e.status==='in-use').length}</b> em uso</span><span><b>${selectedEquipments.filter(e=>e.status==='available').length}</b> disponíveis</span><span><b>${selectedHistory.length}</b> movimentações</span>`;
-    content=`<section class="report-section"><h2>Situação atual</h2>${reportTable(['Patrimônio','Modelo','Status','Responsável','Empresa','Atividade','DH / Local','Retirada','Devolução prevista'],currentRows)}</section><section class="report-section"><h2>Histórico operacional</h2>${reportTable(['Data e hora','Equipamento','Movimentação','Responsável','Empresa','Atividade','DH / Local'],historyRows,'Ainda não existem movimentações registradas.')}</section>`;
-  } else if(type==='checklists') {
-    title='Relatório de checklists PEMT'; subtitle=filtered?'Registros selecionados pelos filtros da tela':'Todos os formulários digitais registrados';
-    const records=filtered?getFilteredInspections():getReportFilteredHistory(true);
-    const rows=records.map(item=>{const eq=equipments.find(e=>e.id===item.equipmentId);return [fullDate(item.date),eq?.code||'—',item.inspection.mode==='devolucao'?'Devolução':'Retirada',item.person||'—',item.company||'—',item.activity||'—',`${item.dataHall||item.place||'—'}${item.location?` · ${item.location}`:''}`,inspectionHasFailure(item.inspection)?'REPROVADO':'APROVADO',item.inspection.physicalFiled?'Confirmada':'Pendente',item.inspection.hourmeter?`${item.inspection.hourmeter} h`:'—'];});
-    summary=`<span><b>${records.length}</b> formulários</span><span><b>${records.filter(item=>!inspectionHasFailure(item.inspection)).length}</b> aprovados</span><span><b>${records.filter(item=>inspectionHasFailure(item.inspection)).length}</b> reprovados</span><span><b>${records.filter(item=>item.inspection.physicalFiled).length}</b> vias físicas confirmadas</span>`;
-    content=`<section class="report-section"><h2>Formulários registrados</h2>${reportTable(['Data','Equipamento','Tipo','Responsável','Empresa','Atividade','DH / Local','Resultado','Via física','Horímetro'],rows,'Nenhum checklist encontrado.')}</section>`;
-  } else if(type==='equipment') {
-    title='Cadastro de PTAs e paleteiras'; subtitle='Inventário atualizado de equipamentos';
-    const selectedEquipments=getReportFilteredEquipments(); const rows=selectedEquipments.map(eq=>[eq.code,eq.type||'—',eq.model||eq.name,eq.serial||'—',eq.hourmeter??'—',eq.battery||'—',eq.contractor||'—',eq.invoice||'—',reportStatus(eq)]);
-    summary=`<span><b>${selectedEquipments.length}</b> equipamentos</span><span><b>${selectedEquipments.filter(e=>e.status==='available').length}</b> disponíveis</span><span><b>${selectedEquipments.filter(e=>e.status==='in-use').length}</b> em uso</span><span><b>${selectedEquipments.filter(e=>e.status==='maintenance').length}</b> indisponíveis</span>`;
-    content=`<section class="report-section"><h2>Inventário da frota</h2>${reportTable(['Patrimônio','Tipo','Modelo / descrição','Chassi','Horímetro','Bateria','Empreiteiro','NF','Status'],rows)}</section>`;
-  } else if(type==='workforce') {
-    title='Empresas e efetivo'; subtitle=workforceCompany?`Relação de colaboradores · ${workforceCompany}`:workforceSelection?'Relação de colaboradores conforme os filtros da tela':'Relação atualizada de colaboradores da obra';
-    const selectedWorkforce=(Array.isArray(workforceSelection)?workforceSelection:workforceCompany?workforce.filter(person=>person.company===workforceCompany):getReportFilteredWorkforce()).sort((a,b)=>safeSort(a.company,b.company)||safeSort(a.name,b.name)); const companies=[...new Set(selectedWorkforce.map(person=>person.company))]; const rows=selectedWorkforce.map(person=>[person.name||'—',person.company||'—',person.role||'—',person.status||'—',person.phone||'—']);
-    summary=`<span><b>${selectedWorkforce.length}</b> colaboradores</span><span><b>${companies.length}</b> empresas</span><span><b>${workforceMeta.source?'Planilha':'Manual'}</b> origem da base</span>`;
-    content=`<section class="report-section"><h2>Efetivo cadastrado</h2>${reportTable(['Nome','Empresa','Função','Vínculo / Status','Telefone'],rows,'Nenhum colaborador cadastrado.')}</section>`;
+function openReportPDF(type, filtered = false, workforceCompany = '', workforceSelection = null, workforceFilterDescription = '') {
+  let title = 'Relatório'; let subtitle = ''; let content = ''; let summary = '';
+  if (type === 'usage') {
+    title = 'Utilização e movimentações de PTAs'; subtitle = 'Situação atual da frota e histórico operacional';
+    const selectedEquipments = getReportFilteredEquipments(); const selectedHistory = getReportFilteredHistory();
+    const currentRows = selectedEquipments.map(eq => [eq.code, eq.model || eq.name, reportStatus(eq), eq.usage?.responsible || '—', eq.usage?.company || '—', eq.usage?.activity || '—', eq.usage ? `${eq.usage.dataHall || ''} · ${eq.usage.location || ''}` : 'Pátio / Base', eq.usage?.startedAt ? fullDate(eq.usage.startedAt) : '—', eq.usage?.expectedAt ? fullDate(eq.usage.expectedAt) : '—']);
+    const historyRows = selectedHistory.map(item => { const eq = equipments.find(e => e.id === item.equipmentId); return [fullDate(item.date), eq?.code || '—', reportAction(item.action), item.person || '—', item.company || '—', item.activity || '—', `${item.dataHall || item.place || '—'}${item.location ? ` · ${item.location}` : ''}`]; });
+    summary = `<span><b>${selectedEquipments.length}</b> equipamentos</span><span><b>${selectedEquipments.filter(e => e.status === 'in-use').length}</b> em uso</span><span><b>${selectedEquipments.filter(e => e.status === 'available').length}</b> disponíveis</span><span><b>${selectedHistory.length}</b> movimentações</span>`;
+    content = `<section class="report-section"><h2>Situação atual</h2>${reportTable(['Patrimônio', 'Modelo', 'Status', 'Responsável', 'Empresa', 'Atividade', 'DH / Local', 'Retirada', 'Devolução prevista'], currentRows)}</section><section class="report-section"><h2>Histórico operacional</h2>${reportTable(['Data e hora', 'Equipamento', 'Movimentação', 'Responsável', 'Empresa', 'Atividade', 'DH / Local'], historyRows, 'Ainda não existem movimentações registradas.')}</section>`;
+  } else if (type === 'checklists') {
+    title = 'Relatório de checklists PEMT'; subtitle = filtered ? 'Registros selecionados pelos filtros da tela' : 'Todos os formulários digitais registrados';
+    const records = filtered ? getFilteredInspections() : getReportFilteredHistory(true);
+    const rows = records.map(item => { const eq = equipments.find(e => e.id === item.equipmentId); return [fullDate(item.date), eq?.code || '—', item.inspection.mode === 'devolucao' ? 'Devolução' : 'Retirada', item.person || '—', item.company || '—', item.activity || '—', `${item.dataHall || item.place || '—'}${item.location ? ` · ${item.location}` : ''}`, inspectionHasFailure(item.inspection) ? 'REPROVADO' : 'APROVADO', item.inspection.physicalFiled ? 'Confirmada' : 'Pendente', item.inspection.hourmeter ? `${item.inspection.hourmeter} h` : '—']; });
+    summary = `<span><b>${records.length}</b> formulários</span><span><b>${records.filter(item => !inspectionHasFailure(item.inspection)).length}</b> aprovados</span><span><b>${records.filter(item => inspectionHasFailure(item.inspection)).length}</b> reprovados</span><span><b>${records.filter(item => item.inspection.physicalFiled).length}</b> vias físicas confirmadas</span>`;
+    content = `<section class="report-section"><h2>Formulários registrados</h2>${reportTable(['Data', 'Equipamento', 'Tipo', 'Responsável', 'Empresa', 'Atividade', 'DH / Local', 'Resultado', 'Via física', 'Horímetro'], rows, 'Nenhum checklist encontrado.')}</section>`;
+  } else if (type === 'equipment') {
+    title = 'Cadastro de PTAs e paleteiras'; subtitle = 'Inventário atualizado de equipamentos';
+    const selectedEquipments = getReportFilteredEquipments(); const rows = selectedEquipments.map(eq => [eq.code, eq.type || '—', eq.model || eq.name, eq.serial || '—', eq.hourmeter ?? '—', eq.battery || '—', eq.contractor || '—', eq.invoice || '—', reportStatus(eq)]);
+    summary = `<span><b>${selectedEquipments.length}</b> equipamentos</span><span><b>${selectedEquipments.filter(e => e.status === 'available').length}</b> disponíveis</span><span><b>${selectedEquipments.filter(e => e.status === 'in-use').length}</b> em uso</span><span><b>${selectedEquipments.filter(e => e.status === 'maintenance').length}</b> indisponíveis</span>`;
+    content = `<section class="report-section"><h2>Inventário da frota</h2>${reportTable(['Patrimônio', 'Tipo', 'Modelo / descrição', 'Chassi', 'Horímetro', 'Bateria', 'Empreiteiro', 'NF', 'Status'], rows)}</section>`;
+  } else if (type === 'workforce') {
+    title = 'Empresas e efetivo'; subtitle = workforceCompany ? `Relação de colaboradores · ${workforceCompany}` : workforceSelection ? 'Relação de colaboradores conforme os filtros da tela' : 'Relação atualizada de colaboradores da obra';
+    const selectedWorkforce = (Array.isArray(workforceSelection) ? workforceSelection : workforceCompany ? workforce.filter(person => person.company === workforceCompany) : getReportFilteredWorkforce()).sort((a, b) => safeSort(a.company, b.company) || safeSort(a.name, b.name)); const companies = [...new Set(selectedWorkforce.map(person => person.company))]; const rows = selectedWorkforce.map(person => [person.name || '—', person.company || '—', person.role || '—', person.status || '—', person.phone || '—']);
+    summary = `<span><b>${selectedWorkforce.length}</b> colaboradores</span><span><b>${companies.length}</b> empresas</span><span><b>${workforceMeta.source ? 'Planilha' : 'Manual'}</b> origem da base</span>`;
+    content = `<section class="report-section"><h2>Efetivo cadastrado</h2>${reportTable(['Nome', 'Empresa', 'Função', 'Vínculo / Status', 'Telefone'], rows, 'Nenhum colaborador cadastrado.')}</section>`;
   } else return;
   const filterCaption = (workforceFilterDescription || workforceCompany)
     ? workforceFilterDescription || `Empresa: ${workforceCompany}`
     : reportFilterCaption();
-  if(filterCaption)content=`<div class="report-filter-caption"><strong>Filtros aplicados:</strong> ${esc(filterCaption)}</div>${content}`;
-  modal(`${modalHead(title,'Visualize antes de imprimir ou salvar')}<div class="modal-body report-preview">${reportDocument(title,subtitle,content,summary)}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('download')} Imprimir / salvar PDF</button></div>`,'modal-paper');
-  document.querySelector('.modal-backdrop').classList.add('print-area','report-print-area');
+  if (filterCaption) content = `<div class="report-filter-caption"><strong>Filtros aplicados:</strong> ${esc(filterCaption)}</div>${content}`;
+  modal(`${modalHead(title, 'Visualize antes de imprimir ou salvar')}<div class="modal-body report-preview">${reportDocument(title, subtitle, content, summary)}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('download')} Imprimir / salvar PDF</button></div>`, 'modal-paper');
+  document.querySelector('.modal-backdrop').classList.add('print-area', 'report-print-area');
 }
 
 function modal(content, size = '') {
@@ -7186,30 +8023,30 @@ async function stopScanner() {
   const scanner = activeQrScanner;
   activeQrScanner = null;
   if (!scanner) return;
-  try { await scanner.stop(); } catch(e) {}
-  try { scanner.clear(); } catch(e) {}
+  try { await scanner.stop(); } catch (e) { }
+  try { scanner.clear(); } catch (e) { }
 }
-function closeModal() { stopScanner(); document.getElementById('modalRoot').innerHTML = ''; document.body.style.overflow = ''; if(location.hash.startsWith('#scan/')) window.history.replaceState(null,'','#dashboard'); }
-function modalHead(title, subtitle='') { return `<div class="modal-head"><div><h2>${title}</h2>${subtitle?`<p>${subtitle}</p>`:''}</div><button class="icon-button" onclick="closeModal()">${icon('close')}</button></div>`; }
+function closeModal() { stopScanner(); document.getElementById('modalRoot').innerHTML = ''; document.body.style.overflow = ''; if (location.hash.startsWith('#scan/')) window.history.replaceState(null, '', '#dashboard'); }
+function modalHead(title, subtitle = '') { return `<div class="modal-head"><div><h2>${title}</h2>${subtitle ? `<p>${subtitle}</p>` : ''}</div><button class="icon-button" onclick="closeModal()">${icon('close')}</button></div>`; }
 
 function openEquipmentModal(id = null) {
-  const eq = id ? equipments.find(e=>e.id===id) : null;
-  modal(`<form id="equipmentForm" onsubmit="saveEquipment(event,'${id||''}')">${modalHead(eq?'Editar equipamento':'Novo equipamento',eq?'Atualize os dados do ativo':'Cadastre um ativo e gere seu QR Code')}<div class="modal-body"><div class="form-grid"><div class="field"><label>Tipo de equipamento <em>*</em></label><select name="type" required><option value="">Selecione...</option>${['PTA Tesoura','PTA Articulada','PTA Mastro','Paleteira Elétrica'].map(v=>`<option ${eq?.type===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Código de identificação (Patrimônio) <em>*</em></label><input name="code" required placeholder="Ex.: TPTA00674" value="${esc(eq?.code||'')}"></div><div class="field"><label>Nº AF (Afonso França)</label><input name="afNumber" placeholder="Ex.: AF-001" value="${esc(eq?.afNumber||'')}"></div><div class="field full"><label>Nome do equipamento <em>*</em></label><input name="name" required placeholder="Ex.: Plataforma Tesoura 10m" value="${esc(eq?.name||'')}"></div><div class="field"><label>Fabricante <em>*</em></label><input name="brand" required placeholder="Ex.: JLG" value="${esc(eq?.brand||'')}"></div><div class="field"><label>Modelo <em>*</em></label><input name="model" required placeholder="Ex.: 2646ES" value="${esc(eq?.model||'')}"></div><div class="field"><label>Número de série</label><input name="serial" placeholder="Número do fabricante" value="${esc(eq?.serial||'')}"></div><div class="field"><label>Capacidade</label><input name="capacity" placeholder="Ex.: 450 kg" value="${esc(eq?.capacity||'')}"></div><div class="field"><label>Status do equipamento</label><select name="status"><option value="available" ${(!eq||eq.status==='available')?'selected':''}>Disponível (Pronto para retirada)</option><option value="in-use" ${eq?.status==='in-use'?'selected':''}>Em uso (Operação na obra)</option><option value="maintenance" ${eq?.status==='maintenance'?'selected':''}>Indisponível / Manutenção</option></select></div><div class="field"><label>Data da última inspeção</label><input name="inspection" type="date" value="${eq?.inspection||new Date().toISOString().slice(0,10)}"></div></div></div><div class="modal-foot">${eq ? `<button type="button" class="button button-ghost" style="color:var(--danger,#ef4444);margin-right:auto;" onclick="deleteEquipment('${id}')">${icon('trash')} Excluir equipamento</button>` : ''}<button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} ${eq?'Salvar alterações':'Cadastrar equipamento'}</button></div></form>`, 'modal-large');
+  const eq = id ? equipments.find(e => e.id === id) : null;
+  modal(`<form id="equipmentForm" onsubmit="saveEquipment(event,'${id || ''}')">${modalHead(eq ? 'Editar equipamento' : 'Novo equipamento', eq ? 'Atualize os dados do ativo' : 'Cadastre um ativo e gere seu QR Code')}<div class="modal-body"><div class="form-grid"><div class="field"><label>Tipo de equipamento <em>*</em></label><select name="type" required><option value="">Selecione...</option>${['PTA Tesoura', 'PTA Articulada', 'PTA Mastro', 'Paleteira Elétrica'].map(v => `<option ${eq?.type === v ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="field"><label>Código de identificação (Patrimônio) <em>*</em></label><input name="code" required placeholder="Ex.: TPTA00674" value="${esc(eq?.code || '')}"></div><div class="field"><label>Nº AF (Afonso França)</label><input name="afNumber" placeholder="Ex.: AF-001" value="${esc(eq?.afNumber || '')}"></div><div class="field full"><label>Nome do equipamento <em>*</em></label><input name="name" required placeholder="Ex.: Plataforma Tesoura 10m" value="${esc(eq?.name || '')}"></div><div class="field"><label>Fabricante <em>*</em></label><input name="brand" required placeholder="Ex.: JLG" value="${esc(eq?.brand || '')}"></div><div class="field"><label>Modelo <em>*</em></label><input name="model" required placeholder="Ex.: 2646ES" value="${esc(eq?.model || '')}"></div><div class="field"><label>Número de série</label><input name="serial" placeholder="Número do fabricante" value="${esc(eq?.serial || '')}"></div><div class="field"><label>Capacidade</label><input name="capacity" placeholder="Ex.: 450 kg" value="${esc(eq?.capacity || '')}"></div><div class="field"><label>Status do equipamento</label><select name="status"><option value="available" ${(!eq || eq.status === 'available') ? 'selected' : ''}>Disponível (Pronto para retirada)</option><option value="in-use" ${eq?.status === 'in-use' ? 'selected' : ''}>Em uso (Operação na obra)</option><option value="maintenance" ${eq?.status === 'maintenance' ? 'selected' : ''}>Indisponível / Manutenção</option></select></div><div class="field"><label>Data da última inspeção</label><input name="inspection" type="date" value="${eq?.inspection || new Date().toISOString().slice(0, 10)}"></div></div></div><div class="modal-foot">${eq ? `<button type="button" class="button button-ghost" style="color:var(--danger,#ef4444);margin-right:auto;" onclick="deleteEquipment('${id}')">${icon('trash')} Excluir equipamento</button>` : ''}<button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} ${eq ? 'Salvar alterações' : 'Cadastrar equipamento'}</button></div></form>`, 'modal-large');
 }
 async function saveEquipment(event, id) {
   event.preventDefault(); const data = Object.fromEntries(new FormData(event.target));
   if (equipments.some(e => e.code.toLowerCase() === data.code.toLowerCase() && e.id !== id)) return toast('Este código já está cadastrado.', true);
   if (id) {
-    const index = equipments.findIndex(e=>e.id===id);
+    const index = equipments.findIndex(e => e.id === id);
     const prevStatus = equipments[index].status;
     const newStatus = data.status || prevStatus;
     // Se o gestor alterou de 'in-use' para outro status manualmente, remove o uso ativo
     const updatedUsage = (newStatus !== 'in-use') ? null : (equipments[index].usage || { responsible: currentUser?.name || 'Gestor', company: currentUser?.company || 'Obra', dataHall: 'Pátio', location: 'Base', startedAt: new Date().toISOString() });
     equipments[index] = { ...equipments[index], ...data, status: newStatus, usage: updatedUsage };
   } else {
-    const newId = `${data.type.includes('Paleteira')?'pal':'pta'}-${Date.now()}`;
+    const newId = `${data.type.includes('Paleteira') ? 'pal' : 'pta'}-${Date.now()}`;
     const initialUsage = data.status === 'in-use' ? { responsible: currentUser?.name || 'Gestor', company: currentUser?.company || 'Obra', dataHall: 'Pátio', location: 'Base', startedAt: new Date().toISOString() } : null;
-    equipments.unshift({ id:newId, ...data, status: data.status || 'available', usage: initialUsage });
+    equipments.unshift({ id: newId, ...data, status: data.status || 'available', usage: initialUsage });
   }
   const changedEquipment = equipments.find(e => e.id === (id || equipments[0]?.id));
   if (changedEquipment) changedEquipment.updatedAt = new Date().toISOString();
@@ -7224,7 +8061,7 @@ async function saveEquipment(event, id) {
   }
   closeModal(); render();
   toast(shared
-    ? (id?'Equipamento atualizado em todos os aparelhos.':'Equipamento cadastrado em todos os aparelhos. QR Code pronto para impressão.')
+    ? (id ? 'Equipamento atualizado em todos os aparelhos.' : 'Equipamento cadastrado em todos os aparelhos. QR Code pronto para impressão.')
     : 'Cadastro salvo somente neste aparelho. Verifique a internet e tente novamente.',
     !shared);
 }
@@ -7247,7 +8084,7 @@ async function deleteEquipment(id) {
 }
 
 function openEquipmentDetails(id) {
-  const eq = equipments.find(e=>e.id===id); if (!eq) return;
+  const eq = equipments.find(e => e.id === id); if (!eq) return;
   if (eq.status === 'available') return openCheckoutModal(id);
   const usage = eq.usage || {
     company: eq.contractor || '—',
@@ -7259,20 +8096,20 @@ function openEquipmentDetails(id) {
     startedAt: '',
     phone: ''
   };
-  modal(`${modalHead(eq.name,`${eq.code} · ${eq.brand} ${eq.model}`)}<div class="modal-body"><div class="equipment-summary"><span class="asset-icon">${equipmentIcon(eq)}</span><div><strong>${esc(eq.name)}</strong><small>Série ${esc(eq.serial)} · Horímetro ${esc(eq.hourmeter ?? '—')} h${eq.battery?` · Bateria ${esc(eq.battery)}`:''}</small></div>${statusBadge(eq.status)}</div>${eq.status==='in-use'?`<div class="form-grid"><div class="field"><label>Empresa</label><strong>${esc(usage.company)}</strong></div><div class="field"><label>Responsável</label><strong>${esc(usage.responsible)}</strong></div><div class="field full"><label>Atividade</label><strong>${esc(usage.activity||'—')}</strong></div><div class="field"><label>DH / Local específico</label><strong>${esc(usage.dataHall)} · ${esc(usage.location)}</strong></div><div class="field"><label>Previsão de entrega</label><strong>${fullDate(usage.expectedAt)}</strong></div><div class="field"><label>Retirada em</label><strong>${fullDate(usage.startedAt)}</strong></div><div class="field"><label>Contato</label><strong>${esc(usage.phone)}</strong></div></div>`:`<div class="notice">${icon(eq.status==='maintenance'?'tool':'check')} ${eq.status==='maintenance'?'Este equipamento está bloqueado para manutenção. Edite o cadastro para liberá-lo após a inspeção.':'Equipamento disponível no Pátio / Base e pronto para retirada.'}</div>`}</div><div class="modal-foot"><button class="button button-outline danger-button" style="color:var(--red);border-color:var(--red-soft);margin-right:auto;" onclick="deleteEquipment('${id}')">${icon('trash')} Excluir PTA</button><button class="button button-ghost" onclick="openEquipmentModal('${id}')">${icon('edit')} Editar</button><button class="button button-outline" onclick="openQRModal('${id}')">${icon('qr')} QR Code</button>${eq.status==='in-use'?`<button class="button button-outline" onclick="openDailyInspectionModal('${id}')">${icon('plus')} Inspeção Diária (Novo Dia)</button><button class="button button-green" onclick="openReturnModal('${id}')">${icon('return')} Registrar devolução</button>`:''}</div>`);
+  modal(`${modalHead(eq.name, `${eq.code} · ${eq.brand} ${eq.model}`)}<div class="modal-body"><div class="equipment-summary"><span class="asset-icon">${equipmentIcon(eq)}</span><div><strong>${esc(eq.name)}</strong><small>Série ${esc(eq.serial)} · Horímetro ${esc(eq.hourmeter ?? '—')} h${eq.battery ? ` · Bateria ${esc(eq.battery)}` : ''}</small></div>${statusBadge(eq.status)}</div>${eq.status === 'in-use' ? `<div class="form-grid"><div class="field"><label>Empresa</label><strong>${esc(usage.company)}</strong></div><div class="field"><label>Responsável</label><strong>${esc(usage.responsible)}</strong></div><div class="field full"><label>Atividade</label><strong>${esc(usage.activity || '—')}</strong></div><div class="field"><label>DH / Local específico</label><strong>${esc(usage.dataHall)} · ${esc(usage.location)}</strong></div><div class="field"><label>Previsão de entrega</label><strong>${fullDate(usage.expectedAt)}</strong></div><div class="field"><label>Retirada em</label><strong>${fullDate(usage.startedAt)}</strong></div><div class="field"><label>Contato</label><strong>${esc(usage.phone)}</strong></div></div>` : `<div class="notice">${icon(eq.status === 'maintenance' ? 'tool' : 'check')} ${eq.status === 'maintenance' ? 'Este equipamento está bloqueado para manutenção. Edite o cadastro para liberá-lo após a inspeção.' : 'Equipamento disponível no Pátio / Base e pronto para retirada.'}</div>`}</div><div class="modal-foot"><button class="button button-outline danger-button" style="color:var(--red);border-color:var(--red-soft);margin-right:auto;" onclick="deleteEquipment('${id}')">${icon('trash')} Excluir PTA</button><button class="button button-ghost" onclick="openEquipmentModal('${id}')">${icon('edit')} Editar</button><button class="button button-outline" onclick="openQRModal('${id}')">${icon('qr')} QR Code</button>${eq.status === 'in-use' ? `<button class="button button-outline" onclick="openDailyInspectionModal('${id}')">${icon('plus')} Inspeção Diária (Novo Dia)</button><button class="button button-green" onclick="openReturnModal('${id}')">${icon('return')} Registrar devolução</button>` : ''}</div>`);
 }
 
 function openDailyInspectionModal(id) {
   const eq = equipments.find(e => e.id === id);
   if (!eq || eq.status !== 'in-use' || !eq.usage) return toast('Equipamento não está em uso.', true);
-  
+
   const currentHall = eq.usage.dataHall || '';
   const currentLoc = eq.usage.location || '';
   const currentAct = eq.usage.activity || '';
   const currentPhone = eq.usage.phone || '';
   const currentExpected = eq.usage.expectedAt ? eq.usage.expectedAt.slice(0, 16) : '';
 
-  modal(`<form onsubmit="submitDailyInspection(event,'${id}')">${modalHead('Inspeção Diária Continuada',`Adicionar nova linha no checklist da PTA (${esc(eq.code)})`)}<div class="modal-body">${inspectionFormHTML(eq,'diaria',{company:eq.usage.company,responsible:eq.usage.responsible,inspectionAt:nowLocal()})}<div class="section-title"><span>${icon('location')}</span><div><h3>Planejamento da utilização</h3><small>Dados mantidos da retirada — atualize a atividade, local ou devolução prevista caso necessário</small></div></div><div class="form-grid"><div class="field"><label>Telefone do responsável</label><input name="phone" placeholder="(85) 99999-9999" value="${esc(currentPhone)}"></div><div class="field"><label>Atividade a executar <em>*</em></label><input name="activity" required placeholder="Ex.: Instalação de dutos no teto" value="${esc(currentAct)}"></div><div class="field"><label>Data Hall — DH <em>*</em></label><select name="dataHall" required><option value="">Selecione...</option>${Array.from({length:10},(_,i)=>`<option ${currentHall===`Data Hall ${String(i+1).padStart(2,'0')}`?'selected':''}>Data Hall ${String(i+1).padStart(2,'0')}</option>`).join('')}<option ${currentHall==='Área externa'?'selected':''}>Área externa</option><option ${currentHall==='Casa de máquinas'?'selected':''}>Casa de máquinas</option><option ${currentHall==='Almoxarifado'?'selected':''}>Almoxarifado</option></select></div><div class="field"><label>Local específico <em>*</em></label><input name="location" required placeholder="Ex.: Corredor B / Sala elétrica" value="${esc(currentLoc)}"></div><div class="field"><label>Devolução prevista <em>*</em></label><input type="datetime-local" name="expectedAt" required value="${currentExpected || nowLocal()}"></div></div><label class="terms physical-term"><input type="checkbox" name="physicalCopy" required><span>Confirmo que a via física do formulário PEMT foi atualizada na linha correspondente e arquivada na pasta do colaborador.</span></label><label class="terms"><input type="checkbox" name="terms" required><span>Declaro que realizei a inspeção diária deste equipamento e as informações registradas são verdadeiras.</span></label></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Registrar Inspeção Diária</button></div></form>`, 'modal-inspection');
+  modal(`<form onsubmit="submitDailyInspection(event,'${id}')">${modalHead('Inspeção Diária Continuada', `Adicionar nova linha no checklist da PTA (${esc(eq.code)})`)}<div class="modal-body">${inspectionFormHTML(eq, 'diaria', { company: eq.usage.company, responsible: eq.usage.responsible, inspectionAt: nowLocal() })}<div class="section-title"><span>${icon('location')}</span><div><h3>Planejamento da utilização</h3><small>Dados mantidos da retirada — atualize a atividade, local ou devolução prevista caso necessário</small></div></div><div class="form-grid"><div class="field"><label>Telefone do responsável</label><input name="phone" placeholder="(85) 99999-9999" value="${esc(currentPhone)}"></div><div class="field"><label>Atividade a executar <em>*</em></label><input name="activity" required placeholder="Ex.: Instalação de dutos no teto" value="${esc(currentAct)}"></div><div class="field"><label>Data Hall — DH <em>*</em></label><select name="dataHall" required><option value="">Selecione...</option>${Array.from({ length: 10 }, (_, i) => `<option ${currentHall === `Data Hall ${String(i + 1).padStart(2, '0')}` ? 'selected' : ''}>Data Hall ${String(i + 1).padStart(2, '0')}</option>`).join('')}<option ${currentHall === 'Área externa' ? 'selected' : ''}>Área externa</option><option ${currentHall === 'Casa de máquinas' ? 'selected' : ''}>Casa de máquinas</option><option ${currentHall === 'Almoxarifado' ? 'selected' : ''}>Almoxarifado</option></select></div><div class="field"><label>Local específico <em>*</em></label><input name="location" required placeholder="Ex.: Corredor B / Sala elétrica" value="${esc(currentLoc)}"></div><div class="field"><label>Devolução prevista <em>*</em></label><input type="datetime-local" name="expectedAt" required value="${currentExpected || nowLocal()}"></div></div><label class="terms physical-term"><input type="checkbox" name="physicalCopy" required><span>Confirmo que a via física do formulário PEMT foi atualizada na linha correspondente e arquivada na pasta do colaborador.</span></label><label class="terms"><input type="checkbox" name="terms" required><span>Declaro que realizei a inspeção diária deste equipamento e as informações registradas são verdadeiras.</span></label></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('check')} Registrar Inspeção Diária</button></div></form>`, 'modal-inspection');
 }
 
 function submitDailyInspection(event, id) {
@@ -7339,103 +8176,103 @@ function submitDailyInspection(event, id) {
 }
 
 function openCheckoutModal(id) {
-  const eq = equipments.find(e=>e.id===id); if (!eq) return;
-  const start = nowLocal(); const end = new Date(Date.now()+8*3600000); end.setMinutes(end.getMinutes()-end.getTimezoneOffset());
-  modal(`<form id="checkoutForm" onsubmit="submitCheckout(event,'${id}')">${modalHead('Inspeção e liberação de uso','Formulário FV-MAQ-ST obrigatório antes da retirada')}<div class="modal-body">${inspectionFormHTML(eq,'retirada')}<div class="section-title"><span>${icon('location')}</span><div><h3>Planejamento da utilização</h3><small>Atividade, local e previsão de devolução</small></div></div><div class="form-grid"><div class="field"><label>Telefone do responsável</label><input name="phone" placeholder="(85) 99999-9999"></div><div class="field"><label>Atividade a executar <em>*</em></label><input name="activity" required placeholder="Ex.: Instalação de dutos no teto"></div><div class="field"><label>Data Hall — DH <em>*</em></label><select name="dataHall" required><option value="">Selecione...</option>${Array.from({length:10},(_,i)=>`<option>Data Hall ${String(i+1).padStart(2,'0')}</option>`).join('')}<option>Área externa</option><option>Casa de máquinas</option><option>Almoxarifado</option></select></div><div class="field"><label>Local específico <em>*</em></label><input name="location" required placeholder="Ex.: Corredor B / Sala elétrica"></div><div class="field"><label>Início previsto <em>*</em></label><input type="datetime-local" name="startedAt" required value="${start}"></div><div class="field"><label>Devolução prevista <em>*</em></label><input type="datetime-local" name="expectedAt" required value="${end.toISOString().slice(0,16)}"></div></div><label class="terms physical-term"><input type="checkbox" name="physicalCopy" required><span>Confirmo que a via física do formulário PEMT foi preenchida e será arquivada na pasta do colaborador.</span></label><label class="terms"><input type="checkbox" name="terms" required><span>Declaro que realizei pessoalmente esta inspeção, sou autorizado a operar o equipamento e me responsabilizo pelas informações registradas.</span></label></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} Concluir e retirar</button></div></form>`, 'modal-inspection');
+  const eq = equipments.find(e => e.id === id); if (!eq) return;
+  const start = nowLocal(); const end = new Date(Date.now() + 8 * 3600000); end.setMinutes(end.getMinutes() - end.getTimezoneOffset());
+  modal(`<form id="checkoutForm" onsubmit="submitCheckout(event,'${id}')">${modalHead('Inspeção e liberação de uso', 'Formulário FV-MAQ-ST obrigatório antes da retirada')}<div class="modal-body">${inspectionFormHTML(eq, 'retirada')}<div class="section-title"><span>${icon('location')}</span><div><h3>Planejamento da utilização</h3><small>Atividade, local e previsão de devolução</small></div></div><div class="form-grid"><div class="field"><label>Telefone do responsável</label><input name="phone" placeholder="(85) 99999-9999"></div><div class="field"><label>Atividade a executar <em>*</em></label><input name="activity" required placeholder="Ex.: Instalação de dutos no teto"></div><div class="field"><label>Data Hall — DH <em>*</em></label><select name="dataHall" required><option value="">Selecione...</option>${Array.from({ length: 10 }, (_, i) => `<option>Data Hall ${String(i + 1).padStart(2, '0')}</option>`).join('')}<option>Área externa</option><option>Casa de máquinas</option><option>Almoxarifado</option></select></div><div class="field"><label>Local específico <em>*</em></label><input name="location" required placeholder="Ex.: Corredor B / Sala elétrica"></div><div class="field"><label>Início previsto <em>*</em></label><input type="datetime-local" name="startedAt" required value="${start}"></div><div class="field"><label>Devolução prevista <em>*</em></label><input type="datetime-local" name="expectedAt" required value="${end.toISOString().slice(0, 16)}"></div></div><label class="terms physical-term"><input type="checkbox" name="physicalCopy" required><span>Confirmo que a via física do formulário PEMT foi preenchida e será arquivada na pasta do colaborador.</span></label><label class="terms"><input type="checkbox" name="terms" required><span>Declaro que realizei pessoalmente esta inspeção, sou autorizado a operar o equipamento e me responsabilizo pelas informações registradas.</span></label></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">${icon('check')} Concluir e retirar</button></div></form>`, 'modal-inspection');
 }
 async function submitCheckout(event, id) {
-  event.preventDefault(); const form = event.target; const data = Object.fromEntries(new FormData(form)); const eq = equipments.find(e=>e.id===id); const inspection = inspectionFromData(data,'retirada');
+  event.preventDefault(); const form = event.target; const data = Object.fromEntries(new FormData(form)); const eq = equipments.find(e => e.id === id); const inspection = inspectionFromData(data, 'retirada');
   if (!data.operatorSign) {
     toast('Por favor, faça a sua rubrica no campo indicado antes de salvar.', true);
     openSignatureModal();
     return;
   }
   const hasFailure = inspectionHasFailure(inspection);
-  eq.hourmeter=Number(data.hourmeter);
+  eq.hourmeter = Number(data.hourmeter);
   eq.updatedAt = new Date().toISOString();
   if (new Date(data.expectedAt) <= new Date(data.startedAt)) return toast('A devolução deve ser posterior ao início.', true);
   if (hasFailure) {
-    eq.status='maintenance'; eq.usage=null; const movement={id:Date.now(),equipmentId:id,action:'issue',person:data.responsible,company:data.company,place:data.dataHall,date:data.inspectionAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection,inspections:[inspection]}; history.unshift(movement); const syncPromise=save(id, movement.id); closeModal(); render(); const result=await syncPromise; return toast(result.remote?'Item reprovado e sincronizado. Equipamento bloqueado.':'Item reprovado e salvo neste aparelho, mas a sincronização está pendente.', true);
+    eq.status = 'maintenance'; eq.usage = null; const movement = { id: Date.now(), equipmentId: id, action: 'issue', person: data.responsible, company: data.company, place: data.dataHall, date: data.inspectionAt, activity: data.activity, location: data.location, dataHall: data.dataHall, inspection, inspections: [inspection] }; history.unshift(movement); const syncPromise = save(id, movement.id); closeModal(); render(); const result = await syncPromise; return toast(result.remote ? 'Item reprovado e sincronizado. Equipamento bloqueado.' : 'Item reprovado e salvo neste aparelho, mas a sincronização está pendente.', true);
   }
-  eq.status='in-use'; eq.usage={ company:data.company, responsible:data.responsible, phone:data.phone, activity:data.activity, location:data.location, dataHall:data.dataHall, startedAt:data.startedAt, expectedAt:data.expectedAt };
-  const movement={id:Date.now(),equipmentId:id,action:'withdraw',person:data.responsible,company:data.company,place:data.dataHall,date:data.startedAt,activity:data.activity,location:data.location,dataHall:data.dataHall,inspection,inspections:[inspection]}; history.unshift(movement); const syncPromise=save(id, movement.id); closeModal(); render(); const result=await syncPromise;
-  toast(result.remote?`${eq.code} liberado e sincronizado.`:`${eq.code} foi liberado neste aparelho, mas a sincronização está pendente. O QR em outros aparelhos ainda pode mostrar o estado anterior.`,!result.remote);
+  eq.status = 'in-use'; eq.usage = { company: data.company, responsible: data.responsible, phone: data.phone, activity: data.activity, location: data.location, dataHall: data.dataHall, startedAt: data.startedAt, expectedAt: data.expectedAt };
+  const movement = { id: Date.now(), equipmentId: id, action: 'withdraw', person: data.responsible, company: data.company, place: data.dataHall, date: data.startedAt, activity: data.activity, location: data.location, dataHall: data.dataHall, inspection, inspections: [inspection] }; history.unshift(movement); const syncPromise = save(id, movement.id); closeModal(); render(); const result = await syncPromise;
+  toast(result.remote ? `${eq.code} liberado e sincronizado.` : `${eq.code} foi liberado neste aparelho, mas a sincronização está pendente. O QR em outros aparelhos ainda pode mostrar o estado anterior.`, !result.remote);
 }
 
 function openReturnModal(id) {
-  const eq=equipments.find(e=>e.id===id); if(!eq || !eq.usage) return toast('Equipamento não está em uso.', true);
+  const eq = equipments.find(e => e.id === id); if (!eq || !eq.usage) return toast('Equipamento não está em uso.', true);
   const responsible = eq.usage.responsible || eq.usage.person || '';
-  const currentHall=eq.usage.dataHall||'';
-  const startedAt=eq.usage.startedAt?.slice(0,16)||'';
-  const expectedAt=eq.usage.expectedAt?.slice(0,16)||'';
-  modal(`<form onsubmit="submitReturn(event,'${id}')">${modalHead('Inspeção de devolução / baixa','Identifique quem está devolvendo e confira todos os dados da utilização')}<div class="modal-body">${inspectionFormHTML(eq,'devolucao',{company:eq.usage.company,responsible,inspectionAt:nowLocal()})}<div class="section-title"><span>${icon('location')}</span><div><h3>Planejamento da utilização</h3><small>Confira e atualize os dados antes de concluir a devolução</small></div></div><div class="form-grid"><div class="field"><label>Telefone de quem está devolvendo</label><input name="phone" placeholder="(85) 99999-9999" value="${esc(eq.usage.phone||'')}"></div><div class="field"><label>Atividade executada <em>*</em></label><input name="activity" required placeholder="Ex.: Instalação de dutos no teto" value="${esc(eq.usage.activity||'')}"></div><div class="field"><label>Data Hall — DH <em>*</em></label><select name="dataHall" required><option value="">Selecione...</option>${Array.from({length:10},(_,i)=>`<option ${currentHall===`Data Hall ${String(i+1).padStart(2,'0')}`?'selected':''}>Data Hall ${String(i+1).padStart(2,'0')}</option>`).join('')}<option ${currentHall==='Área externa'?'selected':''}>Área externa</option><option ${currentHall==='Casa de máquinas'?'selected':''}>Casa de máquinas</option><option ${currentHall==='Almoxarifado'?'selected':''}>Almoxarifado</option></select></div><div class="field"><label>Local específico <em>*</em></label><input name="location" required placeholder="Ex.: Corredor B / Sala elétrica" value="${esc(eq.usage.location||'')}"></div><div class="field"><label>Início da utilização</label><input type="datetime-local" name="startedAt" value="${esc(startedAt)}" readonly></div><div class="field"><label>Devolução prevista</label><input type="datetime-local" name="expectedAt" value="${esc(expectedAt)}" readonly></div></div><div class="section-title"><span>${icon('return')}</span><div><h3>Dados da devolução</h3><small>Defina o local onde o equipamento será entregue</small></div></div><div class="form-grid"><div class="field"><label>Local de entrega <em>*</em></label><select name="place" required><option>Pátio de Equipamentos</option><option>Almoxarifado</option><option>Base da Manutenção</option></select></div><div class="field"><label>Devolução realizada em</label><input value="${esc(nowLocal())}" readonly></div></div><label class="terms physical-term"><input type="checkbox" name="physicalCopy" required><span>Confirmo que a via física da devolução foi preenchida e será arquivada na pasta do colaborador.</span></label><label class="terms"><input type="checkbox" name="terms" required><span>Confirmo que realizei a inspeção de devolução. Se houver item reprovado, o equipamento será bloqueado automaticamente para manutenção.</span></label></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('return')} Concluir e devolver</button></div></form>`, 'modal-inspection');
+  const currentHall = eq.usage.dataHall || '';
+  const startedAt = eq.usage.startedAt?.slice(0, 16) || '';
+  const expectedAt = eq.usage.expectedAt?.slice(0, 16) || '';
+  modal(`<form onsubmit="submitReturn(event,'${id}')">${modalHead('Inspeção de devolução / baixa', 'Identifique quem está devolvendo e confira todos os dados da utilização')}<div class="modal-body">${inspectionFormHTML(eq, 'devolucao', { company: eq.usage.company, responsible, inspectionAt: nowLocal() })}<div class="section-title"><span>${icon('location')}</span><div><h3>Planejamento da utilização</h3><small>Confira e atualize os dados antes de concluir a devolução</small></div></div><div class="form-grid"><div class="field"><label>Telefone de quem está devolvendo</label><input name="phone" placeholder="(85) 99999-9999" value="${esc(eq.usage.phone || '')}"></div><div class="field"><label>Atividade executada <em>*</em></label><input name="activity" required placeholder="Ex.: Instalação de dutos no teto" value="${esc(eq.usage.activity || '')}"></div><div class="field"><label>Data Hall — DH <em>*</em></label><select name="dataHall" required><option value="">Selecione...</option>${Array.from({ length: 10 }, (_, i) => `<option ${currentHall === `Data Hall ${String(i + 1).padStart(2, '0')}` ? 'selected' : ''}>Data Hall ${String(i + 1).padStart(2, '0')}</option>`).join('')}<option ${currentHall === 'Área externa' ? 'selected' : ''}>Área externa</option><option ${currentHall === 'Casa de máquinas' ? 'selected' : ''}>Casa de máquinas</option><option ${currentHall === 'Almoxarifado' ? 'selected' : ''}>Almoxarifado</option></select></div><div class="field"><label>Local específico <em>*</em></label><input name="location" required placeholder="Ex.: Corredor B / Sala elétrica" value="${esc(eq.usage.location || '')}"></div><div class="field"><label>Início da utilização</label><input type="datetime-local" name="startedAt" value="${esc(startedAt)}" readonly></div><div class="field"><label>Devolução prevista</label><input type="datetime-local" name="expectedAt" value="${esc(expectedAt)}" readonly></div></div><div class="section-title"><span>${icon('return')}</span><div><h3>Dados da devolução</h3><small>Defina o local onde o equipamento será entregue</small></div></div><div class="form-grid"><div class="field"><label>Local de entrega <em>*</em></label><select name="place" required><option>Pátio de Equipamentos</option><option>Almoxarifado</option><option>Base da Manutenção</option></select></div><div class="field"><label>Devolução realizada em</label><input value="${esc(nowLocal())}" readonly></div></div><label class="terms physical-term"><input type="checkbox" name="physicalCopy" required><span>Confirmo que a via física da devolução foi preenchida e será arquivada na pasta do colaborador.</span></label><label class="terms"><input type="checkbox" name="terms" required><span>Confirmo que realizei a inspeção de devolução. Se houver item reprovado, o equipamento será bloqueado automaticamente para manutenção.</span></label></div><div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green">${icon('return')} Concluir e devolver</button></div></form>`, 'modal-inspection');
 }
-async function submitReturn(event,id) {
-  event.preventDefault(); const data=Object.fromEntries(new FormData(event.target)); const eq=equipments.find(e=>e.id===id); if(!eq?.usage) return toast('Esta devolução já foi registrada.', true); const previous={...eq.usage}; const inspection=inspectionFromData(data,'devolucao');
+async function submitReturn(event, id) {
+  event.preventDefault(); const data = Object.fromEntries(new FormData(event.target)); const eq = equipments.find(e => e.id === id); if (!eq?.usage) return toast('Esta devolução já foi registrada.', true); const previous = { ...eq.usage }; const inspection = inspectionFromData(data, 'devolucao');
   if (!data.operatorSign) {
     toast('Por favor, faça a sua rubrica no campo indicado antes de salvar.', true);
     openSignatureModal();
     return;
   }
-  const hasFailure=inspectionHasFailure(inspection);
+  const hasFailure = inspectionHasFailure(inspection);
   if (data.startedAt && data.returnedAt && new Date(data.returnedAt) < new Date(data.startedAt)) return toast('A devolu\u00e7\u00e3o realizada n\u00e3o pode ser anterior ao in\u00edcio da utiliza\u00e7\u00e3o.', true);
-  eq.hourmeter=Number(data.hourmeter);
-  eq.status=hasFailure?'maintenance':'available';
-  eq.usage=null;
-  eq.updatedAt=new Date().toISOString();
-  const movement={id:Date.now(),equipmentId:id,equipmentCode:eq.code,action:hasFailure?'issue':'return',person:data.responsible,company:data.company,place:data.place,date:data.returnedAt||data.inspectionAt,notes:data.inspectionNotes,activity:data.activity||previous.activity,location:data.location||previous.location,dataHall:data.dataHall||previous.dataHall,expectedAt:data.expectedAt||previous.expectedAt,inspection,inspections:[inspection]};
+  eq.hourmeter = Number(data.hourmeter);
+  eq.status = hasFailure ? 'maintenance' : 'available';
+  eq.usage = null;
+  eq.updatedAt = new Date().toISOString();
+  const movement = { id: Date.now(), equipmentId: id, equipmentCode: eq.code, action: hasFailure ? 'issue' : 'return', person: data.responsible, company: data.company, place: data.place, date: data.returnedAt || data.inspectionAt, notes: data.inspectionNotes, activity: data.activity || previous.activity, location: data.location || previous.location, dataHall: data.dataHall || previous.dataHall, expectedAt: data.expectedAt || previous.expectedAt, inspection, inspections: [inspection] };
   history.unshift(movement);
-  const syncPromise=save(id, movement.id);
+  const syncPromise = save(id, movement.id);
   closeModal();
   render();
-  const result=await syncPromise;
+  const result = await syncPromise;
   if (!result.remote) return toast('Devolução salva neste aparelho, mas a sincronização está pendente. Mantenha a internet ativa e tente atualizar novamente.', true);
-  toast(hasFailure?'Devolução sincronizada. Item reprovado: equipamento bloqueado.':`${eq.code} devolvido por ${data.responsible} e sincronizado.`,hasFailure);
+  toast(hasFailure ? 'Devolução sincronizada. Item reprovado: equipamento bloqueado.' : `${eq.code} devolvido por ${data.responsible} e sincronizado.`, hasFailure);
 }
 
 function openInspectionRecord(historyId) {
-  const movement=history.find(item=>String(item.id)===String(historyId)); if(!movement?.inspection) return toast('Formulário não disponível.',true);
-  const eq=equipments.find(item=>item.id===movement.equipmentId); if(!eq) return toast('Equipamento não encontrado.',true);
-  modal(`${modalHead('Formulário de inspeção',`${eq.code} · ${fullDate(movement.inspection.inspectedAt)}`)}<div class="modal-body inspection-record">${printableInspection(eq,movement)}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('download')} Imprimir / salvar PDF</button></div>`,'modal-paper');
-  document.querySelector('.modal-backdrop').classList.add('print-area','inspection-print-area');
+  const movement = history.find(item => String(item.id) === String(historyId)); if (!movement?.inspection) return toast('Formulário não disponível.', true);
+  const eq = equipments.find(item => item.id === movement.equipmentId); if (!eq) return toast('Equipamento não encontrado.', true);
+  modal(`${modalHead('Formulário de inspeção', `${eq.code} · ${fullDate(movement.inspection.inspectedAt)}`)}<div class="modal-body inspection-record">${printableInspection(eq, movement)}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('download')} Imprimir / salvar PDF</button></div>`, 'modal-paper');
+  document.querySelector('.modal-backdrop').classList.add('print-area', 'inspection-print-area');
 }
 
 async function openQRModal(id) {
-  const eq=equipments.find(e=>e.id===id); if(!eq) return;
+  const eq = equipments.find(e => e.id === id); if (!eq) return;
   // O codigo patrimonial permanece estavel mesmo se uma importacao recriar o registro.
-  const url=`${location.origin}${location.pathname}#scan/${encodeURIComponent(eq.code)}`;
+  const url = `${location.origin}${location.pathname}#scan/${encodeURIComponent(eq.code)}`;
   const contractor = eq.contractor || eq.brand || 'Tecnogera';
   const afVal = eq.afNumber || '—';
-  modal(`${modalHead('QR Code do equipamento','Imprima e fixe esta etiqueta em local visível')}<div class="modal-body qr-layout"><img src="assets/heating-cooling-logo.jpg" class="qr-brand-logo" alt="Heating Cooling"><div class="qr-box" id="qrTarget"></div><h2>${esc(eq.name)}</h2><span class="qr-code-label">${esc(eq.code)}</span><p style="margin:5px 0 2px;font-weight:800;color:#206b49;font-size:13px;">Nº AF (Afonso França): ${esc(afVal)}</p><p style="margin:2px 0 2px;font-weight:700;color:#14201b;font-size:12px;">Empreiteiro: ${esc(contractor)}</p><p style="margin:2px 0;color:#67736d;font-size:11px;">${esc(eq.brand)} ${esc(eq.model)} · Série ${esc(eq.serial)}</p><p style="margin-top:6px;color:#67736d;font-size:10px;">Obra DataCenter Omnia · Escaneie para checklist / uso</p></div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir etiqueta</button></div>`, 'modal-small');
+  modal(`${modalHead('QR Code do equipamento', 'Imprima e fixe esta etiqueta em local visível')}<div class="modal-body qr-layout"><img src="assets/heating-cooling-logo.jpg" class="qr-brand-logo" alt="Heating Cooling"><div class="qr-box" id="qrTarget"></div><h2>${esc(eq.name)}</h2><span class="qr-code-label">${esc(eq.code)}</span><p style="margin:5px 0 2px;font-weight:800;color:#206b49;font-size:13px;">Nº AF (Afonso França): ${esc(afVal)}</p><p style="margin:2px 0 2px;font-weight:700;color:#14201b;font-size:12px;">Empreiteiro: ${esc(contractor)}</p><p style="margin:2px 0;color:#67736d;font-size:11px;">${esc(eq.brand)} ${esc(eq.model)} · Série ${esc(eq.serial)}</p><p style="margin-top:6px;color:#67736d;font-size:10px;">Obra DataCenter Omnia · Escaneie para checklist / uso</p></div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir etiqueta</button></div>`, 'modal-small');
   document.querySelector('.modal-backdrop').classList.add('print-area');
   const target = document.getElementById('qrTarget');
   if (target) target.innerHTML = '<div class="qr-fallback"><span>Gerando QR Code...</span></div>';
   await ensureQrCodeLibrary();
-  renderQRCode(document.getElementById('qrTarget'),url);
+  renderQRCode(document.getElementById('qrTarget'), url);
 }
-function renderQRCode(target,url) {
-  target.innerHTML='';
-  if(window.QRCode) new QRCode(target,{text:url,width:190,height:190,colorDark:'#14201b',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
-  else target.innerHTML=`<div class="qr-fallback"><span>Biblioteca de QR offline.<br>Conecte à internet e reabra.</span></div>`;
+function renderQRCode(target, url) {
+  target.innerHTML = '';
+  if (window.QRCode) new QRCode(target, { text: url, width: 190, height: 190, colorDark: '#14201b', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
+  else target.innerHTML = `<div class="qr-fallback"><span>Biblioteca de QR offline.<br>Conecte à internet e reabra.</span></div>`;
 }
 async function printAllQRCodes() {
-  if(!equipments.length) return toast('Nenhum equipamento cadastrado.',true);
-  if(!await ensureQrCodeLibrary()) return toast('Não foi possível carregar o gerador de QR Codes. Verifique a internet e tente novamente.',true);
-  const pages=[]; for(let index=0;index<equipments.length;index+=4)pages.push(equipments.slice(index,index+4));
-  const label=eq=>{
+  if (!equipments.length) return toast('Nenhum equipamento cadastrado.', true);
+  if (!await ensureQrCodeLibrary()) return toast('Não foi possível carregar o gerador de QR Codes. Verifique a internet e tente novamente.', true);
+  const pages = []; for (let index = 0; index < equipments.length; index += 4)pages.push(equipments.slice(index, index + 4));
+  const label = eq => {
     const contractor = eq.contractor || eq.brand || 'Tecnogera';
     const afVal = eq.afNumber || '—';
     return `<article class="qr-label"><img src="assets/heating-cooling-logo.jpg" class="qr-brand-logo" alt="Heating Cooling"><div class="qr-box" id="qr-${eq.id}"></div><h3>${esc(eq.name)}</h3><span class="qr-code-label">${esc(eq.code)}</span><p style="margin:4px 0 1px;font-weight:800;color:#206b49;font-size:12px;">Nº AF (Afonso França): ${esc(afVal)}</p><p style="margin:2px 0 1px;font-weight:700;color:#14201b;font-size:11px;">Empreiteiro: ${esc(contractor)}</p><p style="margin:2px 0;font-size:10px;">${esc(eq.brand)} ${esc(eq.model)} · Série ${esc(eq.serial)}</p><p style="margin-top:3px;color:#67736d;font-size:9px;">Obra DataCenter Omnia · Escaneie para checklist</p></article>`;
   };
-  modal(`${modalHead('Etiquetas de todos os equipamentos',`${equipments.length} QR Codes · ${pages.length} página(s) para impressão`)}<div class="modal-body qr-pages">${pages.map((page,index)=>`<section class="qr-sheet qr-print-page" data-page="${index+1}">${page.map(label).join('')}</section>`).join('')}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir todas (${equipments.length})</button></div>`, 'modal-large');
+  modal(`${modalHead('Etiquetas de todos os equipamentos', `${equipments.length} QR Codes · ${pages.length} página(s) para impressão`)}<div class="modal-body qr-pages">${pages.map((page, index) => `<section class="qr-sheet qr-print-page" data-page="${index + 1}">${page.map(label).join('')}</section>`).join('')}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button><button class="button button-dark" onclick="window.print()">${icon('print')} Imprimir todas (${equipments.length})</button></div>`, 'modal-large');
   document.querySelector('.modal-backdrop').classList.add('print-area');
-  equipments.forEach(eq => renderQRCode(document.getElementById(`qr-${eq.id}`),`${location.origin}${location.pathname}#scan/${encodeURIComponent(eq.code)}`,135));
+  equipments.forEach(eq => renderQRCode(document.getElementById(`qr-${eq.id}`), `${location.origin}${location.pathname}#scan/${encodeURIComponent(eq.code)}`, 135));
 }
 
 async function openScanModal() {
   await stopScanner();
   qrScanHandled = false;
-  modal(`${modalHead('Ler QR Code do Equipamento','Aponte a câmera para o QR Code impresso no equipamento')}<div class="modal-body"><div id="qrCameraContainer" style="width:100%;min-height:220px;background:#14201b;border-radius:12px;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;color:#fff;"><div id="reader" style="width:100%;"></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;"><button type="button" class="button button-outline" onclick="initQrCamera()">${icon('scan')} Ativar câmera</button><label class="button button-outline" style="cursor:pointer;justify-content:center;">${icon('qr')} Ler pela foto<input type="file" accept="image/*" capture="environment" hidden onchange="scanQrImage(event)"></label></div><div style="margin:14px 0 10px;text-align:center;color:#67736d;font-size:11px;font-weight:600;letter-spacing:0.5px;">OU DIGITE O CÓDIGO DO ATIVO</div><form class="scan-input" onsubmit="findEquipment(event)"><input id="scanCode" required autocomplete="off" placeholder="Ex.: TPTA00674, 686..."><button class="button button-green">Localizar</button></form><div class="notice">${icon('qr')} Autorize o uso da câmera quando o navegador solicitar.</div></div>`, 'modal-small');
+  modal(`${modalHead('Ler QR Code do Equipamento', 'Aponte a câmera para o QR Code impresso no equipamento')}<div class="modal-body"><div id="qrCameraContainer" style="width:100%;min-height:220px;background:#14201b;border-radius:12px;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;color:#fff;"><div id="reader" style="width:100%;"></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;"><button type="button" class="button button-outline" onclick="initQrCamera()">${icon('scan')} Ativar câmera</button><label class="button button-outline" style="cursor:pointer;justify-content:center;">${icon('qr')} Ler pela foto<input type="file" accept="image/*" capture="environment" hidden onchange="scanQrImage(event)"></label></div><div style="margin:14px 0 10px;text-align:center;color:#67736d;font-size:11px;font-weight:600;letter-spacing:0.5px;">OU DIGITE O CÓDIGO DO ATIVO</div><form class="scan-input" onsubmit="findEquipment(event)"><input id="scanCode" required autocomplete="off" placeholder="Ex.: TPTA00674, 686..."><button class="button button-green">Localizar</button></form><div class="notice">${icon('qr')} Autorize o uso da câmera quando o navegador solicitar.</div></div>`, 'modal-small');
   setTimeout(initQrCamera, 100);
 }
 
@@ -7499,7 +8336,7 @@ async function initQrCamera() {
         closeModal();
         openScannedEquipment(decodedText);
       },
-      () => {}
+      () => { }
     );
   } catch (error) {
     console.warn('Erro ao inicializar leitor QR:', error);
@@ -7523,13 +8360,13 @@ async function scanQrImage(event) {
   try {
     const decodedText = await scanner.scanFile(file, true);
     activeQrScanner = null;
-    try { scanner.clear(); } catch(e) {}
+    try { scanner.clear(); } catch (e) { }
     closeModal();
     openScannedEquipment(decodedText);
   } catch (error) {
     console.warn('QR não encontrado na imagem:', error);
     activeQrScanner = null;
-    try { scanner.clear(); } catch(e) {}
+    try { scanner.clear(); } catch (e) { }
     qrCameraMessage('QR Code não encontrado na foto', 'Tire outra foto com boa iluminação, foco e o código inteiro dentro da imagem.');
   } finally {
     input.value = '';
@@ -7548,7 +8385,7 @@ function findEquipment(event) {
 let latestScanRequest = 0;
 function normalizeScannedEquipmentIdentifier(value) {
   let target = String(value || '').trim();
-  try { target = decodeURIComponent(target); } catch (error) {}
+  try { target = decodeURIComponent(target); } catch (error) { }
   const scanMarker = target.toLowerCase().lastIndexOf('#scan/');
   if (scanMarker >= 0) target = target.slice(scanMarker + 6);
   else if (target.includes('/')) target = target.split('/').filter(Boolean).pop() || target;
@@ -7568,7 +8405,7 @@ async function openScannedEquipment(text) {
   const target = normalizeScannedEquipmentIdentifier(text);
   if (!target) return toast('O QR Code lido não possui um código de equipamento válido.', true);
 
-  modal(`${modalHead('Consultando equipamento','Validando o QR Code na base compartilhada')}<div class="modal-body"><div class="notice">${icon('clock')} Aguarde um instante. Estamos carregando o status mais recente do equipamento.</div></div>`, 'modal-small');
+  modal(`${modalHead('Consultando equipamento', 'Validando o QR Code na base compartilhada')}<div class="modal-body"><div class="notice">${icon('clock')} Aguarde um instante. Estamos carregando o status mais recente do equipamento.</div></div>`, 'modal-small');
 
   // The actions depend on the latest shared status, not stale phone data.
   const [syncResult] = await Promise.all([
@@ -7580,36 +8417,36 @@ async function openScannedEquipment(text) {
   const eq = findEquipmentByScannedIdentifier(target);
 
   if (!eq) {
-    modal(`${modalHead('Equipamento não encontrado','O QR Code foi lido, mas não corresponde à base atual')}<div class="modal-body"><div class="notice">${icon('alert')} Código lido: <strong>${esc(String(text))}</strong></div><p>Confira se esta etiqueta pertence à obra atual ou tente localizar pelo patrimônio, Nº AF ou número de série.</p><form class="scan-input" onsubmit="findEquipment(event)"><input id="scanCode" required autocomplete="off" placeholder="Ex.: TPTA00674, 686..."><button class="button button-green">Localizar</button></form></div>`, 'modal-small');
+    modal(`${modalHead('Equipamento não encontrado', 'O QR Code foi lido, mas não corresponde à base atual')}<div class="modal-body"><div class="notice">${icon('alert')} Código lido: <strong>${esc(String(text))}</strong></div><p>Confira se esta etiqueta pertence à obra atual ou tente localizar pelo patrimônio, Nº AF ou número de série.</p><form class="scan-input" onsubmit="findEquipment(event)"><input id="scanCode" required autocomplete="off" placeholder="Ex.: TPTA00674, 686..."><button class="button button-green">Localizar</button></form></div>`, 'modal-small');
     return;
   }
   openPublicEquipmentModal(eq.id);
   if (!syncResult?.remote) toast('Ficha carregada da c\u00f3pia deste aparelho. Verifique a internet antes de registrar a opera\u00e7\u00e3o.', true);
 }
 function openPublicEquipmentModal(id) {
-  const eq=equipments.find(item=>item.id===id); if(!eq)return;
-  const latest=history.find(item=>item.equipmentId===id&&item.inspection);
-  const usage=eq.usage;
-  const operationalStatus=usage?'in-use':eq.status;
+  const eq = equipments.find(item => item.id === id); if (!eq) return;
+  const latest = history.find(item => item.equipmentId === id && item.inspection);
+  const usage = eq.usage;
+  const operationalStatus = usage ? 'in-use' : eq.status;
   const contractor = eq.contractor || eq.brand || 'Tecnogera';
   const afVal = eq.afNumber || '—';
-  const statusNotice=operationalStatus==='maintenance'
-    ? { icon:'tool', title:'Equipamento bloqueado', detail:'Aguardando manutenção e nova liberação.' }
-    : operationalStatus==='in-use'
-      ? { icon:'clock', title:'Equipamento em uso', detail:'Os dados da utilização ainda não estão disponíveis neste aparelho.' }
-      : { icon:'check', title:'Equipamento disponível', detail:'Local atual: Pátio / Base' };
-  const usageSection=usage
-    ? `<section class="public-use-card"><h3>Utilização atual</h3><div class="public-use-grid"><span><small>Responsável</small><strong>${esc(usage.responsible)}</strong><em>${esc(usage.company)}</em></span><span><small>Atividade</small><strong>${esc(usage.activity||'—')}</strong></span><span><small>DH e local</small><strong>${esc(usage.dataHall)} · ${esc(usage.location)}</strong></span><span><small>Previsão de devolução</small><strong>${fullDate(usage.expectedAt)}</strong></span></div></section>`
+  const statusNotice = operationalStatus === 'maintenance'
+    ? { icon: 'tool', title: 'Equipamento bloqueado', detail: 'Aguardando manutenção e nova liberação.' }
+    : operationalStatus === 'in-use'
+      ? { icon: 'clock', title: 'Equipamento em uso', detail: 'Os dados da utilização ainda não estão disponíveis neste aparelho.' }
+      : { icon: 'check', title: 'Equipamento disponível', detail: 'Local atual: Pátio / Base' };
+  const usageSection = usage
+    ? `<section class="public-use-card"><h3>Utilização atual</h3><div class="public-use-grid"><span><small>Responsável</small><strong>${esc(usage.responsible)}</strong><em>${esc(usage.company)}</em></span><span><small>Atividade</small><strong>${esc(usage.activity || '—')}</strong></span><span><small>DH e local</small><strong>${esc(usage.dataHall)} · ${esc(usage.location)}</strong></span><span><small>Previsão de devolução</small><strong>${fullDate(usage.expectedAt)}</strong></span></div></section>`
     : `<div class="public-availability">${icon(statusNotice.icon)}<div><strong>${statusNotice.title}</strong><small>${statusNotice.detail}</small></div></div>`;
-  modal(`${modalHead('Informações do equipamento','Acesso público pelo QR Code')}<div class="modal-body"><section class="public-equipment-head"><span>${equipmentIcon(eq)}</span><div><small>${esc(eq.code)} · <strong style="color:#206b49;">Nº AF: ${esc(afVal)}</strong></small><h2>${esc(eq.name)}</h2><p>${esc(eq.model)} · Série ${esc(eq.serial)} · Empreiteiro: <strong>${esc(contractor)}</strong></p></div>${statusBadge(operationalStatus)}</section><div class="public-specs"><span><small>Nº AF (Afonso França)</small><strong style="color:#206b49;">${esc(afVal)}</strong></span><span><small>Empreiteiro</small><strong>${esc(contractor)}</strong></span><span><small>Horímetro</small><strong>${esc(eq.hourmeter??'—')} h</strong></span><span><small>Bateria</small><strong>${esc(eq.battery||'—')}</strong></span></div>${usageSection}${latest?`<button class="public-checklist-link" onclick="openInspectionRecord('${latest.id}')">${icon('file')}<span><strong>Último formulário de verificação</strong><small>${fullDate(latest.inspection.inspectedAt)} · ${latest.inspection.mode==='devolucao'?'Devolução':'Retirada'}</small></span>${icon('chevron')}</button>`:''}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button>${operationalStatus==='available'?`<button class="button button-green" onclick="openCheckoutModal('${id}')">${icon('check')} Retirar com checklist</button>`:''}${operationalStatus==='in-use'&&usage?`<button class="button button-outline" onclick="openDailyInspectionModal('${id}')">${icon('plus')} Inspeção Diária (Novo Dia)</button><button class="button button-green" onclick="openReturnModal('${id}')">${icon('return')} Registrar devolução</button>`:''}</div>`,'modal-large');
+  modal(`${modalHead('Informações do equipamento', 'Acesso público pelo QR Code')}<div class="modal-body"><section class="public-equipment-head"><span>${equipmentIcon(eq)}</span><div><small>${esc(eq.code)} · <strong style="color:#206b49;">Nº AF: ${esc(afVal)}</strong></small><h2>${esc(eq.name)}</h2><p>${esc(eq.model)} · Série ${esc(eq.serial)} · Empreiteiro: <strong>${esc(contractor)}</strong></p></div>${statusBadge(operationalStatus)}</section><div class="public-specs"><span><small>Nº AF (Afonso França)</small><strong style="color:#206b49;">${esc(afVal)}</strong></span><span><small>Empreiteiro</small><strong>${esc(contractor)}</strong></span><span><small>Horímetro</small><strong>${esc(eq.hourmeter ?? '—')} h</strong></span><span><small>Bateria</small><strong>${esc(eq.battery || '—')}</strong></span></div>${usageSection}${latest ? `<button class="public-checklist-link" onclick="openInspectionRecord('${latest.id}')">${icon('file')}<span><strong>Último formulário de verificação</strong><small>${fullDate(latest.inspection.inspectedAt)} · ${latest.inspection.mode === 'devolucao' ? 'Devolução' : 'Retirada'}</small></span>${icon('chevron')}</button>` : ''}</div><div class="modal-foot"><button class="button button-outline" onclick="closeModal()">Fechar</button>${operationalStatus === 'available' ? `<button class="button button-green" onclick="openCheckoutModal('${id}')">${icon('check')} Retirar com checklist</button>` : ''}${operationalStatus === 'in-use' && usage ? `<button class="button button-outline" onclick="openDailyInspectionModal('${id}')">${icon('plus')} Inspeção Diária (Novo Dia)</button><button class="button button-green" onclick="openReturnModal('${id}')">${icon('return')} Registrar devolução</button>` : ''}</div>`, 'modal-large');
 }
 
 function exportCSV() {
-  const selectedHistory=getReportFilteredHistory(); if(!selectedHistory.length)return toast('Nenhuma movimentação encontrada com os filtros selecionados.',true); const rows=[['Data','Equipamento','Modelo','Ação','Responsável','Empresa','Atividade','Data Hall','Local','Horímetro','Resultado'],...selectedHistory.map(h=>{const e=equipments.find(x=>x.id===h.equipmentId);return [h.date,e?.code||'',e?.model||'',reportAction(h.action),h.person||'',h.company||'',h.activity||'',h.dataHall||h.place||'',h.location||'',h.inspection?.hourmeter||'',h.inspection?(inspectionHasFailure(h.inspection)?'Reprovado':'Aprovado'):'' ];})];
-  const csv='\uFEFF'+rows.map(r=>r.map(v=>`"${String(v||'').replace(/"/g,'""')}"`).join(';')).join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`obraflow-movimentacoes-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(a.href); toast('Relatório exportado com sucesso.');
+  const selectedHistory = getReportFilteredHistory(); if (!selectedHistory.length) return toast('Nenhuma movimentação encontrada com os filtros selecionados.', true); const rows = [['Data', 'Equipamento', 'Modelo', 'Ação', 'Responsável', 'Empresa', 'Atividade', 'Data Hall', 'Local', 'Horímetro', 'Resultado'], ...selectedHistory.map(h => { const e = equipments.find(x => x.id === h.equipmentId); return [h.date, e?.code || '', e?.model || '', reportAction(h.action), h.person || '', h.company || '', h.activity || '', h.dataHall || h.place || '', h.location || '', h.inspection?.hourmeter || '', h.inspection ? (inspectionHasFailure(h.inspection) ? 'Reprovado' : 'Aprovado') : '']; })];
+  const csv = '\uFEFF' + rows.map(r => r.map(v => `"${String(v || '').replace(/"/g, '""')}"`).join(';')).join('\n'); const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `obraflow-movimentacoes-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href); toast('Relatório exportado com sucesso.');
 }
-function toast(message,error=false) { const root=document.getElementById('toastRoot'); const el=document.createElement('div'); el.className=`toast ${error?'error':''}`; el.innerHTML=`<span>${icon(error?'alert':'check')}</span><p>${esc(message)}</p>`; root.appendChild(el); setTimeout(()=>el.remove(),3800); }
-function closeMobileMenu(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('mobileBackdrop').classList.remove('open'); }
+function toast(message, error = false) { const root = document.getElementById('toastRoot'); const el = document.createElement('div'); el.className = `toast ${error ? 'error' : ''}`; el.innerHTML = `<span>${icon(error ? 'alert' : 'check')}</span><p>${esc(message)}</p>`; root.appendChild(el); setTimeout(() => el.remove(), 3800); }
+function closeMobileMenu() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('mobileBackdrop').classList.remove('open'); }
 
 let deferredInstallPrompt = null;
 const installAppButton = document.getElementById('installAppButton');
@@ -7629,7 +8466,7 @@ async function installDataCenterApp() {
   const instructions = isIos
     ? 'No Safari, toque no botao Compartilhar e escolha Adicionar a Tela de Inicio.'
     : 'Abra o menu do navegador e escolha Instalar aplicativo ou Adicionar a tela inicial.';
-  modal(`${modalHead('Instalar DataCenter Omnia','Acesso rapido no celular ou computador')}<div class="modal-body"><div class="public-availability">${icon('download')}<div><strong>${instructions}</strong><small>O atalho usara o icone da Heating Cooling com a plataforma elevatoria.</small></div></div></div><div class="modal-foot"><button class="button button-green" onclick="closeModal()">Entendi</button></div>`);
+  modal(`${modalHead('Instalar DataCenter Omnia', 'Acesso rapido no celular ou computador')}<div class="modal-body"><div class="public-availability">${icon('download')}<div><strong>${instructions}</strong><small>O atalho usara o icone da Heating Cooling com a plataforma elevatoria.</small></div></div></div><div class="modal-foot"><button class="button button-green" onclick="closeModal()">Entendi</button></div>`);
 }
 
 window.addEventListener('beforeinstallprompt', event => {
@@ -7730,22 +8567,31 @@ window.addEventListener('resize', () => {
     updateAppShellAccess();
   });
 });
-document.getElementById('quickScanButton').addEventListener('click',openScanModal);
+document.getElementById('quickScanButton').addEventListener('click', openScanModal);
 document.getElementById('offlineSyncStatus')?.addEventListener('click', window.retryOfflineSync);
-document.getElementById('globalSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){const q=e.target.value.toLowerCase();const eq=equipments.find(x=>`${x.code} ${x.name} ${x.usage?.responsible||''}`.toLowerCase().includes(q));eq?openEquipmentDetails(eq.id):toast('Nenhum equipamento encontrado.',true);}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();document.getElementById('globalSearch').focus();}});
-window.addEventListener('hashchange',render);
+document.getElementById('globalSearch').addEventListener('keydown', e => { if (e.key === 'Enter') { const q = e.target.value.toLowerCase(); const eq = equipments.find(x => `${x.code} ${x.name} ${x.usage?.responsible || ''}`.toLowerCase().includes(q)); eq ? openEquipmentDetails(eq.id) : toast('Nenhum equipamento encontrado.', true); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); document.getElementById('globalSearch').focus(); } });
+window.addEventListener('hashchange', render);
 window.ObraflowOfflineSync?.subscribe(updateOfflineSyncStatus);
 window.spoolRecoverLegacyOfflineMutation?.().catch(error => {
   console.warn('Nao foi possivel converter a fila antiga de spools:', error);
 });
-window.addEventListener('focus',()=>{
-  if (navigator.onLine !== false) synchronizeAfterReconnect();
+window.addEventListener('focus', () => {
+  if (navigator.onLine !== false) {
+    if (currentUser) verifyCurrentUserSession();
+    synchronizeAfterReconnect();
+  }
 });
-window.addEventListener('online',()=>synchronizeAfterReconnect({ notify: true }));
-window.addEventListener('offline',()=>window.ObraflowOfflineSync?.refresh());
-document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible' && navigator.onLine !== false) synchronizeAfterReconnect();
+window.addEventListener('online', () => {
+  if (currentUser) verifyCurrentUserSession();
+  synchronizeAfterReconnect({ notify: true });
+});
+window.addEventListener('offline', () => window.ObraflowOfflineSync?.refresh());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && navigator.onLine !== false) {
+    if (currentUser) verifyCurrentUserSession();
+    synchronizeAfterReconnect();
+  }
 });
 window.addEventListener('beforeunload', () => {
   if (typeof workforceRemoteSaveTimer !== 'undefined' && workforceRemoteSaveTimer) persistWorkforceControlRemote();

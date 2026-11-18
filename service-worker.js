@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'datacenter-omnia-';
-const APP_VERSION = '20261116_checkin_fixes_v13';
+const APP_VERSION = '20261118_pdf_utf8_v26';
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${APP_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-${APP_VERSION}`;
 
@@ -63,7 +63,7 @@ async function networkFirst(request, fallbackUrl = '') {
     // Cache Storage abaixo continua garantindo o funcionamento offline.
     const response = await fetch(request, { cache: 'no-store' });
     if (response && (response.ok || response.type === 'opaque')) {
-      cache.put(request, response.clone()).catch(() => {});
+      cache.put(request, response.clone()).catch(() => { });
     }
     return response;
   } catch (error) {
@@ -83,7 +83,7 @@ async function cacheFirst(request) {
   const response = await fetch(request);
   if (response && (response.ok || response.type === 'opaque')) {
     const cache = await caches.open(RUNTIME_CACHE);
-    cache.put(request, response.clone()).catch(() => {});
+    cache.put(request, response.clone()).catch(() => { });
   }
   return response;
 }

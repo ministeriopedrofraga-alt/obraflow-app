@@ -1,6 +1,7 @@
 const CHECKIN_STORE_KEY = 'obraflow_daily_work_reports_v1';
 const CHECKIN_TABLE = 'daily_work_reports';
-const CHECKIN_STATUS = ['Concluído', 'Parcial', 'Não iniciado', 'Extra (não programada)', 'Suspenso', 'Iniciado'];
+const CHECKIN_STATUS = ['Concluído', 'Parcial', 'Não iniciado', 'Suspenso', 'Iniciado'];
+const CHECKIN_EXTRA_LEGACY_STATUS = 'Extra (não programada)';
 const CHECKIN_DISCIPLINES = ['Hidráulica', 'Isolamento', 'Duto', 'Logística'];
 const CHECKIN_SHIFTS = ['Diurno', 'Noturno'];
 const CHECKIN_WEATHER = ['Ensolarado', 'Nublado', 'Chuva leve', 'Chuva forte'];
@@ -24,12 +25,14 @@ let checkinLoadedRemote = false;
 let checkinActiveTab = 'diario';
 let checkinSelectedDate = checkinToday();
 let checkinDisciplineFilter = '';
+let checkinShiftFilter = '';
 let checkinEngineerFilter = '';
 let checkinDhFilter = '';
 let checkinCompanyFilter = '';
 let checkinPlanStart = checkinToday();
 let checkinPlanEnd = checkinDateOffset(checkinToday(), 6);
 let checkinPlanDisciplineFilter = '';
+let checkinPlanShiftFilter = '';
 let checkinPlanEngineerFilter = '';
 let checkinPlanCompanyFilter = '';
 let checkinCurveStart = checkinDateOffset(checkinToday(), -29);
@@ -37,6 +40,7 @@ let checkinCurveEnd = checkinToday();
 let checkinCurveEngineer = '';
 let checkinCurveDh = '';
 let checkinCurveDiscipline = '';
+let checkinCurveShift = '';
 let checkinCurveCompany = '';
 let checkinCurveWeekday = '';
 let checkinCurveMetric = 'tasks';
@@ -87,9 +91,9 @@ function checkinIsTestReport(report) {
 function checkinLoadLocal() {
   try {
     const saved = JSON.parse(localStorage.getItem(CHECKIN_STORE_KEY) || '[]');
-    return Array.isArray(saved)
-      ? saved.filter(r => !checkinIsTestReport(r)).map(checkinMigrateReportTaskTimes)
-      : [];
+    if (!Array.isArray(saved)) return [];
+    const migrated = saved.filter(r => !checkinIsTestReport(r)).map(checkinMigrateReportTaskTimes);
+    return checkinReconcileCagReports(migrated).reports;
   } catch (error) {
     console.warn('Cópia local do check-in inválida:', error);
     return [];
@@ -166,29 +170,259 @@ function checkinIsGarbageActivity(activity) {
   return false;
 }
 
+function checkinIsExtraActivity(activity) {
+  if (!activity) return false;
+  return Boolean(
+    activity.isExtra
+    || activity.status === CHECKIN_EXTRA_LEGACY_STATUS
+    || String(activity.id || '').includes('-extra-')
+  );
+}
+
+function checkinResolveMigratedStatus(activity, checkinAt, checkoutAt) {
+  const rawStatus = String(activity?.status || '').trim();
+  const planned = checkinParseNumber(activity?.plannedMeters);
+  const executed = checkinParseNumber(activity?.executedMeters);
+  if (rawStatus && rawStatus !== CHECKIN_EXTRA_LEGACY_STATUS && CHECKIN_STATUS.includes(rawStatus)) {
+    // Se já tem check-in ativo mas o status ficou travado em "Não iniciado", corrige para "Iniciado"
+    if (rawStatus === 'Não iniciado' && checkinAt && !checkoutAt) return 'Iniciado';
+    return rawStatus;
+  }
+  if (checkoutAt) {
+    if (planned > 0 && executed > 0 && executed < planned) return 'Parcial';
+    return 'Concluído';
+  }
+  if (checkinAt) return 'Iniciado';
+  if (planned > 0 && executed >= planned) return 'Concluído';
+  if (executed > 0) return 'Parcial';
+  return 'Não iniciado';
+}
+
 function checkinMigrateReportTaskTimes(report) {
   const rawActivities = Array.isArray(report.activities) ? report.activities : [];
   const filteredActivities = rawActivities.filter(activity => !checkinIsGarbageActivity(activity));
   const hasTaskLevelTimes = filteredActivities.some(activity => activity.checkinAt || activity.checkoutAt);
+  let cleanedContractors = false;
+  const migratedActivities = filteredActivities.map(activity => {
+    const isGeneric = !activity.discipline || checkinNormalizeHeader(activity.discipline).includes('geral') || checkinNormalizeHeader(activity.discipline).includes('varias');
+    const descNorm = checkinNormalizeHeader([activity.pstItem, activity.scheduleId, activity.location, activity.activity].filter(Boolean).join(' '));
+    // Corrige tarefas de duto que mencionam "isolamento de duto" mas tinham sido classificadas como Isolamento
+    const isDuctWithInsulation = activity.discipline === 'Isolamento'
+      && /\bdutos?\b|\bduct|\bdamper|\bventil/.test(descNorm)
+      && (checkinNormalizeHeader(report.discipline).includes('duto') || /\bdutos?\b/.test(descNorm));
+    const resolvedDiscipline = (isGeneric || isDuctWithInsulation) ? checkinGetActivityDiscipline(report, { ...activity, discipline: isDuctWithInsulation ? '' : activity.discipline }) : activity.discipline;
+    const rawContractor = String(activity.contractor || '').trim();
+    const parts = checkinUniqueContractors([rawContractor]);
+    const cleanedTaskContractor = parts.length > 1 ? (!activity.checkinAt && !activity.checkoutAt ? '' : parts[0]) : (parts[0] || '');
+    if (cleanedTaskContractor !== rawContractor) cleanedContractors = true;
+    const resolvedShift = checkinGetActivityShift(report, activity);
+    const resolvedCheckinAt = activity.checkinAt || (!hasTaskLevelTimes ? report.checkinAt : '') || '';
+    const resolvedCheckoutAt = activity.checkoutAt || (!hasTaskLevelTimes ? report.checkoutAt : '') || '';
+    const isExtra = checkinIsExtraActivity(activity);
+    const resolvedStatus = checkinResolveMigratedStatus(activity, resolvedCheckinAt, resolvedCheckoutAt);
+    if (resolvedStatus !== activity.status || Boolean(activity.isExtra) !== isExtra) {
+      cleanedContractors = true;
+    }
+    return {
+      ...activity,
+      isExtra,
+      status: resolvedStatus,
+      contractor: cleanedTaskContractor,
+      discipline: resolvedDiscipline || activity.discipline || '',
+      shift: resolvedShift,
+      checkinAt: resolvedCheckinAt,
+      checkoutAt: resolvedCheckoutAt
+    };
+  });
+  const rawReportContractor = String(report.contractor || '').trim();
+  const cleanReportContractor = checkinUniqueContractors([
+    ...migratedActivities.map(a => a.contractor),
+    rawReportContractor
+  ]).join(', ');
+  if (cleanReportContractor !== rawReportContractor) cleanedContractors = true;
   return {
     ...report,
-    _cleanedGarbage: filteredActivities.length !== rawActivities.length,
-    activities: filteredActivities.map(activity => {
-      const isGeneric = !activity.discipline || checkinNormalizeHeader(activity.discipline).includes('geral') || checkinNormalizeHeader(activity.discipline).includes('varias');
-      const descNorm = checkinNormalizeHeader([activity.pstItem, activity.scheduleId, activity.location, activity.activity].filter(Boolean).join(' '));
-      // Corrige tarefas de duto que mencionam "isolamento de duto" mas tinham sido classificadas como Isolamento
-      const isDuctWithInsulation = activity.discipline === 'Isolamento'
-        && /\bdutos?\b|\bduct|\bdamper|\bventil/.test(descNorm)
-        && (checkinNormalizeHeader(report.discipline).includes('duto') || /\bdutos?\b/.test(descNorm));
-      const resolvedDiscipline = (isGeneric || isDuctWithInsulation) ? checkinGetActivityDiscipline(report, { ...activity, discipline: isDuctWithInsulation ? '' : activity.discipline }) : activity.discipline;
-      return {
-        ...activity,
-        discipline: resolvedDiscipline || activity.discipline || '',
-        checkinAt: activity.checkinAt || (!hasTaskLevelTimes ? report.checkinAt : '') || '',
-        checkoutAt: activity.checkoutAt || (!hasTaskLevelTimes ? report.checkoutAt : '') || ''
-      };
-    })
+    contractor: cleanReportContractor,
+    _cleanedGarbage: filteredActivities.length !== rawActivities.length || cleanedContractors,
+    activities: migratedActivities
   };
+}
+
+function checkinActivityTargetCagDh(activity) {
+  if (!activity) return '';
+  const idStr = String(activity.id || '');
+  const idMatch = idStr.match(/-task-cag-0?(\d{1,2})-/i);
+  if (idMatch) {
+    const num = Number(idMatch[1]);
+    if (num >= 1 && num <= 10) return `DH ${String(num).padStart(2, '0')}`;
+  }
+  const locStr = String(activity.location || '').trim();
+  const locMatch = locStr.match(/^CAG\s*0?(\d{1,2})\b/i);
+  if (locMatch) {
+    const num = Number(locMatch[1]);
+    if (num >= 1 && num <= 10) return `DH ${String(num).padStart(2, '0')}`;
+  }
+  return '';
+}
+
+function checkinIsGenericEngineerName(value) {
+  const eng = String(value || '').trim();
+  return !eng || /^respons[aá]vel\s+a\s+definir$/i.test(eng) || /^selecione/i.test(eng) || eng === '—' || eng === '-';
+}
+
+function checkinMergeActivitiesIntoReport(sourceReport, targetReport, movedActivities) {
+  movedActivities.forEach(act => {
+    const oldPrefix = `${sourceReport.id}-`;
+    const newActId = String(act.id || '').startsWith(oldPrefix)
+      ? `${targetReport.id}-${String(act.id).slice(oldPrefix.length)}`
+      : `${targetReport.id}-task-${checkinSlug(act.scheduleId || act.pstItem || `${act.location}-${act.activity}`)}`;
+    const updatedAct = { ...act, id: newActId };
+    const dupIdx = targetReport.activities.findIndex(existing =>
+      existing.id === newActId
+      || (existing.pstItem === updatedAct.pstItem && existing.scheduleId === updatedAct.scheduleId && existing.location === updatedAct.location && existing.activity === updatedAct.activity)
+    );
+    if (dupIdx >= 0) {
+      const saved = targetReport.activities[dupIdx];
+      targetReport.activities[dupIdx] = {
+        ...updatedAct,
+        id: saved.id || updatedAct.id,
+        shift: saved.shift || updatedAct.shift || 'Diurno',
+        checkinAt: saved.checkinAt || updatedAct.checkinAt || '',
+        checkoutAt: saved.checkoutAt || updatedAct.checkoutAt || '',
+        contractor: saved.contractor || updatedAct.contractor || '',
+        actualCrew: saved.actualCrew ?? updatedAct.actualCrew,
+        ptaCount: saved.ptaCount ?? updatedAct.ptaCount,
+        forkliftCount: saved.forkliftCount ?? updatedAct.forkliftCount,
+        executedMeters: saved.executedMeters || updatedAct.executedMeters || 0,
+        status: (saved.status && saved.status !== 'Não iniciado') ? saved.status : updatedAct.status,
+        problemCode: saved.problemCode || updatedAct.problemCode || '',
+        problemOther: saved.problemOther || updatedAct.problemOther || '',
+        notes: saved.notes || updatedAct.notes || ''
+      };
+    } else {
+      targetReport.activities.push(updatedAct);
+    }
+  });
+  targetReport.actualCrew = checkinActualCrewTotal(targetReport);
+  targetReport.actualPtaCount = checkinActualPtaTotal(targetReport);
+  targetReport.forkliftCount = checkinActualForkliftTotal(targetReport);
+  targetReport.contractor = checkinUniqueContractors([
+    ...targetReport.activities.map(a => a.contractor),
+    targetReport.contractor
+  ]).join(', ');
+  const checkedIn = targetReport.activities.filter(item => item.checkinAt);
+  const checkedOut = targetReport.activities.filter(item => item.checkoutAt);
+  targetReport.checkinAt = checkedIn.map(item => item.checkinAt).sort()[0] || targetReport.checkinAt || '';
+  targetReport.checkoutAt = targetReport.activities.length && checkedOut.length === targetReport.activities.length
+    ? checkedOut.map(item => item.checkoutAt).sort().at(-1) : '';
+  targetReport.status = targetReport.checkoutAt ? 'fechado' : targetReport.checkinAt ? 'iniciado' : 'planejado';
+  targetReport._cleanedGarbage = true;
+}
+
+function checkinReconcileCagReports(reportsList) {
+  const list = Array.isArray(reportsList) ? reportsList.map(r => ({ ...r, activities: Array.isArray(r.activities) ? [...r.activities] : [] })) : [];
+  const byId = new Map(list.map(r => [r.id, r]));
+  const knownEngineerByDh = new Map();
+  const knownEngineerByDateDh = new Map();
+  list.forEach(r => {
+    const eng = String(r.engineer || '').trim();
+    if (r.dh && !checkinIsGenericEngineerName(eng)) {
+      if (!knownEngineerByDh.has(r.dh)) knownEngineerByDh.set(r.dh, eng);
+      if (r.workDate && !knownEngineerByDateDh.has(`${r.workDate}|${r.dh}`)) {
+        knownEngineerByDateDh.set(`${r.workDate}|${r.dh}`, eng);
+      }
+    }
+  });
+
+  const removedReportIds = [];
+  list.forEach(report => {
+    if (!byId.has(report.id)) return;
+    const kept = [];
+    const movedByDh = new Map();
+    (report.activities || []).forEach(activity => {
+      const targetDh = checkinActivityTargetCagDh(activity);
+      if (targetDh && targetDh !== report.dh) {
+        const group = movedByDh.get(targetDh) || [];
+        group.push(activity);
+        movedByDh.set(targetDh, group);
+      } else {
+        kept.push(activity);
+      }
+    });
+    if (movedByDh.size) {
+      report.activities = kept;
+      report.actualCrew = checkinActualCrewTotal(report);
+      report.actualPtaCount = checkinActualPtaTotal(report);
+      report.forkliftCount = checkinActualForkliftTotal(report);
+      report.contractor = checkinUniqueContractors(kept.map(a => a.contractor)).join(', ');
+      report._cleanedGarbage = true;
+
+      movedByDh.forEach((movedActivities, targetDh) => {
+        let targetReport = [...byId.values()].find(r => r.id !== report.id && r.workDate === report.workDate && r.dh === targetDh && !checkinIsGenericEngineerName(r.engineer))
+          || [...byId.values()].find(r => r.id !== report.id && r.workDate === report.workDate && r.dh === targetDh);
+        if (!targetReport) {
+          const fallbackEng = knownEngineerByDateDh.get(`${report.workDate}|${targetDh}`) || knownEngineerByDh.get(targetDh) || 'Responsável a definir';
+          const targetId = checkinReportId(report.workDate, targetDh, fallbackEng);
+          targetReport = byId.get(targetId) || checkinCreateReport({
+            workDate: report.workDate,
+            dh: targetDh,
+            engineer: fallbackEng,
+            discipline: movedActivities[0]?.discipline || report.discipline || '',
+            hcEngineer: fallbackEng,
+            shift: report.shift || ''
+          });
+          byId.set(targetReport.id, targetReport);
+        }
+        checkinMergeActivitiesIntoReport(report, targetReport, movedActivities);
+      });
+
+      if (!report.activities.length) {
+        byId.delete(report.id);
+        if (report.id) removedReportIds.push(report.id);
+        return;
+      }
+    }
+
+    // Se o relatório ficou com "Responsável a definir" (ex.: vindo de CAG 3 ou CAG 4) e existe engenheiro conhecido para o DH, unifica no diário principal do DH
+    if (checkinIsGenericEngineerName(report.engineer) && report.dh) {
+      const siblingReport = [...byId.values()].find(r =>
+        r.id !== report.id && r.workDate === report.workDate && r.dh === report.dh && !checkinIsGenericEngineerName(r.engineer)
+      );
+      if (siblingReport) {
+        checkinMergeActivitiesIntoReport(report, siblingReport, report.activities || []);
+        byId.delete(report.id);
+        if (report.id) removedReportIds.push(report.id);
+      } else {
+        const resolvedEng = knownEngineerByDateDh.get(`${report.workDate}|${report.dh}`) || knownEngineerByDh.get(report.dh);
+        if (resolvedEng) {
+          const newId = checkinReportId(report.workDate, report.dh, resolvedEng);
+          const existingTarget = byId.get(newId);
+          if (existingTarget && existingTarget.id !== report.id) {
+            checkinMergeActivitiesIntoReport(report, existingTarget, report.activities || []);
+            byId.delete(report.id);
+            if (report.id) removedReportIds.push(report.id);
+          } else if (newId !== report.id) {
+            const oldId = report.id;
+            byId.delete(oldId);
+            if (oldId) removedReportIds.push(oldId);
+            report.id = newId;
+            report.engineer = resolvedEng;
+            report.hcEngineer = resolvedEng;
+            report.activities = (report.activities || []).map(act => {
+              const oldPrefix = `${oldId}-`;
+              return String(act.id || '').startsWith(oldPrefix)
+                ? { ...act, id: `${newId}-${String(act.id).slice(oldPrefix.length)}` }
+                : act;
+            });
+            report._cleanedGarbage = true;
+            byId.set(newId, report);
+          }
+        }
+      }
+    }
+  });
+
+  return { reports: [...byId.values()], removedReportIds };
 }
 
 function checkinToRow(report) {
@@ -224,13 +458,19 @@ async function checkinLoadReports({ force = false } = {}) {
     }
     const testRowIds = [];
     const cleanedRemote = [];
-    const remote = new Map();
+    const rawRemoteList = [];
     (Array.isArray(rows) ? rows : []).forEach(row => {
       const record = checkinFromRow(row);
       if (checkinIsTestReport(record)) {
         if (record.id) testRowIds.push(record.id);
         return;
       }
+      rawRemoteList.push(record);
+    });
+    const { reports: reconciledRemoteList, removedReportIds } = checkinReconcileCagReports(rawRemoteList);
+    testRowIds.push(...removedReportIds);
+    const remote = new Map();
+    reconciledRemoteList.forEach(record => {
       if (record._cleanedGarbage) {
         delete record._cleanedGarbage;
         record.updatedAt = new Date().toISOString();
@@ -241,7 +481,7 @@ async function checkinLoadReports({ force = false } = {}) {
     if (testRowIds.length) {
       Promise.allSettled(testRowIds.map(id =>
         supabaseRestRequest(`${CHECKIN_TABLE}?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE', queueOffline: false })
-      )).catch(() => {});
+      )).catch(() => { });
     }
     const pending = [...cleanedRemote];
     checkinReports.forEach(local => {
@@ -351,6 +591,22 @@ function checkinUniqueOptions(values) {
     .sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
+function checkinUniqueContractors(values) {
+  const list = Array.isArray(values) ? values : [values];
+  const seen = new Map();
+  list.forEach(item => {
+    String(item || '')
+      .split(',')
+      .map(part => part.trim())
+      .filter(part => part && part !== '—' && part !== '-')
+      .forEach(part => {
+        const key = checkinNormalizeHeader(part);
+        if (key && !seen.has(key)) seen.set(key, part);
+      });
+  });
+  return [...seen.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
 function checkinActualCrewTotal(report) {
   return (Array.isArray(report.activities) ? report.activities : []).reduce((sum, activity) => sum + (Number(activity.actualCrew) || 0), 0);
 }
@@ -364,9 +620,11 @@ function checkinActualForkliftTotal(report) {
 }
 
 function checkinReportContractorsDisplay(report) {
-  const taskCompanies = checkinUniqueOptions((report.activities || []).map(a => a.contractor).filter(Boolean));
-  if (taskCompanies.length > 0) return taskCompanies.join(', ');
-  return report.contractor || '—';
+  const companies = checkinUniqueContractors([
+    ...(report.activities || []).map(a => a.contractor),
+    report.contractor
+  ]);
+  return companies.length > 0 ? companies.join(', ') : '—';
 }
 
 function checkinUpdateCardTotals(input) {
@@ -384,6 +642,27 @@ function checkinUpdateCardTotals(input) {
 
   const contractorEl = card.querySelector(`[data-meta-contractor="${CSS.escape(reportId)}"]`);
   if (contractorEl) contractorEl.textContent = checkinReportContractorsDisplay(report);
+}
+
+function checkinNormalizeShift(value) {
+  const norm = checkinNormalizeHeader(value);
+  if (!norm) return '';
+  if (/^noturn|^noite|\bnoturn|\bnoite/.test(norm)) return 'Noturno';
+  if (/^diurn|^dia\b|\bdiurn/.test(norm)) return 'Diurno';
+  return '';
+}
+
+function checkinGetActivityShift(report, activity) {
+  const taskShift = checkinNormalizeShift(activity?.shift);
+  if (taskShift) return taskShift;
+  const reportShift = checkinNormalizeShift(report?.shift);
+  return reportShift || 'Diurno';
+}
+
+function checkinShiftSelectOptions(selected = '', allLabel = 'Todos') {
+  return `<option value="">${allLabel}</option>
+    <option value="Diurno" ${selected === 'Diurno' ? 'selected' : ''}>☀️ Diurno</option>
+    <option value="Noturno" ${selected === 'Noturno' ? 'selected' : ''}>🌙 Noturno</option>`;
 }
 
 function checkinGetActivityDiscipline(report, activity) {
@@ -418,11 +697,11 @@ function checkinCompanies() {
     : [];
   const fromReports = (Array.isArray(checkinReports))
     ? checkinReports.flatMap(report => [
-        report?.contractor,
-        ...(Array.isArray(report?.activities) ? report.activities.map(a => a?.contractor) : [])
-      ])
+      report?.contractor,
+      ...(Array.isArray(report?.activities) ? report.activities.map(a => a?.contractor) : [])
+    ])
     : [];
-  return checkinUniqueOptions([...fromWorkforce, ...fromReports]);
+  return checkinUniqueContractors([...fromWorkforce, ...fromReports]);
 }
 
 function checkinEngineers() {
@@ -469,7 +748,11 @@ function checkinExtraSectorFromForm(value) {
 
 function checkinNormalizeDataHall(value) {
   const raw = String(value || '').trim();
-  if (/^CAG\s*0?[34]\b/i.test(raw)) return 'DH 04';
+  const cagMatch = raw.match(/^CAG\s*0?(\d{1,2})\b/i);
+  if (cagMatch) {
+    const cagNumber = Number(cagMatch[1]);
+    return cagNumber >= 1 && cagNumber <= 10 ? `DH ${String(cagNumber).padStart(2, '0')}` : '';
+  }
   const match = raw.match(/^(?:DH|DATA\s*HALL)?\s*0?(\d{1,2})$/i);
   const number = match ? Number(match[1]) : 0;
   return number >= 1 && number <= 10 ? `DH ${String(number).padStart(2, '0')}` : '';
@@ -491,23 +774,39 @@ function checkinCanDeletePlanning() {
   return typeof isMasterUser === 'function' && isMasterUser();
 }
 
-async function renderCheckIn() {
-  const app = document.getElementById('app');
-  if (!app) return;
-  app.innerHTML = '<div class="checkin-loading">Carregando planejamento diário…</div>';
-  await checkinLoadReports();
+function checkinSyncFiltersFromDom() {
+  const isIsoDate = val => typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val.trim());
+  const dailyDateEl = document.querySelector('[data-checkin-daily-date]');
+  if (dailyDateEl && isIsoDate(dailyDateEl.value)) {
+    checkinSelectedDate = dailyDateEl.value.trim();
+  }
+  const planStartEl = document.querySelector('[data-checkin-plan-start]');
+  if (planStartEl && isIsoDate(planStartEl.value)) {
+    checkinPlanStart = planStartEl.value.trim();
+  }
+  const planEndEl = document.querySelector('[data-checkin-plan-end]');
+  if (planEndEl && isIsoDate(planEndEl.value)) {
+    checkinPlanEnd = planEndEl.value.trim();
+  }
+  const curveStartEl = document.querySelector('[data-checkin-curve-start]');
+  if (curveStartEl && isIsoDate(curveStartEl.value)) {
+    checkinCurveStart = curveStartEl.value.trim();
+  }
+  const curveEndEl = document.querySelector('[data-checkin-curve-end]');
+  if (curveEndEl && isIsoDate(curveEndEl.value)) {
+    checkinCurveEnd = curveEndEl.value.trim();
+  }
+}
 
+function checkinComputeDailyView() {
   const dayReports = checkinReports.filter(report => report.workDate === checkinSelectedDate);
-  const engineers = checkinUniqueOptions(checkinReports.map(report => report.engineer));
-  const dataHalls = CHECKIN_DATA_HALLS;
-  const disciplines = checkinAllDisciplines();
   const companies = checkinCompanies();
-  const canManagePlanning = checkinCanManagePlanning();
   const visibleReports = dayReports
     .map(report => {
-      if (!checkinDisciplineFilter) return report;
+      if (!checkinDisciplineFilter && !checkinShiftFilter) return report;
       const filteredActivities = (report.activities || []).filter(activity =>
-        checkinGetActivityDiscipline(report, activity) === checkinDisciplineFilter
+        (!checkinDisciplineFilter || checkinGetActivityDiscipline(report, activity) === checkinDisciplineFilter)
+        && (!checkinShiftFilter || checkinGetActivityShift(report, activity) === checkinShiftFilter)
       );
       if (!filteredActivities.length) return null;
       return { ...report, activities: filteredActivities };
@@ -521,6 +820,23 @@ async function renderCheckIn() {
   const totalPlanned = visibleReports.reduce((sum, report) => sum + report.activities.reduce((total, activity) => total + checkinParseNumber(activity.plannedMeters), 0), 0);
   const totalExecuted = visibleReports.reduce((sum, report) => sum + report.activities.reduce((total, activity) => total + checkinParseNumber(activity.executedMeters), 0), 0);
   const openReports = visibleReports.filter(report => !report.checkoutAt).length;
+  return { visibleReports, companies, totalPlanned, totalExecuted, openReports };
+}
+
+async function renderCheckIn() {
+  const app = document.getElementById('app');
+  if (!app) return;
+  checkinSyncFiltersFromDom();
+  if (!checkinLoadedRemote) {
+    app.innerHTML = '<div class="checkin-loading">Carregando planejamento diário…</div>';
+  }
+  await checkinLoadReports();
+
+  const engineers = checkinUniqueOptions(checkinReports.map(report => report.engineer));
+  const dataHalls = CHECKIN_DATA_HALLS;
+  const disciplines = checkinAllDisciplines();
+  const { visibleReports, companies, totalPlanned, totalExecuted, openReports } = checkinComputeDailyView();
+  const canManagePlanning = checkinCanManagePlanning();
 
   app.innerHTML = `
     ${pageHeader('Check-in e Check-out Diário', 'Planeje as frentes por engenheiro e acompanhe o executado, desvios e Curva S.', 'PRODUÇÃO DE CAMPO', `<button class="button button-dark" onclick="checkinOpenReportPDF()">${icon('print')} Relatório PDF + Curva S</button><button class="button button-outline" onclick="checkinDownloadTemplate()">${icon('download')} Modelo semanal</button>${canManagePlanning ? `<button class="button button-green" onclick="checkinOpenImport()">${icon('upload')} Importar semana</button>` : ''}`)}
@@ -537,10 +853,23 @@ async function renderCheckIn() {
   if (typeof hydrateIcons === 'function') hydrateIcons();
 }
 
+function checkinRenderDailyResults(reports, companies, planned, executed, openReports) {
+  return `
+    <section class="checkin-metrics">
+      <article><small>ATIVIDADES DO DIA</small><strong>${reports.reduce((sum, report) => sum + report.activities.length, 0)}</strong></article>
+      <article><small>PLANEJADO</small><strong>${checkinNumber(planned)} m</strong></article>
+      <article><small>EXECUTADO</small><strong>${checkinNumber(executed)} m</strong></article>
+      <article><small>DIÁRIOS EM ABERTO</small><strong>${openReports}</strong></article>
+    </section>
+    ${reports.length ? reports.map(report => checkinRenderDailyReport(report, companies)).join('') : `<section class="checkin-empty"><span>${icon('calendar')}</span><h2>Nenhuma atividade planejada para ${checkinFormatDate(checkinSelectedDate)}</h2><p>Importe a planilha semanal ou cadastre uma atividade planejada para abrir o diário de campo.</p><button class="button button-green" onclick="checkinSetTab('planejamento')">Abrir planejamento</button></section>`}
+  `;
+}
+
 function checkinRenderDaily(reports, engineers, dataHalls, disciplines, companies, planned, executed, openReports) {
   return `
     <section class="checkin-filter-panel">
-      <label><span>Data do diário</span><input type="date" value="${checkinSelectedDate}" onchange="checkinSetDay(this.value)"></label>
+      <label><span>Data do diário</span><input type="date" data-checkin-daily-date value="${checkinSelectedDate}" oninput="checkinSetDay(this.value)" onchange="checkinSetDay(this.value)"></label>
+      <label><span>Turno</span><select onchange="checkinSetDailyFilter('shift', this.value)">${checkinShiftSelectOptions(checkinShiftFilter, 'Todos')}</select></label>
       <label><span>Disciplina</span><select onchange="checkinSetDailyFilter('discipline', this.value)">${checkinSelectOptions(disciplines, checkinDisciplineFilter, 'Todas')}</select></label>
       <label><span>Empresa</span><select onchange="checkinSetDailyFilter('company', this.value)">${checkinSelectOptions(companies, checkinCompanyFilter, 'Todas')}</select></label>
       <label><span>Engenheiro</span><select onchange="checkinSetDailyFilter('engineer', this.value)">${checkinSelectOptions(engineers, checkinEngineerFilter, 'Todos')}</select></label>
@@ -551,13 +880,9 @@ function checkinRenderDaily(reports, engineers, dataHalls, disciplines, companie
       <button class="button button-outline" onclick="checkinCopyDayWhatsApp('checkout')">Copiar checkouts do dia</button>
       <button class="button button-dark" onclick="checkinOpenReportPDF('daily')">${icon('print')} Extrair PDF do dia</button>
     </section>
-    <section class="checkin-metrics">
-      <article><small>ATIVIDADES DO DIA</small><strong>${reports.reduce((sum, report) => sum + report.activities.length, 0)}</strong></article>
-      <article><small>PLANEJADO</small><strong>${checkinNumber(planned)} m</strong></article>
-      <article><small>EXECUTADO</small><strong>${checkinNumber(executed)} m</strong></article>
-      <article><small>DIÁRIOS EM ABERTO</small><strong>${openReports}</strong></article>
-    </section>
-    ${reports.length ? reports.map(report => checkinRenderDailyReport(report, companies)).join('') : `<section class="checkin-empty"><span>${icon('calendar')}</span><h2>Nenhuma atividade planejada para ${checkinFormatDate(checkinSelectedDate)}</h2><p>Importe a planilha semanal ou cadastre uma atividade planejada para abrir o diário de campo.</p><button class="button button-green" onclick="checkinSetTab('planejamento')">Abrir planejamento</button></section>`}
+    <div id="checkinDailyResults">
+      ${checkinRenderDailyResults(reports, companies, planned, executed, openReports)}
+    </div>
   `;
 }
 
@@ -581,8 +906,6 @@ function checkinRenderDailyReport(report, companies = checkinCompanies()) {
       <span><small>Responsável HC</small><strong>${esc(report.hcEngineer || report.engineer)}</strong></span>
       <span><small>Efetivo total</small><strong data-meta-crew="${esc(report.id)}">${checkinActualCrewTotal(report)} pessoas</strong></span>
       <span><small>Equipamentos (total)</small><strong data-meta-equip="${esc(report.id)}">${checkinActualPtaTotal(report)} PTA · ${checkinActualForkliftTotal(report)} empilhadeira(s)</strong></span>
-      <span><small>Turno</small><select class="checkin-meta-input" data-report-id="${esc(report.id)}" data-header-field="shift" onchange="checkinAutoSaveReport('${esc(report.id)}')">${checkinSelectOptions(CHECKIN_SHIFTS, report.shift, 'Selecione o turno')}</select></span>
-      <span><small>Clima</small><select class="checkin-meta-input" data-report-id="${esc(report.id)}" data-header-field="weather" onchange="checkinAutoSaveReport('${esc(report.id)}')">${checkinSelectOptions(CHECKIN_WEATHER, report.weather, 'Selecione o clima')}</select></span>
       <span><small>Supervisor</small><input class="checkin-meta-input" data-report-id="${esc(report.id)}" data-header-field="supervisor" type="text" value="${esc(report.supervisor || '')}" placeholder="Nome do supervisor" onchange="checkinAutoSaveReport('${esc(report.id)}')"></span>
       <span><small>Atividades com entrada / saida</small><strong>${checkinCount} / ${checkoutCount} de ${report.activities.length}</strong></span>
     </div>
@@ -621,38 +944,50 @@ function checkinActualCrewLabel(discipline) {
 function checkinRenderActivityRow(report, activity, companies = checkinCompanies()) {
   const planned = checkinParseNumber(activity.plannedMeters);
   const executed = checkinParseNumber(activity.executedMeters);
-  const percent = planned > 0 ? `${checkinNumber(executed / planned * 100, 0)}%` : executed ? 'Extra' : '—';
+  const isExtra = checkinIsExtraActivity(activity);
+  const percent = planned > 0 ? `${checkinNumber(executed / planned * 100, 0)}%` : executed ? '100%' : '—';
   const isClosed = Boolean(activity.checkoutAt);
   const isRunning = Boolean(activity.checkinAt && !activity.checkoutAt);
-  const rowStateClass = isRunning ? 'is-running' : isClosed ? 'is-closed' : 'is-pending';
+  const actShift = checkinGetActivityShift(report, activity);
+  const isNightShift = actShift === 'Noturno';
+  const rowStateClass = `${isRunning ? 'is-running' : isClosed ? 'is-closed' : 'is-pending'} ${isNightShift ? 'is-night-shift' : 'is-day-shift'} ${isExtra ? 'is-extra-task' : ''}`;
   const actDiscipline = checkinGetActivityDiscipline(report, activity);
-  const taskContractor = activity.contractor || report.contractor || '';
+  const rawTaskContractors = checkinUniqueContractors([activity.contractor]);
+  const fallbackReportContractors = checkinUniqueContractors([report.contractor]);
+  const taskContractor = rawTaskContractors[0] || (fallbackReportContractors.length === 1 ? fallbackReportContractors[0] : '');
   const disciplineOptions = checkinUniqueOptions([...CHECKIN_DISCIPLINES, actDiscipline].filter(Boolean));
   const checkinTimeVal = checkinTimeInputValue(activity.checkinAt);
   const checkoutTimeVal = checkinTimeInputValue(activity.checkoutAt);
+  const currentStatus = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
 
   const statusPill = isRunning
     ? `<span class="checkin-status-pill running"><span class="pulse-dot"></span> Em andamento (${checkinFormatTime(activity.checkinAt)})</span>`
     : isClosed
       ? `<span class="checkin-status-pill closed">✓ Finalizada (${checkinFormatTime(activity.checkinAt)} → ${checkinFormatTime(activity.checkoutAt)})</span>`
-      : `<span class="checkin-status-pill pending">Não iniciada</span>`;
+      : `<span class="checkin-status-pill pending">${isNightShift ? '🌙 Aguardando Noturno' : 'Não iniciada'}</span>`;
+
+  const extraPill = `<span class="checkin-extra-pill" data-extra-pill style="${isExtra ? '' : 'display:none'}">➕ Extra (não programada)</span>`;
 
   return `<tr class="checkin-activity-row ${rowStateClass}" data-report-id="${esc(report.id)}" data-activity-id="${esc(activity.id)}">
-    <td>${statusPill}<strong>${esc(activity.pstItem || '—')}</strong><small>${esc(activity.scheduleId || 'Sem ID de cronograma')}</small></td>
+    <td>${statusPill}${extraPill}<strong>${esc(activity.pstItem || (isExtra ? 'EXTRA' : '—'))}</strong><small>${esc(activity.scheduleId || (isExtra ? 'Atividade não programada' : 'Sem ID de cronograma'))}</small></td>
     <td>
       <input class="checkin-inline-text strong" type="text" data-activity-field="location" value="${esc(activity.location || '')}" placeholder="Local / sala" onchange="checkinAutoSaveReport('${esc(report.id)}')">
       <textarea class="checkin-inline-textarea" rows="2" data-activity-field="activity" placeholder="Descrição da atividade" oninput="checkinResizeNote(this)" onchange="checkinAutoSaveReport('${esc(report.id)}')">${esc(activity.activity || '')}</textarea>
       <div class="checkin-task-inline-meta">
         <select class="checkin-discipline-select" data-activity-field="discipline" onchange="checkinOnTaskDisciplineChange(this, '${esc(report.id)}')">${checkinSelectOptions(disciplineOptions, actDiscipline, 'Disciplina')}</select>
+        <select class="checkin-shift-select ${isNightShift ? 'is-night' : 'is-day'}" data-activity-field="shift" onchange="checkinOnTaskShiftChange(this, '${esc(report.id)}')" title="Turno da tarefa (Diurno ou Noturno)">
+          <option value="Diurno" ${!isNightShift ? 'selected' : ''}>☀️ Diurno</option>
+          <option value="Noturno" ${isNightShift ? 'selected' : ''}>🌙 Noturno</option>
+        </select>
       </div>
     </td>
     <td>${esc(activity.unit || 'm')}</td>
     <td><div class="checkin-planned-wrap"><input class="checkin-number-input" type="number" min="0" step="0.1" data-activity-field="plannedMeters" value="${esc(planned)}" oninput="checkinUpdatePercent(this)" onchange="checkinAutoSaveReport('${esc(report.id)}')"> <span>${esc(activity.unit || 'm')}</span></div></td>
     <td><input class="checkin-number-input" type="number" min="0" step="0.1" data-activity-field="executedMeters" value="${esc(executed)}" oninput="checkinUpdatePercent(this)" onchange="checkinAutoSaveReport('${esc(report.id)}')"></td>
     <td class="checkin-percent-cell">${percent}</td>
-    <td><select data-activity-field="status" onchange="checkinToggleExtraReason(this); checkinAutoSaveReport('${esc(report.id)}')">${CHECKIN_STATUS.map(status => `<option ${activity.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select></td>
+    <td><select data-activity-field="status" onchange="checkinAutoSaveReport('${esc(report.id)}')">${CHECKIN_STATUS.map(status => `<option ${currentStatus === status ? 'selected' : ''}>${status}</option>`).join('')}</select></td>
     <td><select data-activity-field="problemCode" onchange="checkinToggleOther(this); checkinAutoSaveReport('${esc(report.id)}')"><option value="">—</option>${CHECKIN_PROBLEMS.map(([code, label]) => `<option value="${code}" ${activity.problemCode === code ? 'selected' : ''}>${code} - ${label}</option>`).join('')}</select><input class="checkin-problem-other" data-activity-field="problemOther" placeholder="Descreva outro motivo" value="${esc(activity.problemOther || '')}" style="${activity.problemCode === 'OUTRO' ? '' : 'display:none'}" onchange="checkinAutoSaveReport('${esc(report.id)}')"></td>
-    <td><textarea class="checkin-note-input" data-activity-field="notes" rows="2" oninput="checkinResizeNote(this)" onchange="checkinAutoSaveReport('${esc(report.id)}')" placeholder="${activity.status === CHECKIN_STATUS[3] ? 'Observação / motivo da atividade extra (opcional)' : 'Observação'}" maxlength="500">${esc(activity.notes || '')}</textarea></td>
+    <td><textarea class="checkin-note-input" data-activity-field="notes" rows="2" oninput="checkinResizeNote(this)" onchange="checkinAutoSaveReport('${esc(report.id)}')" placeholder="${isExtra ? 'Observação / motivo da atividade extra (opcional)' : 'Observação'}" maxlength="500">${esc(activity.notes || '')}</textarea></td>
     <td class="checkin-task-actions">
       <label class="checkin-task-field-label"><span>Empresa</span><select data-activity-field="contractor" onchange="checkinUpdateCardTotals(this); checkinAutoSaveReport('${esc(report.id)}')">${checkinSelectOptions(companies, taskContractor, 'Selecione a empresa')}</select></label>
       <label class="checkin-task-field-label"><span data-crew-label>${esc(checkinActualCrewLabel(actDiscipline || report.discipline))}</span><input type="number" min="0" step="1" data-activity-field="actualCrew" value="${activity.actualCrew ?? ''}" placeholder="Pessoas" style="${isRunning ? 'border-color:#16a34a;' : ''}" oninput="checkinUpdateCardTotals(this)" onchange="checkinAutoSaveReport('${esc(report.id)}')"></label>
@@ -700,7 +1035,7 @@ function checkinUpdatePercent(input) {
   const planned = plannedInput ? checkinParseNumber(plannedInput.value) : checkinParseNumber(activity.plannedMeters);
   const executed = executedInput ? checkinParseNumber(executedInput.value) : checkinParseNumber(activity.executedMeters);
   const cell = row.querySelector('.checkin-percent-cell');
-  if (cell) cell.textContent = planned > 0 ? `${checkinNumber(executed / planned * 100, 0)}%` : executed ? 'Extra' : '—';
+  if (cell) cell.textContent = planned > 0 ? `${checkinNumber(executed / planned * 100, 0)}%` : executed ? '100%' : '—';
 }
 
 function checkinToggleOther(select) {
@@ -709,12 +1044,31 @@ function checkinToggleOther(select) {
 }
 
 function checkinToggleExtraReason(select) {
-  const input = select.closest('tr')?.querySelector('[data-activity-field="notes"]');
-  const isExtra = select.value === CHECKIN_STATUS[3];
+  const row = select.closest('tr');
+  const input = row?.querySelector('[data-activity-field="notes"]');
+  const extraCheckbox = row?.querySelector('[data-activity-field="isExtra"]');
+  const isExtra = Boolean(extraCheckbox?.checked);
   if (input) {
     input.required = false;
     input.placeholder = isExtra ? 'Observação / motivo da atividade extra (opcional)' : 'Observação';
   }
+}
+
+async function checkinOnTaskExtraChange(checkbox, reportId) {
+  const isExtra = Boolean(checkbox.checked);
+  const label = checkbox.closest('.checkin-extra-toggle');
+  if (label) label.classList.toggle('is-extra', isExtra);
+  const row = checkbox.closest('tr');
+  if (row) {
+    row.classList.toggle('is-extra-task', isExtra);
+    const pill = row.querySelector('[data-extra-pill]');
+    if (pill) pill.style.display = isExtra ? '' : 'none';
+    const notesInput = row.querySelector('[data-activity-field="notes"]');
+    if (notesInput) {
+      notesInput.placeholder = isExtra ? 'Observação / motivo da atividade extra (opcional)' : 'Observação';
+    }
+  }
+  await checkinAutoSaveReport(reportId);
 }
 
 function checkinCaptureReport(reportId) {
@@ -734,6 +1088,8 @@ function checkinCaptureReport(reportId) {
       if (field === 'checkinTime' || field === 'checkoutTime') {
         // Horários só são aplicados ao clicar nos botões de Registrar/Salvar entrada ou saída
         return;
+      } else if (field === 'isExtra') {
+        activity.isExtra = Boolean(input.checked);
       } else if (field === 'executedMeters' || field === 'plannedMeters') {
         activity[field] = checkinParseNumber(input.value);
       } else if (field === 'actualCrew' || field === 'ptaCount' || field === 'forkliftCount') {
@@ -749,9 +1105,11 @@ function checkinCaptureReport(reportId) {
   next.actualCrew = checkinActualCrewTotal(next);
   next.actualPtaCount = checkinActualPtaTotal(next);
   next.forkliftCount = checkinActualForkliftTotal(next);
-  const taskCompanies = checkinUniqueOptions((next.activities || []).map(a => a.contractor).filter(Boolean));
-  if (taskCompanies.length === 1) next.contractor = taskCompanies[0];
-  else if (taskCompanies.length > 1) next.contractor = taskCompanies.join(', ');
+  const taskCompanies = checkinUniqueContractors([
+    ...(next.activities || []).map(a => a.contractor),
+    next.contractor
+  ]);
+  next.contractor = taskCompanies.join(', ');
   const checkedIn = next.activities.filter(item => item.checkinAt);
   const checkedOut = next.activities.filter(item => item.checkoutAt);
   next.checkinAt = checkedIn.map(item => item.checkinAt).sort()[0] || '';
@@ -772,6 +1130,28 @@ async function checkinOnTaskDisciplineChange(select, reportId) {
   const crewLabel = row?.querySelector('[data-crew-label]');
   if (crewLabel) crewLabel.textContent = checkinActualCrewLabel(select.value);
   await checkinAutoSaveReport(reportId);
+  if (checkinDisciplineFilter) {
+    checkinSetDailyFilter('discipline', checkinDisciplineFilter);
+  }
+}
+
+async function checkinOnTaskShiftChange(select, reportId) {
+  const isNight = select.value === 'Noturno';
+  select.classList.toggle('is-night', isNight);
+  select.classList.toggle('is-day', !isNight);
+  const row = select.closest('tr');
+  if (row) {
+    row.classList.toggle('is-night-shift', isNight);
+    row.classList.toggle('is-day-shift', !isNight);
+    const pendingPill = row.querySelector('.checkin-status-pill.pending');
+    if (pendingPill) {
+      pendingPill.textContent = isNight ? '🌙 Aguardando Noturno' : 'Não iniciada';
+    }
+  }
+  await checkinAutoSaveReport(reportId);
+  if (checkinShiftFilter) {
+    checkinSetDailyFilter('shift', checkinShiftFilter);
+  }
 }
 
 async function checkinUpdateTaskTime(reportId, activityId, which, timeValue) {
@@ -781,7 +1161,7 @@ async function checkinUpdateTaskTime(reportId, activityId, which, timeValue) {
   if (!activity) return;
   if (which === 'checkin') {
     activity.checkinAt = timeValue ? checkinIsoFromTimeInput(report.workDate, timeValue, activity.checkinAt) : '';
-    if (activity.checkinAt && (!activity.status || activity.status === CHECKIN_STATUS[2])) {
+    if (activity.checkinAt && (!activity.status || activity.status === 'Não iniciado' || activity.status === CHECKIN_EXTRA_LEGACY_STATUS)) {
       activity.status = 'Iniciado';
     }
   } else if (which === 'checkout') {
@@ -862,7 +1242,9 @@ async function checkinRegister(reportId, action, activityId) {
     activity.checkinAt = typedCheckinTime
       ? checkinIsoFromTimeInput(report.workDate, typedCheckinTime, now)
       : now;
-    if (!activity.status || activity.status === CHECKIN_STATUS[2]) activity.status = 'Iniciado';
+    if (!activity.status || activity.status === 'Não iniciado' || activity.status === CHECKIN_EXTRA_LEGACY_STATUS) {
+      activity.status = 'Iniciado';
+    }
   } else {
     if (!activity.checkinAt && typedCheckinTime) {
       activity.checkinAt = checkinIsoFromTimeInput(report.workDate, typedCheckinTime, now);
@@ -870,6 +1252,15 @@ async function checkinRegister(reportId, action, activityId) {
     activity.checkoutAt = typedCheckoutTime
       ? checkinIsoFromTimeInput(report.workDate, typedCheckoutTime, now)
       : now;
+    if (!activity.status || activity.status === 'Iniciado' || activity.status === 'Não iniciado' || activity.status === CHECKIN_EXTRA_LEGACY_STATUS) {
+      const planned = checkinParseNumber(activity.plannedMeters);
+      const executed = checkinParseNumber(activity.executedMeters);
+      if (planned > 0 && executed > 0 && executed < planned) {
+        activity.status = 'Parcial';
+      } else if (executed > 0 || planned === 0) {
+        activity.status = 'Concluído';
+      }
+    }
   }
 
   const checkedIn = report.activities.filter(item => item.checkinAt);
@@ -916,45 +1307,166 @@ function checkinExtraReasonFromForm(data) {
   return parts.join(' · ');
 }
 
+function checkinFormatWhatsAppActivity(report, activity, index, { isCheckout, isCheckedInSection, isScheduledSection = false }) {
+  const plannedNum = checkinParseNumber(activity.plannedMeters);
+  const executedNum = checkinParseNumber(activity.executedMeters);
+  const planned = checkinNumber(plannedNum);
+  const executed = checkinNumber(executedNum);
+  const pct = plannedNum > 0 ? `${checkinNumber((executedNum / plannedNum) * 100, 0)}%` : '';
+  const unit = activity.unit || 'm';
+  const actDiscipline = checkinGetActivityDiscipline(report, activity) || report.discipline || '';
+  const actShift = checkinGetActivityShift(report, activity);
+  const shiftBadge = actShift === 'Noturno' ? '🌙 *Noturno*' : '☀️ *Diurno*';
+  const actContractor = checkinUniqueContractors([activity.contractor]).join(', ');
+  const statusLabel = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
+  const codeTag = [activity.pstItem, activity.scheduleId].filter(Boolean).join(' · ');
+  const title = codeTag ? `[${codeTag}] ${activity.activity || 'Atividade'}` : (activity.activity || 'Atividade');
+
+  const block = [];
+  block.push(`*${index + 1}. ${title}*`);
+  block.push(`📍 *Local:* ${activity.location || 'Local não informado'}${actDiscipline ? ` _(${actDiscipline})_` : ''} · ${shiftBadge}`);
+
+  if (isCheckedInSection || Number(activity.actualCrew) > 0 || actContractor) {
+    const crewParts = [];
+    if (actContractor) crewParts.push(`*Empresa:* ${actContractor}`);
+    if (isCheckedInSection || Number(activity.actualCrew) > 0) {
+      crewParts.push(`*Efetivo:* ${Number(activity.actualCrew || 0)} pessoa(s)`);
+    }
+    if (crewParts.length) block.push(`👷 ${crewParts.join(' · ')}`);
+  }
+
+  if (Number(activity.ptaCount) || Number(activity.forkliftCount)) {
+    block.push(`🚜 *Equipamentos:* ${Number(activity.ptaCount || 0)} PTA · ${Number(activity.forkliftCount || 0)} empilhadeira(s)`);
+  }
+
+  if (isScheduledSection) {
+    block.push(`📏 *Previsto:* ${planned} ${unit} · *Status:* Programada para o Turno Noturno`);
+  } else if (isCheckout) {
+    block.push(`📏 *Volume:* Previsto ${planned} ${unit} → Executado ${executed} ${unit}${pct ? ` (${pct})` : ''}`);
+    block.push(`📌 *Status:* ${statusLabel}${!isCheckedInSection ? ' _(Sem check-in)_' : ''}`);
+  } else {
+    block.push(`📏 *Previsto:* ${planned} ${unit}${!isCheckedInSection ? ` · *Status:* ${statusLabel} _(Sem check-in)_` : ''}`);
+  }
+
+  if (isCheckedInSection) {
+    block.push(`🕒 *Horário:* Entrada ${checkinFormatTime(activity.checkinAt)}${isCheckout ? ` · Saída ${checkinFormatTime(activity.checkoutAt)}` : ''}`);
+  }
+
+  if (checkinIsExtraActivity(activity)) {
+    block.push('➕ *Informação:* Atividade extra (não programada)');
+  }
+
+  if (activity.problemCode || activity.problemOther) {
+    block.push(`⚠️ *Motivo / Desvio:* ${checkinProblemLabel(activity.problemCode, activity.problemOther) || activity.problemOther}`);
+  }
+
+  if (activity.notes) {
+    block.push(`💬 *Explanação / Obs.:* ${activity.notes}`);
+  }
+
+  return block.join('\n');
+}
+
 function checkinBuildWhatsApp(report, action) {
   const isCheckout = action === 'checkout';
-  const reportActivities = report.activities.filter(activity => isCheckout ? activity.checkoutAt : activity.checkinAt);
+  const rawActivities = Array.isArray(report.activities) ? report.activities : [];
+  const allActivities = rawActivities.filter(activity =>
+    (!checkinDisciplineFilter || checkinGetActivityDiscipline(report, activity) === checkinDisciplineFilter)
+    && (!checkinShiftFilter || checkinGetActivityShift(report, activity) === checkinShiftFilter)
+  );
+  const checkedInActivities = allActivities.filter(activity => Boolean(activity.checkinAt || activity.checkoutAt));
+  const isPendingNightShift = activity =>
+    !checkinShiftFilter
+    && checkinGetActivityShift(report, activity) === 'Noturno'
+    && !activity.checkinAt
+    && !activity.checkoutAt
+    && !activity.problemCode
+    && !activity.problemOther
+    && !Number(activity.executedMeters);
+
+  const nightScheduledActivities = allActivities.filter(isPendingNightShift);
+  const notCheckedInActivities = allActivities.filter(
+    activity => !activity.checkinAt && !activity.checkoutAt && !isPendingNightShift(activity)
+  );
+
+  const activeContractors = checkinUniqueContractors(
+    (checkedInActivities.length ? checkedInActivities : allActivities).map(activity => activity.contractor)
+  );
+  const headerContractors = (activeContractors.length ? activeContractors : checkinUniqueContractors([
+    ...allActivities.map(activity => activity.contractor),
+    report.contractor
+  ])).join(', ') || '—';
+
+  const checkoutTimes = allActivities.map(a => a.checkoutAt).filter(Boolean).sort();
+  const checkinTimes = allActivities.map(a => a.checkinAt).filter(Boolean).sort();
+  const headerExitTime = report.checkoutAt || checkoutTimes.at(-1) || new Date().toISOString();
+  const headerEntryTime = report.checkinAt || checkinTimes[0] || new Date().toISOString();
+  const totalCrew = allActivities.reduce((sum, activity) => sum + (Number(activity.actualCrew) || 0), 0);
+  const totalPta = allActivities.reduce((sum, activity) => sum + (Number(activity.ptaCount) || 0), 0);
+  const totalForklift = allActivities.reduce((sum, activity) => sum + (Number(activity.forkliftCount) || 0), 0);
+  const withoutCheckinCount = Math.max(0, allActivities.length - checkedInActivities.length - nightScheduledActivities.length);
+  const shiftHeaderLabel = checkinShiftFilter
+    ? ` · *Turno:* ${checkinShiftFilter === 'Noturno' ? '🌙 Noturno' : '☀️ Diurno'}`
+    : '';
+
   const lines = [
-    `*${isCheckout ? 'CHECK-OUT' : 'CHECK-IN'} DIÁRIO — ${report.dh}*`,
-    `Data: ${checkinFormatDate(report.workDate)}${isCheckout ? ` · Saída: ${checkinFormatTime(report.checkoutAt || new Date().toISOString())}` : ` · Entrada: ${checkinFormatTime(report.checkinAt || new Date().toISOString())}`}`,
-    `Engenheiro: ${report.engineer}`,
-    `Disciplina: ${report.discipline || '—'} · Etapa: ${report.stage || '—'}`,
-    `Turno: ${report.shift || '—'}`,
-    `Empreiteira: ${report.contractor || '—'}`,
-    `Eng. responsável HC: ${report.hcEngineer || report.engineer}`,
-    `Equipamentos: ${checkinActualPtaTotal(report)} PTA · ${checkinActualForkliftTotal(report)} empilhadeira(s)`,
-    '',
-    `Efetivo real informado nas tarefas: ${reportActivities.reduce((sum, activity) => sum + (Number(activity.actualCrew) || 0), 0)} pessoas`,
-    '*Atividades do dia*'
+    `📋 *${isCheckout ? 'CHECK-OUT' : 'CHECK-IN'} DIÁRIO — ${report.dh}*`,
+    '━━━━━━━━━━━━━━━━━━━━',
+    `📅 *Data:* ${checkinFormatDate(report.workDate)}${shiftHeaderLabel}${isCheckout ? ` · *Saída:* ${checkinFormatTime(headerExitTime)}` : ` · *Entrada:* ${checkinFormatTime(headerEntryTime)}`}`,
+    `👷 *Engenheiro:* ${report.engineer}`,
+    `🏢 *Empreiteira:* ${headerContractors}`,
+    `🛡️ *Eng. responsável HC:* ${report.hcEngineer || report.engineer}`,
+    `🚜 *Equipamentos:* ${totalPta} PTA · ${totalForklift} empilhadeira(s)`,
+    `👥 *Efetivo real em campo:* ${totalCrew} pessoa(s)`,
+    `📊 *Resumo:* ${checkedInActivities.length} com check-in · ${withoutCheckinCount} sem check-in${nightScheduledActivities.length ? ` · ${nightScheduledActivities.length} turno noturno` : ''} (Total: ${allActivities.length})`
   ];
-  reportActivities.forEach((activity, index) => {
-    const planned = checkinNumber(activity.plannedMeters);
-    const executed = checkinNumber(activity.executedMeters);
-    const actDiscipline = checkinGetActivityDiscipline(report, activity);
-    lines.push(`${index + 1}. ${[activity.pstItem, activity.scheduleId, activity.activity].filter(Boolean).join(' · ')}`);
-    lines.push(`   Efetivo real: ${Number(activity.actualCrew || 0)} pessoas - ${checkinActualCrewLabel(actDiscipline || activity.discipline || report.discipline)}`);
-    if (activity.contractor && activity.contractor !== report.contractor) lines.push(`   Empresa: ${activity.contractor}`);
-    if (Number(activity.ptaCount) || Number(activity.forkliftCount)) {
-      lines.push(`   Equipamentos: ${Number(activity.ptaCount || 0)} PTA · ${Number(activity.forkliftCount || 0)} empilhadeira(s)`);
-    }
-    lines.push(`   ${activity.location || 'Local não informado'} · Previsto ${planned} ${activity.unit || 'm'}${isCheckout ? ` · Executado ${executed} ${activity.unit || 'm'} · ${activity.status || 'Não iniciado'}` : ''}`);
-    lines.push(`   Entrada: ${checkinFormatTime(activity.checkinAt)}${isCheckout ? ` · Saida: ${checkinFormatTime(activity.checkoutAt)}` : ''}`);
-    if (!isCheckout && activity.status === CHECKIN_STATUS[3]) lines.push('   Tipo: Atividade extra (não programada)');
-    if (isCheckout && activity.problemCode) lines.push(`   Desvio: ${checkinProblemLabel(activity.problemCode, activity.problemOther)}`);
-    if (isCheckout && activity.notes) lines.push(`   Obs.: ${activity.notes}`);
-  });
-  if (report.weather) lines.push('', `Clima: ${report.weather}`);
+
+  if (checkedInActivities.length) {
+    lines.push(
+      '',
+      '━━━━━━━━━━━━━━━━━━━━',
+      `✅ *ATIVIDADES COM CHECK-IN${isCheckout ? ' / EXECUTADAS' : ' (INICIADAS)'} (${checkedInActivities.length})*`,
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      checkedInActivities
+        .map((activity, index) => checkinFormatWhatsAppActivity(report, activity, index, { isCheckout, isCheckedInSection: true }))
+        .join('\n\n────────────────────\n\n')
+    );
+  }
+
+  if (notCheckedInActivities.length) {
+    lines.push(
+      '',
+      '━━━━━━━━━━━━━━━━━━━━',
+      `⚠️ *ATIVIDADES SEM CHECK-IN / JUSTIFICATIVAS (${notCheckedInActivities.length})*`,
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      notCheckedInActivities
+        .map((activity, index) => checkinFormatWhatsAppActivity(report, activity, index, { isCheckout, isCheckedInSection: false }))
+        .join('\n\n────────────────────\n\n')
+    );
+  }
+
+  if (nightScheduledActivities.length) {
+    lines.push(
+      '',
+      '━━━━━━━━━━━━━━━━━━━━',
+      `🌙 *PROGRAMADAS PARA O TURNO NOTURNO (${nightScheduledActivities.length})*`,
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      nightScheduledActivities
+        .map((activity, index) => checkinFormatWhatsAppActivity(report, activity, index, { isCheckout, isCheckedInSection: false, isScheduledSection: true }))
+        .join('\n\n────────────────────\n\n')
+    );
+  }
+
   return lines.join('\n');
 }
 
 function checkinCopyWhatsApp(reportId, action) {
   const report = checkinCaptureReport(reportId) || checkinGetReport(reportId);
   if (!report) return;
+  checkinPersistReports(report, { silent: true });
   const text = checkinBuildWhatsApp(report, action);
   const fallbackCopy = () => {
     const area = document.createElement('textarea');
@@ -970,9 +1482,25 @@ function checkinCopyWhatsApp(reportId, action) {
 }
 
 function checkinCopyDayWhatsApp(action) {
+  checkinSyncFiltersFromDom();
   const isCheckout = action === 'checkout';
+  document.querySelectorAll('[data-report-card]').forEach(card => {
+    const repId = card.dataset.reportCard;
+    const captured = checkinCaptureReport(repId);
+    if (captured) {
+      const idx = checkinReports.findIndex(r => r.id === repId);
+      if (idx >= 0) checkinReports[idx] = captured;
+    }
+  });
   const dayReports = checkinReports.filter(report => report.workDate === checkinSelectedDate
-    && report.activities.some(activity => isCheckout ? activity.checkoutAt : activity.checkinAt));
+    && (!checkinEngineerFilter || report.engineer === checkinEngineerFilter)
+    && (!checkinDhFilter || report.dh === checkinDhFilter)
+    && (report.activities || []).some(activity =>
+      (!checkinDisciplineFilter || checkinGetActivityDiscipline(report, activity) === checkinDisciplineFilter)
+      && (!checkinShiftFilter || checkinGetActivityShift(report, activity) === checkinShiftFilter)
+      && (isCheckout
+        ? (activity.checkoutAt || activity.checkinAt || activity.problemCode || activity.problemOther || activity.notes || Number(activity.executedMeters) > 0 || (activity.status && activity.status !== 'Não iniciado'))
+        : activity.checkinAt)));
   if (!dayReports.length) return toast(`Nenhum ${isCheckout ? 'checkout' : 'check-in'} registrado em ${checkinFormatDate(checkinSelectedDate)}.`, true);
   const text = dayReports
     .sort((a, b) => a.dh.localeCompare(b.dh) || a.engineer.localeCompare(b.engineer, 'pt-BR'))
@@ -996,29 +1524,44 @@ function checkinCopyText(text, successMessage) {
 }
 
 function checkinSetTab(tab) {
+  checkinSyncFiltersFromDom();
   checkinActiveTab = ['diario', 'planejamento', 'curva'].includes(tab) ? tab : 'diario';
   renderCheckIn();
 }
 
 function checkinSetDay(value) {
-  if (!value) return;
-  checkinSelectedDate = value;
-  checkinDisciplineFilter = '';
-  checkinEngineerFilter = '';
-  checkinDhFilter = '';
-  checkinCompanyFilter = '';
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(String(value).trim())) return;
+  checkinSelectedDate = String(value).trim();
+  const resultsEl = document.getElementById('checkinDailyResults');
+  if (resultsEl && checkinActiveTab === 'diario') {
+    const { visibleReports, companies, totalPlanned, totalExecuted, openReports } = checkinComputeDailyView();
+    resultsEl.innerHTML = checkinRenderDailyResults(visibleReports, companies, totalPlanned, totalExecuted, openReports);
+    resultsEl.querySelectorAll('.checkin-note-input, .checkin-inline-textarea').forEach(checkinResizeNote);
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return;
+  }
   renderCheckIn();
 }
 
 function checkinSetDailyFilter(key, value) {
+  checkinSyncFiltersFromDom();
   if (key === 'discipline') checkinDisciplineFilter = value;
+  if (key === 'shift') checkinShiftFilter = value;
   if (key === 'engineer') checkinEngineerFilter = value;
   if (key === 'dh') checkinDhFilter = value;
   if (key === 'company') checkinCompanyFilter = value;
+  const resultsEl = document.getElementById('checkinDailyResults');
+  if (resultsEl && checkinActiveTab === 'diario') {
+    const { visibleReports, companies, totalPlanned, totalExecuted, openReports } = checkinComputeDailyView();
+    resultsEl.innerHTML = checkinRenderDailyResults(visibleReports, companies, totalPlanned, totalExecuted, openReports);
+    resultsEl.querySelectorAll('.checkin-note-input, .checkin-inline-textarea').forEach(checkinResizeNote);
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return;
+  }
   renderCheckIn();
 }
 
-function checkinRenderPlanning(engineers, dataHalls, disciplines = checkinAllDisciplines(), companies = checkinCompanies()) {
+function checkinRenderPlanningResults() {
   const reports = checkinReports.filter(report => report.workDate >= checkinPlanStart && report.workDate <= checkinPlanEnd
     && (!checkinPlanEngineerFilter || report.engineer === checkinPlanEngineerFilter)
     && (!checkinPlanCompanyFilter || (report.contractor === checkinPlanCompanyFilter || (report.activities || []).some(a => a.contractor === checkinPlanCompanyFilter))));
@@ -1026,42 +1569,93 @@ function checkinRenderPlanning(engineers, dataHalls, disciplines = checkinAllDis
   const rows = reports.flatMap(report =>
     (report.activities || [])
       .filter(activity => !checkinPlanDisciplineFilter || checkinGetActivityDiscipline(report, activity) === checkinPlanDisciplineFilter)
+      .filter(activity => !checkinPlanShiftFilter || checkinGetActivityShift(report, activity) === checkinPlanShiftFilter)
       .filter(activity => !checkinPlanCompanyFilter || (activity.contractor ? activity.contractor === checkinPlanCompanyFilter : report.contractor === checkinPlanCompanyFilter))
       .map(activity => ({ report, activity }))
   ).sort((a, b) => a.report.workDate.localeCompare(b.report.workDate) || a.report.dh.localeCompare(b.report.dh) || a.report.engineer.localeCompare(b.report.engineer));
   const planned = rows.reduce((sum, item) => sum + checkinParseNumber(item.activity.plannedMeters), 0);
 
+  return `<section class="checkin-plan-summary"><strong>${rows.length}</strong> atividade(s) · <strong>${checkinNumber(planned)} m</strong> planejados · ${reports.length} diário(s) por engenheiro e DH</section>
+  ${rows.length ? `<article class="checkin-report-card"><div class="checkin-activity-table-wrap"><table class="checkin-activity-table checkin-plan-table"><thead><tr><th>Data / DH</th><th>Engenheiro / empreiteira</th><th>Disciplina / turno</th><th>Item / cronograma</th><th>Local / atividade</th><th>Planejado</th></tr></thead><tbody>${rows.map(({ report, activity }) => {
+    const shift = checkinGetActivityShift(report, activity);
+    return `<tr><td>${checkinFormatDate(report.workDate)}<small>${esc(report.dh)}</small></td><td>${esc(report.engineer)}<small>${esc(activity.contractor || report.contractor || '—')}</small></td><td><strong>${esc(checkinGetActivityDiscipline(report, activity) || report.discipline || '—')}</strong><small>${shift === 'Noturno' ? '🌙 Noturno' : '☀️ Diurno'}${activity.stage || report.stage ? ` · ${esc(activity.stage || report.stage)}` : ''}</small></td><td><strong>${esc(activity.pstItem || '—')}</strong><small>${esc(activity.scheduleId || activity.unit || '')}</small></td><td><strong>${esc(activity.location || '—')}</strong><small>${esc(activity.activity || '')}</small></td><td>${checkinNumber(activity.plannedMeters)} ${esc(activity.unit || 'm')}</td></tr>`;
+  }).join('')}</tbody></table></div></article>` : `<section class="checkin-empty"><h2>Nenhum planejamento neste período</h2><p>Importe uma planilha semanal para abrir a agenda de atividades.</p></section>`}`;
+}
+
+function checkinRenderPlanning(engineers, dataHalls, disciplines = checkinAllDisciplines(), companies = checkinCompanies()) {
   return `<section class="checkin-filter-panel checkin-plan-filter">
-    <label><span>De</span><input type="date" value="${checkinPlanStart}" onchange="checkinSetPlanRange('start',this.value)"></label>
-    <label><span>Até</span><input type="date" value="${checkinPlanEnd}" onchange="checkinSetPlanRange('end',this.value)"></label>
+    <label><span>De</span><input type="date" data-checkin-plan-start value="${checkinPlanStart}" oninput="checkinSetPlanRange('start',this.value)" onchange="checkinSetPlanRange('start',this.value)"></label>
+    <label><span>Até</span><input type="date" data-checkin-plan-end value="${checkinPlanEnd}" oninput="checkinSetPlanRange('end',this.value)" onchange="checkinSetPlanRange('end',this.value)"></label>
+    <label><span>Turno</span><select onchange="checkinSetPlanShiftFilter(this.value)">${checkinShiftSelectOptions(checkinPlanShiftFilter, 'Todos')}</select></label>
     <label><span>Disciplina</span><select onchange="checkinSetPlanDisciplineFilter(this.value)">${checkinSelectOptions(disciplines, checkinPlanDisciplineFilter, 'Todas')}</select></label>
     <label><span>Empresa</span><select onchange="checkinSetPlanCompanyFilter(this.value)">${checkinSelectOptions(companies, checkinPlanCompanyFilter, 'Todas')}</select></label>
     <label><span>Engenheiro</span><select onchange="checkinSetPlanEngineerFilter(this.value)">${checkinSelectOptions(engineers, checkinPlanEngineerFilter, 'Todos')}</select></label>
     ${checkinCanManagePlanning() ? `<button class="button button-outline" onclick="checkinOpenImport()">${icon('upload')} Importar planilha semanal</button>` : ''}
     <button class="button button-outline" onclick="checkinDownloadTemplate()">${icon('download')} Baixar modelo XLSX</button>
   </section>
-  <section class="checkin-plan-summary"><strong>${rows.length}</strong> atividade(s) · <strong>${checkinNumber(planned)} m</strong> planejados · ${reports.length} diário(s) por engenheiro e DH</section>
-  ${rows.length ? `<article class="checkin-report-card"><div class="checkin-activity-table-wrap"><table class="checkin-activity-table checkin-plan-table"><thead><tr><th>Data / DH</th><th>Engenheiro / empreiteira</th><th>Disciplina / etapa</th><th>Item / cronograma</th><th>Local / atividade</th><th>Planejado</th></tr></thead><tbody>${rows.map(({ report, activity }) => `<tr><td>${checkinFormatDate(report.workDate)}<small>${esc(report.dh)}</small></td><td>${esc(report.engineer)}<small>${esc(activity.contractor || report.contractor || '—')}</small></td><td><strong>${esc(checkinGetActivityDiscipline(report, activity) || report.discipline || '—')}</strong><small>${esc(activity.stage || report.stage || '—')}</small></td><td><strong>${esc(activity.pstItem || '—')}</strong><small>${esc(activity.scheduleId || activity.unit || '')}</small></td><td><strong>${esc(activity.location || '—')}</strong><small>${esc(activity.activity || '')}</small></td><td>${checkinNumber(activity.plannedMeters)} ${esc(activity.unit || 'm')}</td></tr>`).join('')}</tbody></table></div></article>` : `<section class="checkin-empty"><h2>Nenhum planejamento neste período</h2><p>Importe uma planilha semanal para abrir a agenda de atividades.</p></section>`}`;
+  <div id="checkinPlanResults">
+    ${checkinRenderPlanningResults()}
+  </div>`;
 }
 
 function checkinSetPlanRange(which, value) {
-  if (which === 'start') checkinPlanStart = value;
-  else checkinPlanEnd = value;
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(String(value).trim())) return;
+  if (which === 'start') checkinPlanStart = String(value).trim();
+  else checkinPlanEnd = String(value).trim();
+  const resultsEl = document.getElementById('checkinPlanResults');
+  if (resultsEl && checkinActiveTab === 'planejamento') {
+    resultsEl.innerHTML = checkinRenderPlanningResults();
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return;
+  }
   renderCheckIn();
 }
 
 function checkinSetPlanEngineerFilter(value) {
+  checkinSyncFiltersFromDom();
   checkinPlanEngineerFilter = value;
+  const resultsEl = document.getElementById('checkinPlanResults');
+  if (resultsEl && checkinActiveTab === 'planejamento') {
+    resultsEl.innerHTML = checkinRenderPlanningResults();
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return;
+  }
   renderCheckIn();
 }
 
 function checkinSetPlanCompanyFilter(value) {
+  checkinSyncFiltersFromDom();
   checkinPlanCompanyFilter = value;
+  const resultsEl = document.getElementById('checkinPlanResults');
+  if (resultsEl && checkinActiveTab === 'planejamento') {
+    resultsEl.innerHTML = checkinRenderPlanningResults();
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return;
+  }
   renderCheckIn();
 }
 
 function checkinSetPlanDisciplineFilter(value) {
+  checkinSyncFiltersFromDom();
   checkinPlanDisciplineFilter = value;
+  const resultsEl = document.getElementById('checkinPlanResults');
+  if (resultsEl && checkinActiveTab === 'planejamento') {
+    resultsEl.innerHTML = checkinRenderPlanningResults();
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return;
+  }
+  renderCheckIn();
+}
+
+function checkinSetPlanShiftFilter(value) {
+  checkinSyncFiltersFromDom();
+  checkinPlanShiftFilter = value;
+  const resultsEl = document.getElementById('checkinPlanResults');
+  if (resultsEl && checkinActiveTab === 'planejamento') {
+    resultsEl.innerHTML = checkinRenderPlanningResults();
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return;
+  }
   renderCheckIn();
 }
 
@@ -1257,21 +1851,27 @@ function checkinReadDhWorkbook(workbook) {
         return { name, dh: `DH ${String(Number(dhMatch[1])).padStart(2, '0')}`, areaPrefix: '' };
       }
       const cagMatch = cleanName.match(/^CAG\s*0?(\d{1,2})\b/i);
-      if (cagMatch) {
-        return { name, dh: 'DH 04', areaPrefix: `CAG ${Number(cagMatch[1])}` };
+      if (cagMatch && Number(cagMatch[1]) >= 1 && Number(cagMatch[1]) <= 10) {
+        const cagNum = Number(cagMatch[1]);
+        return { name, dh: `DH ${String(cagNum).padStart(2, '0')}`, areaPrefix: `CAG ${cagNum}` };
       }
       return null;
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    .sort((a, b) => Number(Boolean(a.areaPrefix)) - Number(Boolean(b.areaPrefix)));
   if (!sheets.length) return null;
 
-  // Pré-carrega o engenheiro do DH 04 para usar como fallback nas abas CAG caso o responsável na aba CAG esteja vazio
-  let dh04DefaultEngineer = '';
-  const dh04SheetInfo = sheets.find(s => s.dh === 'DH 04' && !s.areaPrefix);
-  if (dh04SheetInfo && workbook.Sheets[dh04SheetInfo.name]) {
-    const dh04Rows = XLSX.utils.sheet_to_json(workbook.Sheets[dh04SheetInfo.name], { header: 1, defval: '', raw: true });
-    dh04DefaultEngineer = String(dh04Rows[2]?.[2] || '').trim();
-  }
+  // Pré-carrega o engenheiro de cada DH para usar como fallback na aba CAG correspondente (ex.: CAG 3 -> DH 03, CAG 4 -> DH 04)
+  const dhDefaultEngineers = new Map();
+  const dhEngineerByDate = new Map();
+  sheets.filter(s => !s.areaPrefix).forEach(s => {
+    if (!workbook.Sheets[s.name]) return;
+    const dhRows = XLSX.utils.sheet_to_json(workbook.Sheets[s.name], { header: 1, defval: '', raw: true });
+    const eng = String(dhRows[2]?.[2] || '').trim();
+    if (!checkinIsGenericEngineerName(eng)) {
+      dhDefaultEngineers.set(s.dh, eng);
+    }
+  });
 
   const grouped = new Map();
   const rejectionReasons = [];
@@ -1281,10 +1881,11 @@ function checkinReadDhWorkbook(workbook) {
     const sheet = workbook.Sheets[name];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
     const rawSheetEng = String(rows[2]?.[2] || '').trim();
-    const isGenericEng = !rawSheetEng || /^respons[aá]vel\s+a\s+definir$/i.test(rawSheetEng) || /^selecione/i.test(rawSheetEng) || rawSheetEng === '—' || rawSheetEng === '-';
+    const isGenericEng = checkinIsGenericEngineerName(rawSheetEng);
+    const fallbackDhEngineer = areaPrefix ? (dhDefaultEngineers.get(dh) || '') : '';
     let currentBlockEngineer = !isGenericEng
       ? rawSheetEng
-      : (areaPrefix && dh04DefaultEngineer ? dh04DefaultEngineer : 'Responsável a definir');
+      : (fallbackDhEngineer || 'Responsável a definir');
     if (currentBlockEngineer === 'Responsável a definir') missingEngineers += 1;
     let activeDiscipline = '';
     let currentBlockDate = '';
@@ -1308,7 +1909,7 @@ function checkinReadDhWorkbook(workbook) {
           const labelNorm = checkinNormalizeHeader(row[c]);
           if (/^(?:engenheiro|responsavel|eng\s+responsavel)/.test(labelNorm)) {
             const candidate = String(row[c + 1] || row[c + 2] || '').trim();
-            if (candidate && !/^respons[aá]vel\s+a\s+definir$/i.test(candidate) && candidate !== '—') {
+            if (!checkinIsGenericEngineerName(candidate)) {
               currentBlockEngineer = candidate;
             }
           }
@@ -1316,7 +1917,13 @@ function checkinReadDhWorkbook(workbook) {
       }
 
       const workDate = metaDate || currentBlockDate;
-      const engineer = currentBlockEngineer;
+      if (!areaPrefix && !checkinIsGenericEngineerName(currentBlockEngineer)) {
+        if (!dhDefaultEngineers.has(dh)) dhDefaultEngineers.set(dh, currentBlockEngineer);
+        if (workDate) dhEngineerByDate.set(`${dh}|${workDate}`, currentBlockEngineer);
+      }
+      const engineer = areaPrefix
+        ? (dhEngineerByDate.get(`${dh}|${workDate}`) || (!checkinIsGenericEngineerName(currentBlockEngineer) ? currentBlockEngineer : '') || dhDefaultEngineers.get(dh) || 'Responsável a definir')
+        : currentBlockEngineer;
 
       if (/interferencia/.test(rowJoined)) {
         activeDiscipline = '';
@@ -1403,7 +2010,9 @@ function checkinReadDhWorkbook(workbook) {
       const problemCode = problemMatch ? problemMatch[1].padStart(2, '0') : rawProblem ? 'OUTRO' : '';
       const activity = {
         id: activityId, pstItem, scheduleId, location, activity: activityText,
-        discipline, actualCrew: null, unit, plannedMeters, executedMeters, status,
+        discipline, shift: checkinNormalizeShift(currentBlockShift) || 'Diurno',
+        actualCrew: null, unit, plannedMeters, executedMeters, status,
+        isExtra: currentStatus === CHECKIN_EXTRA_LEGACY_STATUS,
         problemCode, problemOther: problemCode === 'OUTRO' ? rawProblem : '',
         notes: String(row[10] || '').trim()
       };
@@ -1481,6 +2090,7 @@ async function checkinImportWeekly(event) {
       const activity = {
         ...(existing || {}), id: activityId, pstItem, scheduleId,
         discipline: String(data.discipline || existing?.discipline || report.discipline || '').trim(),
+        shift: checkinNormalizeShift(data.shift || existing?.shift || report.shift) || 'Diurno',
         actualCrew: existing?.actualCrew ?? null,
         location: String(data.location || '').trim(), activity: activityText,
         unit: String(data.unit || 'm').trim(), plannedMeters: checkinParseNumber(data.plannedMeters),
@@ -1506,6 +2116,7 @@ async function checkinImportWeekly(event) {
           const saved = currentActivities.get(activity.id);
           return saved ? {
             ...activity,
+            shift: saved.shift || activity.shift || 'Diurno',
             status: saved.status || activity.status,
             checkinAt: saved.checkinAt || activity.checkinAt || '',
             checkoutAt: saved.checkoutAt || activity.checkoutAt || '',
@@ -1521,7 +2132,7 @@ async function checkinImportWeekly(event) {
         });
         // Atividades extras foram lançadas no diário, não na planilha semanal.
         imported.activities.push(...current.activities.filter(activity =>
-          activity.status === CHECKIN_STATUS[3] && !imported.activities.some(item => item.id === activity.id)
+          checkinIsExtraActivity(activity) && !imported.activities.some(item => item.id === activity.id)
         ));
         for (const key of ['checkinAt', 'checkoutAt', 'status', 'updatedAt']) imported[key] = current[key] || imported[key];
         imported.actualCrew = Number(current.actualCrew) || imported.actualCrew || 0;
@@ -1554,25 +2165,26 @@ async function checkinImportWeekly(event) {
 }
 
 async function checkinOpenStandaloneExtra() {
+  checkinSyncFiltersFromDom();
   if (!checkinCompanies().length && typeof workforceReadyPromise !== 'undefined') await workforceReadyPromise;
   if (typeof syncUserApprovalsFromSupabase === 'function') await syncUserApprovalsFromSupabase();
   const engineers = checkinAvailableEngineers();
   const companies = checkinCompanies();
-  modal(`${modalHead('Planejar atividade extra', 'Registre uma tarefa fora da planilha semanal. Ela ficará marcada como não programada.')}
+  const defaultShift = checkinShiftFilter || 'Diurno';
+  modal(`${modalHead('Planejar atividade extra', 'Registre uma tarefa fora da planilha semanal. Ela ficará identificada com a informação de Atividade Extra e seguirá o fluxo normal de check-in / check-out.')}
     <form class="checkin-manual-form" onsubmit="checkinAddStandaloneExtra(event)">
       <label><span>Data</span><input name="workDate" type="date" required value="${checkinSelectedDate}"></label>
       <label><span>DH</span><select name="dh" required>${checkinSelectOptions(CHECKIN_DATA_HALLS, checkinDhFilter || '', 'Selecione')}</select></label>
       <label><span>Disciplina</span><select name="discipline" required>${checkinSelectOptions(CHECKIN_DISCIPLINES, checkinDisciplineFilter || '', 'Selecione')}</select></label>
+      <label><span>Turno</span><select name="shift" required><option value="Diurno" ${defaultShift === 'Diurno' ? 'selected' : ''}>☀️ Diurno</option><option value="Noturno" ${defaultShift === 'Noturno' ? 'selected' : ''}>🌙 Noturno</option></select></label>
       <label><span>Engenheiro</span><input name="engineer" list="checkinEngineersDatalist" required value="${esc(checkinEngineerFilter || (typeof currentUser !== 'undefined' && currentUser?.name ? currentUser.name : ''))}" placeholder="Selecione ou digite o engenheiro"><datalist id="checkinEngineersDatalist">${engineers.map(eng => `<option value="${esc(eng)}">`).join('')}</datalist></label>
       <label><span>Empreiteira</span><input name="contractor" list="checkinCompaniesDatalist" value="${esc(checkinCompanyFilter || '')}" placeholder="Selecione ou digite a empresa"><datalist id="checkinCompaniesDatalist">${companies.map(comp => `<option value="${esc(comp)}">`).join('')}</datalist></label>
-      <label><span>Turno</span><select name="shift">${checkinSelectOptions(CHECKIN_SHIFTS, 'Diurno', 'Selecione')}</select></label>
-      <label><span>Clima</span><select name="weather">${checkinSelectOptions(CHECKIN_WEATHER, 'Ensolarado', 'Selecione')}</select></label>
       <label><span>Local / sala</span><input name="location" placeholder="Ex.: Sala RMU 4.4"></label>
       <label><span>Setor (opcional)</span><select name="sector">${checkinExtraSectorOptions()}</select></label>
       <label class="wide"><span>Atividade / serviço</span><input name="activity" required placeholder="Descreva o serviço fora do planejamento"></label>
       ${checkinExtraReasonFields()}
       <label><span>Unidade</span><select name="unit">${CHECKIN_UNITS.map((value, index) => `<option value="${value}" ${index === 0 ? 'selected' : ''}>${value}</option>`).join('')}</select></label>
-      <label><span>Quantidade prevista</span><input name="plannedMeters" type="number" min="0" step="0.1" value="0" required></label>
+      <label><span>Quantidade estimada no dia</span><input name="plannedMeters" type="number" min="0" step="0.1" value="0" required></label>
       <div class="modal-foot"><button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button><button class="button button-green" type="submit">Salvar atividade extra</button></div>
     </form>`, 'modal-large');
 }
@@ -1590,15 +2202,16 @@ async function checkinAddStandaloneExtra(event) {
   }
   const sector = checkinExtraSectorFromForm(data.sector);
   const id = checkinReportId(workDate, dh, engineer);
+  const selectedShift = checkinNormalizeShift(data.shift) || 'Diurno';
   let report = checkinGetReport(id);
   if (!report) {
     report = checkinCreateReport({
       workDate, dh, engineer, discipline: data.discipline,
       stage: 'Atividade extra', contractor: data.contractor, hcEngineer: engineer,
-      shift: data.shift || '', weather: data.weather || ''
+      shift: selectedShift, weather: data.weather || ''
     });
   } else {
-    if (data.shift && !report.shift) report.shift = data.shift;
+    if (selectedShift && !report.shift) report.shift = selectedShift;
     if (data.weather && !report.weather) report.weather = data.weather;
     if (data.contractor && !report.contractor) report.contractor = data.contractor;
   }
@@ -1606,21 +2219,24 @@ async function checkinAddStandaloneExtra(event) {
   report.activities.push({
     id: taskId, pstItem: '', scheduleId: '', location: [String(data.location || '').trim(), sector?.name].filter(Boolean).join(' - '),
     sector: sector?.id || '', sectorName: sector?.name || '', discipline: data.discipline,
+    shift: selectedShift,
     contractor: String(data.contractor || report.contractor || '').trim(),
     actualCrew: null,
     activity: String(data.activity || '').trim(), unit: String(data.unit || 'm').trim() || 'm',
     plannedMeters: checkinParseNumber(data.plannedMeters), executedMeters: 0,
-    status: CHECKIN_STATUS[3], problemCode: data.extraReasonCode || '', problemOther: String(data.extraReasonOther || '').trim(), notes: extraReason
+    isExtra: true,
+    status: 'Não iniciado',
+    problemCode: data.extraReasonCode || '', problemOther: String(data.extraReasonOther || '').trim(), notes: extraReason
   });
   report.checkoutAt = '';
-  report.status = 'iniciado';
+  report.status = report.activities.some(item => item.checkinAt) ? 'iniciado' : 'planejado';
   await checkinPersistReports(report, { silent: true });
   closeModal();
   checkinSelectedDate = workDate;
   checkinEngineerFilter = engineer;
   checkinDhFilter = dh;
   checkinActiveTab = 'diario';
-  toast('Atividade extra planejada no diário.');
+  toast('Atividade extra adicionada ao diário. Registre a entrada para iniciar.');
   renderCheckIn();
 }
 
@@ -1632,13 +2248,15 @@ async function checkinOpenManualActivity(reportId = '', isExtra = false) {
   const date = current.workDate;
   const engineers = checkinAvailableEngineers();
   const companies = checkinCompanies();
-  modal(`${modalHead('Adicionar atividade extra', current.checkoutAt ? 'O diário fechado será reaberto para registrar esta atividade.' : 'Registre a atividade extra neste diário.')}
+  const defaultShift = checkinShiftFilter || checkinNormalizeShift(current.shift) || 'Diurno';
+  modal(`${modalHead('Adicionar atividade extra', current.checkoutAt ? 'O diário fechado será reaberto para registrar esta atividade.' : 'Registre a atividade extra neste diário. Ela ficará identificada como Extra e seguirá o fluxo normal de check-in.')}
     <form class="checkin-manual-form" onsubmit="checkinAddManualActivity(event)">
       <input type="hidden" name="reportId" value="${esc(current.id)}">
       <input type="hidden" name="taskType" value="extra">
       <label><span>Data</span><input name="workDate" type="date" required value="${date}" readonly></label>
       <label><span>DH</span><select name="dh" required>${checkinSelectOptions(CHECKIN_DATA_HALLS, current.dh, 'Selecione')}</select></label>
       <label><span>Disciplina</span><select name="discipline" required>${checkinSelectOptions(CHECKIN_DISCIPLINES, CHECKIN_DISCIPLINES.includes(current.discipline) ? current.discipline : 'Duto', 'Selecione')}</select></label>
+      <label><span>Turno</span><select name="shift" required><option value="Diurno" ${defaultShift === 'Diurno' ? 'selected' : ''}>☀️ Diurno</option><option value="Noturno" ${defaultShift === 'Noturno' ? 'selected' : ''}>🌙 Noturno</option></select></label>
       <label><span>Engenheiro</span><input name="engineer" list="checkinManualEngineersList" required value="${esc(current.engineer)}"><datalist id="checkinManualEngineersList">${engineers.map(eng => `<option value="${esc(eng)}">`).join('')}</datalist></label>
       <label><span>Empreiteira</span><input name="contractor" list="checkinManualCompaniesList" value="${esc(current.contractor || '')}" placeholder="Empresa"><datalist id="checkinManualCompaniesList">${companies.map(comp => `<option value="${esc(comp)}">`).join('')}</datalist></label>
       <label><span>Local / sala</span><input name="location" placeholder="Ex.: Sala RMU / Corredor"></label>
@@ -1666,6 +2284,7 @@ async function checkinAddManualActivity(event) {
   const engineer = String(data.engineer || '').trim();
   if (!dh || !engineer) return toast('Selecione um DH e informe o engenheiro.', true);
   const sector = checkinExtraSectorFromForm(data.sector);
+  const selectedShift = checkinNormalizeShift(data.shift) || 'Diurno';
   const targetReportId = checkinReportId(date, dh, engineer);
   let report = checkinGetReport(targetReportId);
   if (!report) {
@@ -1673,7 +2292,7 @@ async function checkinAddManualActivity(event) {
       workDate: date, dh, engineer, discipline: data.discipline || sourceReport.discipline,
       stage: sourceReport.stage, contractor: data.contractor || sourceReport.contractor,
       hcEngineer: sourceReport.hcEngineer || engineer, supervisor: sourceReport.supervisor,
-      shift: sourceReport.shift, weather: sourceReport.weather
+      shift: selectedShift || sourceReport.shift, weather: sourceReport.weather
     });
   }
   const taskId = `${report.id}-extra-${Date.now().toString(36)}`;
@@ -1681,22 +2300,24 @@ async function checkinAddManualActivity(event) {
     id: taskId, pstItem: '', scheduleId: '',
     sector: sector?.id || '', sectorName: sector?.name || '',
     discipline: String(data.discipline || report.discipline || '').trim(),
+    shift: selectedShift,
     contractor: String(data.contractor || report.contractor || '').trim(),
     actualCrew: null,
     location: [data.location.trim(), sector?.name].filter(Boolean).join(' - '), activity: data.activity.trim(), unit: data.unit.trim() || 'm',
     plannedMeters: checkinParseNumber(data.plannedMeters), executedMeters: 0,
-    status: data.taskType === 'extra' ? CHECKIN_STATUS[3] : 'Não iniciado',
+    isExtra: data.taskType === 'extra',
+    status: 'Não iniciado',
     problemCode: data.extraReasonCode || '', problemOther: String(data.extraReasonOther || '').trim(), notes: extraReason
   });
   report.checkoutAt = '';
-  report.status = 'iniciado';
+  report.status = report.activities.some(item => item.checkinAt) ? 'iniciado' : 'planejado';
   await checkinPersistReports(report, { silent: true });
   closeModal();
   checkinSelectedDate = date;
   checkinEngineerFilter = engineer;
   checkinDhFilter = dh;
   checkinActiveTab = 'diario';
-  toast('Atividade extra adicionada ao diário.');
+  toast('Atividade extra adicionada ao diário. Registre a entrada para iniciar.');
   renderCheckIn();
 }
 
@@ -1768,18 +2389,13 @@ function checkinCurveActivityDiscipline(report, activity) {
 }
 
 function checkinActivityBucket(activity) {
-  const status = String(activity?.status || '').trim();
+  const status = checkinResolveMigratedStatus(activity, activity?.checkinAt, activity?.checkoutAt);
   const planned = checkinParseNumber(activity?.plannedMeters);
   const executed = checkinParseNumber(activity?.executedMeters);
   if (status === 'Concluído') return 'completed';
   if (status === 'Parcial') return 'partial';
   if (status === 'Iniciado') {
     if (planned > 0 && executed >= planned) return 'completed';
-    if (executed > 0) return 'partial';
-    return 'notStarted';
-  }
-  if (status === 'Extra (não programada)') {
-    if (executed > 0 && (planned === 0 || executed >= planned)) return 'completed';
     if (executed > 0) return 'partial';
     return 'notStarted';
   }
@@ -1790,6 +2406,36 @@ function checkinActivityBucket(activity) {
   return 'notStarted';
 }
 
+function checkinActivityTaskProgress(activity) {
+  if (!activity) return { isExtra: false, plannedTask: 0, executedTask: 0, progressPct: 0 };
+  const isExtra = checkinIsExtraActivity(activity);
+  const planned = checkinParseNumber(activity.plannedMeters);
+  const executed = checkinParseNumber(activity.executedMeters);
+  const status = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
+
+  let executedTask = 0;
+  if (planned > 0) {
+    if (executed > 0) {
+      executedTask = executed / planned; // ex.: 20/30 = 0.67 (67%), 36/30 = 1.20 (120%)
+    } else if (status === 'Concluído') {
+      executedTask = 1;
+    }
+  } else {
+    if (status === 'Concluído' || executed > 0) {
+      executedTask = 1;
+    } else if (status === 'Parcial') {
+      executedTask = 0.5;
+    }
+  }
+
+  return {
+    isExtra,
+    plannedTask: isExtra ? 0 : 1,
+    executedTask,
+    progressPct: executedTask * 100
+  };
+}
+
 function checkinIsActivityCompleted(activity) {
   return checkinActivityBucket(activity) === 'completed';
 }
@@ -1798,13 +2444,15 @@ function checkinIsActivityDeviation(activity) {
   const bucket = checkinActivityBucket(activity);
   const planned = checkinParseNumber(activity.plannedMeters);
   const executed = checkinParseNumber(activity.executedMeters);
-  if (activity.problemCode) return true;
+  const isExtra = checkinIsExtraActivity(activity);
+  if (activity.problemCode && !isExtra) return true;
+  if (isExtra) return bucket !== 'completed' && Boolean(activity.problemCode);
   if (bucket !== 'completed') return true;
   if (planned > 0 && executed < planned) return true;
   return false;
 }
 
-function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
+function checkinRenderCurveResults() {
   const reports = checkinReports.filter(report =>
     report.workDate >= checkinCurveStart && report.workDate <= checkinCurveEnd
     && (!checkinCurveEngineer || report.engineer === checkinCurveEngineer)
@@ -1818,29 +2466,37 @@ function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
     const row = byDate.get(report.workDate) || { plannedTasks: 0, completedTasks: 0, deviationTasks: 0, plannedMeters: 0, executedMeters: 0 };
     (report.activities || []).forEach(activity => {
       const actDiscipline = checkinCurveActivityDiscipline(report, activity) || 'Sem disciplina';
+      const actShift = checkinGetActivityShift(report, activity);
       const actCompany = activity.contractor || report.contractor || '';
       if (checkinCurveDiscipline && actDiscipline !== checkinCurveDiscipline) return;
+      if (checkinCurveShift && actShift !== checkinCurveShift) return;
       if (checkinCurveCompany && actCompany !== checkinCurveCompany) return;
 
       const plannedM = checkinParseNumber(activity.plannedMeters);
       const executedM = checkinParseNumber(activity.executedMeters);
       const isCompleted = checkinIsActivityCompleted(activity);
       const isDeviation = checkinIsActivityDeviation(activity);
+      const { isExtra, plannedTask, executedTask, progressPct } = checkinActivityTaskProgress(activity);
 
-      row.plannedTasks += 1;
-      if (isCompleted) row.completedTasks += 1;
+      row.plannedTasks += plannedTask;
+      row.completedTasks += executedTask;
       if (isDeviation) row.deviationTasks += 1;
-      row.plannedMeters += plannedM;
+      row.plannedMeters += isExtra ? 0 : plannedM;
       row.executedMeters += executedM;
 
       matchedActivities.push({
         report,
         activity,
         discipline: actDiscipline,
+        shift: actShift,
         company: actCompany,
+        isExtra,
+        plannedTask,
+        executedTask,
+        progressPct,
         plannedM,
         executedM,
-        diffM: executedM - plannedM,
+        diffM: executedM - (isExtra ? 0 : plannedM),
         isCompleted,
         isDeviation
       });
@@ -1863,6 +2519,7 @@ function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
   });
 
   const maxValue = Math.max(1, ...points.map(point => Math.max(point.planned, point.executed)));
+  const tickDigits = isTasksMetric && maxValue < 10 ? 1 : 0;
   const width = 900, height = 310, left = 54, right = 22, top = 20, bottom = 48;
   const chartWidth = width - left - right, chartHeight = height - top - bottom;
   const x = index => left + (points.length <= 1 ? chartWidth / 2 : index * chartWidth / (points.length - 1));
@@ -1874,23 +2531,32 @@ function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
   const pathFor = key => points.map((point, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${y(point[key]).toFixed(1)}`).join(' ');
   const ticks = [0, maxValue / 2, maxValue];
 
-  const totalTasks = matchedActivities.length;
+  const totalPlannedTasks = matchedActivities.reduce((s, item) => s + item.plannedTask, 0);
+  const totalExtraTasks = matchedActivities.filter(item => item.isExtra).length;
+  const totalExecutedTasks = matchedActivities.reduce((s, item) => s + item.executedTask, 0);
   const totalCompletedTasks = matchedActivities.filter(item => item.isCompleted).length;
+  const totalPartialTasks = matchedActivities.filter(item => checkinActivityBucket(item.activity) === 'partial').length;
   const totalDeviationTasks = matchedActivities.filter(item => item.isDeviation).length;
-  const totalPlannedM = matchedActivities.reduce((s, item) => s + item.plannedM, 0);
+  const totalPlannedM = matchedActivities.reduce((s, item) => s + (item.isExtra ? 0 : item.plannedM), 0);
   const totalExecutedM = matchedActivities.reduce((s, item) => s + item.executedM, 0);
+  const overallTaskPct = totalPlannedTasks > 0
+    ? Math.round((totalExecutedTasks / totalPlannedTasks) * 100)
+    : (totalExecutedTasks > 0 ? 100 : 0);
 
   // Agrupamento por disciplina
   const discOrder = checkinUniqueOptions([...CHECKIN_DISCIPLINES, ...matchedActivities.map(m => m.discipline)]);
   const byDiscipline = discOrder.map(disc => {
     const items = matchedActivities.filter(m => m.discipline === disc);
     if (!items.length) return null;
+    const plannedTasks = items.reduce((s, m) => s + m.plannedTask, 0);
+    const extraCount = items.filter(m => m.isExtra).length;
+    const executedTasks = items.reduce((s, m) => s + m.executedTask, 0);
     const completed = items.filter(m => checkinActivityBucket(m.activity) === 'completed').length;
     const partial = items.filter(m => checkinActivityBucket(m.activity) === 'partial').length;
     const notStarted = items.filter(m => checkinActivityBucket(m.activity) === 'notStarted').length;
     const withProblem = items.filter(m => m.activity.problemCode).length;
     const deviations = items.filter(m => m.isDeviation).length;
-    const plannedM = items.reduce((s, m) => s + m.plannedM, 0);
+    const plannedM = items.reduce((s, m) => s + (m.isExtra ? 0 : m.plannedM), 0);
     const executedM = items.reduce((s, m) => s + m.executedM, 0);
     const topProblems = new Map();
     items.forEach(m => {
@@ -1899,15 +2565,18 @@ function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
       topProblems.set(label, (topProblems.get(label) || 0) + 1);
     });
     const topProblemStr = [...topProblems.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k, v]) => `${k} (${v})`).join(', ') || '—';
+    const adherencePct = plannedTasks > 0 ? Math.round((executedTasks / plannedTasks) * 100) : (executedTasks > 0 ? 100 : 0);
     return {
       discipline: disc,
-      total: items.length,
+      total: plannedTasks,
+      extraCount,
+      executedTasks,
       completed,
       partial,
       notStarted,
       withProblem,
       deviations,
-      adherencePct: items.length ? Math.round((completed / items.length) * 100) : 0,
+      adherencePct,
       plannedM,
       executedM,
       diffM: executedM - plannedM,
@@ -1920,43 +2589,28 @@ function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
     .filter(item => !checkinCurveDeviationOnly || item.isDeviation)
     .sort((a, b) => b.report.workDate.localeCompare(a.report.workDate) || a.discipline.localeCompare(b.discipline) || a.report.dh.localeCompare(b.report.dh));
 
-  const filterText = [checkinCurveDh || 'Todos os DHs', checkinCurveDiscipline || 'Todas as disciplinas', checkinCurveCompany || 'Todas as empresas', checkinCurveEngineer || 'Todos os engenheiros', checkinCurveWeekday ? CHECKIN_WEEKDAYS[Number(checkinCurveWeekday)] : 'Todos os dias'].join(' · ');
+  const filterText = [checkinCurveDh || 'Todos os DHs', checkinCurveShift ? `Turno ${checkinCurveShift}` : 'Todos os turnos', checkinCurveDiscipline || 'Todas as disciplinas', checkinCurveCompany || 'Todas as empresas', checkinCurveEngineer || 'Todos os engenheiros', checkinCurveWeekday ? CHECKIN_WEEKDAYS[Number(checkinCurveWeekday)] : 'Todos os dias'].join(' · ');
 
-  return `<section class="checkin-filter-panel checkin-curve-filters">
-    <label><span>Data inicial</span><input type="date" value="${checkinCurveStart}" onchange="checkinSetCurveRange('start',this.value)"></label>
-    <label><span>Data final</span><input type="date" value="${checkinCurveEnd}" onchange="checkinSetCurveRange('end',this.value)"></label>
-    <label><span>Disciplina</span><select onchange="checkinSetCurveFilter('discipline',this.value)">${checkinSelectOptions(disciplines, checkinCurveDiscipline, 'Todas')}</select></label>
-    <label><span>Empresa</span><select onchange="checkinSetCurveFilter('company',this.value)">${checkinSelectOptions(companies, checkinCurveCompany, 'Todas')}</select></label>
-    <label><span>Engenheiro</span><select onchange="checkinSetCurveFilter('engineer',this.value)">${checkinSelectOptions(engineers, checkinCurveEngineer, 'Todos')}</select></label>
-    <label><span>Data Hall</span><select onchange="checkinSetCurveFilter('dh',this.value)">${checkinSelectOptions(dataHalls, checkinCurveDh, 'Todos')}</select></label>
-    <label><span>Dia da semana</span><select onchange="checkinSetCurveFilter('weekday',this.value)"><option value="">Todos</option>${CHECKIN_WEEKDAYS.map((day, index) => `<option value="${index}" ${checkinCurveWeekday === String(index) ? 'selected' : ''}>${day}</option>`).join('')}</select></label>
-    <label><span>Unidade do gráfico</span><select onchange="checkinSetCurveFilter('metric',this.value)">
-      <option value="tasks" ${isTasksMetric ? 'selected' : ''}>Por tarefas (Concluídas x Planejadas)</option>
-      <option value="meters" ${!isTasksMetric ? 'selected' : ''}>Por quantidade / metros</option>
-    </select></label>
-    <button class="button button-dark" onclick="checkinOpenReportPDF('curve')">${icon('print')} Extrair Relatório PDF</button>
-  </section>
-
-  <section class="checkin-metrics">
-    <article><small>TAREFAS PLANEJADAS</small><strong>${totalTasks}</strong></article>
-    <article><small>TAREFAS CONCLUÍDAS</small><strong>${totalCompletedTasks} (${totalTasks ? Math.round(totalCompletedTasks / totalTasks * 100) : 0}%)</strong></article>
+  return `<section class="checkin-metrics">
+    <article><small>TAREFAS PLANEJADAS</small><strong>${totalPlannedTasks}${totalExtraTasks ? ` <span style="font-size:12px;color:#6d28d9;font-weight:700;">(+${totalExtraTasks} extra)</span>` : ''}</strong></article>
+    <article><small>AVANÇO EM TAREFAS (EXEC.)</small><strong style="color:${overallTaskPct >= 100 ? '#15803d' : '#0f172a'}">${checkinNumber(totalExecutedTasks, 2)} (${overallTaskPct}%)</strong><small style="display:block;margin-top:2px;font-size:10px;color:#475569;font-weight:700;">${totalCompletedTasks} concluída(s) · ${totalPartialTasks} parcial(is)</small></article>
     <article><small>TAREFAS COM DESVIO</small><strong style="color:${totalDeviationTasks ? '#b91c1c' : '#143d2b'}">${totalDeviationTasks}</strong></article>
     <article><small>VOLUME (PREV. / EXEC.)</small><strong>${checkinNumber(totalPlannedM)} / ${checkinNumber(totalExecutedM)}</strong></article>
   </section>
 
   <article class="checkin-report-card">
     <header class="checkin-report-head">
-      <div><p class="eyebrow">ANÁLISE POR DISCIPLINA</p><h2>Desempenho e Desvios por Disciplina</h2><p>Comparativo de tarefas planejadas, concluídas e desvios no período · ${esc(filterText)}</p></div>
+      <div><p class="eyebrow">ANÁLISE POR DISCIPLINA</p><h2>Desempenho e Desvios por Disciplina</h2><p>Comparativo de tarefas planejadas, avanço proporcional executado e desvios no período · ${esc(filterText)}</p></div>
     </header>
     ${byDiscipline.length ? `<div class="checkin-activity-table-wrap"><table class="checkin-activity-table checkin-plan-table">
       <thead><tr>
         <th>Disciplina</th>
         <th>Tarefas Planejadas</th>
-        <th>Concluídas</th>
+        <th>Concluídas (100%+)</th>
         <th>Parciais</th>
         <th>Não inic. / Susp.</th>
         <th>Tarefas c/ Desvio</th>
-        <th>% Aderência (Tarefas)</th>
+        <th>Avanço Físico (Tarefas)</th>
         <th>Qtd Prev. / Exec.</th>
         <th>Saldo (Desvio Qtd)</th>
         <th>Principais Motivos de Desvio</th>
@@ -1964,12 +2618,12 @@ function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
       <tbody>
         ${byDiscipline.map(d => `<tr>
           <td><strong>${esc(d.discipline)}</strong></td>
-          <td><strong>${d.total}</strong></td>
+          <td><strong>${d.total}</strong>${d.extraCount ? `<small style="color:#6d28d9;font-weight:700;">+${d.extraCount} extra(s)</small>` : ''}</td>
           <td style="color:#15803d;font-weight:700">${d.completed}</td>
           <td style="color:#b45309;font-weight:700">${d.partial}</td>
           <td style="color:#64748b;font-weight:700">${d.notStarted}</td>
           <td style="color:${d.deviations ? '#b91c1c' : '#15803d'};font-weight:800">${d.deviations}</td>
-          <td><strong>${d.adherencePct}%</strong></td>
+          <td style="color:${d.adherencePct >= 100 ? '#15803d' : '#0f172a'};font-weight:800"><strong>${checkinNumber(d.executedTasks, 2)} (${d.adherencePct}%)</strong></td>
           <td>${checkinNumber(d.plannedM)} / ${checkinNumber(d.executedM)}</td>
           <td style="color:${d.diffM < 0 ? '#b91c1c' : '#15803d'};font-weight:700">${d.diffM > 0 ? '+' : ''}${checkinNumber(d.diffM)}</td>
           <td><small>${esc(d.topProblemStr)}</small></td>
@@ -1978,11 +2632,11 @@ function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
     </table></div>` : `<div class="checkin-empty"><p>Nenhuma tarefa encontrada para este filtro.</p></div>`}
   </article>
 
-  <article class="checkin-curve-card"><header><div><p class="eyebrow">ACOMPANHAMENTO FÍSICO</p><h2>Curva S — ${isTasksMetric ? 'Tarefas Planejadas x Concluídas' : 'Quantidade Planejada x Executada'}</h2><p>Acumulado diário (${isTasksMetric ? 'em nº de tarefas' : 'em quantidade/metros'}) · ${checkinFormatDate(checkinCurveStart)} a ${checkinFormatDate(checkinCurveEnd)}</p></div><div class="checkin-curve-legend"><span class="planned">${isTasksMetric ? 'Tarefas planejadas' : 'Planejado'}</span><span class="executed">${isTasksMetric ? 'Tarefas concluídas' : 'Executado'}</span></div></header>
+  <article class="checkin-curve-card"><header><div><p class="eyebrow">ACOMPANHAMENTO FÍSICO</p><h2>Curva S — ${isTasksMetric ? 'Tarefas Planejadas x Avanço Executado (Proporcional)' : 'Quantidade Planejada x Executada'}</h2><p>Acumulado diário (${isTasksMetric ? 'peso 1,0 por tarefa planejada · avanço proporcional ao volume executado' : 'em quantidade/metros'}) · ${checkinFormatDate(checkinCurveStart)} a ${checkinFormatDate(checkinCurveEnd)}</p></div><div class="checkin-curve-legend"><span class="planned">${isTasksMetric ? `Tarefas planejadas (${checkinNumber(points.at(-1)?.planned || 0, 2)})` : `Planejado (${checkinNumber(points.at(-1)?.planned || 0, 1)})`}</span><span class="executed">${isTasksMetric ? `Avanço executado (${checkinNumber(points.at(-1)?.executed || 0, 2)})` : `Executado (${checkinNumber(points.at(-1)?.executed || 0, 1)})`}</span></div></header>
     ${points.length ? `<div class="checkin-chart-scroll"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Curva S acumulada">
-      ${ticks.map(value => `<g><line x1="${left}" y1="${y(value)}" x2="${width - right}" y2="${y(value)}"/><text x="${left - 8}" y="${y(value) + 4}" text-anchor="end">${checkinNumber(value, 0)}</text></g>`).join('')}
+      ${ticks.map(value => `<g><line x1="${left}" y1="${y(value)}" x2="${width - right}" y2="${y(value)}"/><text x="${left - 8}" y="${y(value) + 4}" text-anchor="end">${checkinNumber(value, tickDigits)}</text></g>`).join('')}
       <path class="curve-planned" d="${pathFor('planned')}"/><path class="curve-executed" d="${pathFor('executed')}"/>
-      ${points.map((point, index) => `<g><circle class="point-planned" cx="${x(index)}" cy="${y(point.planned)}" r="3"/><circle class="point-executed" cx="${x(index)}" cy="${y(point.executed)}" r="3"/>${dateLabelIndices.has(index) ? `<text class="curve-date" x="${x(index)}" y="${height - 16}" text-anchor="middle">${new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'2-digit'}).format(new Date(`${point.date}T12:00:00`))}</text>` : ''}</g>`).join('')}
+      ${points.map((point, index) => `<g><circle class="point-planned" cx="${x(index)}" cy="${y(point.planned)}" r="3"><title>${checkinFormatDate(point.date)} — Planejado: ${checkinNumber(point.planned, 2)}</title></circle><circle class="point-executed" cx="${x(index)}" cy="${y(point.executed)}" r="3"><title>${checkinFormatDate(point.date)} — Executado: ${checkinNumber(point.executed, 2)}</title></circle>${dateLabelIndices.has(index) ? `<text class="curve-date" x="${x(index)}" y="${height - 16}" text-anchor="middle">${new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(`${point.date}T12:00:00`))}</text>` : ''}</g>`).join('')}
     </svg></div>` : `<div class="checkin-empty"><h2>Selecione um intervalo válido</h2></div>`}
     ${matchedActivities.length ? '' : `<p class="checkin-curve-empty">Ainda não há planejamento ou executado no recorte escolhido.</p>`}
   </article>
@@ -1998,58 +2652,97 @@ function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
     ${taskRows.length ? `<div class="checkin-activity-table-wrap"><table class="checkin-activity-table checkin-plan-table">
       <thead><tr>
         <th>Data / DH</th>
-        <th>Disciplina</th>
+        <th>Disciplina / Turno</th>
         <th>Engenheiro / Empresa</th>
         <th>Item / Local / Tarefa</th>
         <th>Previsto</th>
         <th>Executado</th>
         <th>Desvio (Saldo)</th>
-        <th>%</th>
+        <th>% (Peso Tarefa)</th>
         <th>Status</th>
         <th>Cód. Problema / Imprevisto</th>
         <th>Observações</th>
       </tr></thead>
       <tbody>
-        ${taskRows.map(({ report, activity, discipline, company, plannedM, executedM, diffM, isDeviation }) => {
-          const pct = plannedM > 0 ? `${checkinNumber(executedM / plannedM * 100, 0)}%` : executedM > 0 ? 'Extra' : '0%';
-          const probLabel = activity.problemCode ? checkinProblemLabel(activity.problemCode, activity.problemOther) : '—';
-          return `<tr style="${isDeviation ? 'background:#fff5f5;' : ''}">
+        ${taskRows.map(({ report, activity, discipline, shift, company, isExtra, executedTask, plannedM, executedM, diffM, isDeviation }) => {
+    const pct = plannedM > 0 ? `${checkinNumber(executedM / plannedM * 100, 0)}%` : executedM > 0 ? '100%' : '0%';
+    const probLabel = activity.problemCode ? checkinProblemLabel(activity.problemCode, activity.problemOther) : '—';
+    const currentStatus = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
+    return `<tr style="${isDeviation ? 'background:#fff5f5;' : ''}">
             <td><strong>${checkinFormatDate(report.workDate)}</strong><small>${esc(report.dh)}</small></td>
-            <td><span class="checkin-discipline-tag">${esc(discipline)}</span></td>
+            <td><span class="checkin-discipline-tag">${esc(discipline)}</span><small>${shift === 'Noturno' ? '🌙 Noturno' : '☀️ Diurno'}</small></td>
             <td><strong>${esc(report.engineer)}</strong><small>${esc(company || '—')}</small></td>
-            <td><strong>${esc(activity.location || '—')}</strong><small>${esc([activity.pstItem, activity.scheduleId, activity.activity].filter(Boolean).join(' · '))}</small></td>
-            <td>${checkinNumber(plannedM)} ${esc(activity.unit || 'm')}</td>
+            <td>${isExtra ? `<span class="checkin-extra-pill">➕ Extra (não programada)</span>` : ''}<strong>${esc(activity.location || '—')}</strong><small>${esc([activity.pstItem, activity.scheduleId, activity.activity].filter(Boolean).join(' · '))}</small></td>
+            <td>${checkinNumber(plannedM)} ${esc(activity.unit || 'm')}${isExtra ? '<small style="color:#6d28d9;font-weight:700;">Estimado (Extra)</small>' : ''}</td>
             <td><strong>${checkinNumber(executedM)} ${esc(activity.unit || 'm')}</strong></td>
             <td style="color:${diffM < 0 ? '#b91c1c' : '#15803d'};font-weight:800">${diffM > 0 ? '+' : ''}${checkinNumber(diffM)} ${esc(activity.unit || 'm')}</td>
-            <td><strong>${pct}</strong></td>
-            <td><span class="checkin-status-pill ${activity.status === 'Concluído' ? 'closed' : activity.status === 'Iniciado' ? 'running' : 'pending'}">${esc(activity.status || 'Não iniciado')}</span></td>
+            <td><strong>${pct}</strong><small>${checkinNumber(executedTask, 2)} tarefa</small></td>
+            <td><span class="checkin-status-pill ${currentStatus === 'Concluído' ? 'closed' : currentStatus === 'Iniciado' ? 'running' : 'pending'}">${esc(currentStatus)}</span></td>
             <td style="color:${activity.problemCode ? '#b91c1c' : 'inherit'};font-weight:${activity.problemCode ? '700' : '400'}">${esc(probLabel)}</td>
             <td><small>${esc(activity.notes || '—')}</small></td>
           </tr>`;
-        }).join('')}
+  }).join('')}
       </tbody>
     </table></div>` : `<div class="checkin-empty"><p>Nenhuma tarefa com desvio no recorte selecionado.</p></div>`}
   </article>`;
 }
 
+function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
+  const isTasksMetric = checkinCurveMetric === 'tasks';
+  return `<section class="checkin-filter-panel checkin-curve-filters">
+    <label><span>Data inicial</span><input type="date" data-checkin-curve-start value="${checkinCurveStart}" oninput="checkinSetCurveRange('start',this.value)" onchange="checkinSetCurveRange('start',this.value)"></label>
+    <label><span>Data final</span><input type="date" data-checkin-curve-end value="${checkinCurveEnd}" oninput="checkinSetCurveRange('end',this.value)" onchange="checkinSetCurveRange('end',this.value)"></label>
+    <label><span>Turno</span><select onchange="checkinSetCurveFilter('shift',this.value)">${checkinShiftSelectOptions(checkinCurveShift, 'Todos')}</select></label>
+    <label><span>Disciplina</span><select onchange="checkinSetCurveFilter('discipline',this.value)">${checkinSelectOptions(disciplines, checkinCurveDiscipline, 'Todas')}</select></label>
+    <label><span>Empresa</span><select onchange="checkinSetCurveFilter('company',this.value)">${checkinSelectOptions(companies, checkinCurveCompany, 'Todas')}</select></label>
+    <label><span>Engenheiro</span><select onchange="checkinSetCurveFilter('engineer',this.value)">${checkinSelectOptions(engineers, checkinCurveEngineer, 'Todos')}</select></label>
+    <label><span>Data Hall</span><select onchange="checkinSetCurveFilter('dh',this.value)">${checkinSelectOptions(dataHalls, checkinCurveDh, 'Todos')}</select></label>
+    <label><span>Dia da semana</span><select onchange="checkinSetCurveFilter('weekday',this.value)"><option value="">Todos</option>${CHECKIN_WEEKDAYS.map((day, index) => `<option value="${index}" ${checkinCurveWeekday === String(index) ? 'selected' : ''}>${day}</option>`).join('')}</select></label>
+    <label><span>Unidade do gráfico</span><select onchange="checkinSetCurveFilter('metric',this.value)">
+      <option value="tasks" ${isTasksMetric ? 'selected' : ''}>Por tarefas (Avanço proporcional x Planejadas)</option>
+      <option value="meters" ${!isTasksMetric ? 'selected' : ''}>Por quantidade / metros</option>
+    </select></label>
+    <button class="button button-dark" onclick="checkinOpenReportPDF('curve')">${icon('print')} Extrair Relatório PDF</button>
+  </section>
+  <div id="checkinCurveResults">
+    ${checkinRenderCurveResults()}
+  </div>`;
+}
+
 function checkinSetCurveRange(which, value) {
-  if (which === 'start') checkinCurveStart = value;
-  else checkinCurveEnd = value;
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(String(value).trim())) return;
+  if (which === 'start') checkinCurveStart = String(value).trim();
+  else checkinCurveEnd = String(value).trim();
+  const resultsEl = document.getElementById('checkinCurveResults');
+  if (resultsEl && checkinActiveTab === 'curva') {
+    resultsEl.innerHTML = checkinRenderCurveResults();
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return;
+  }
   renderCheckIn();
 }
 
 function checkinSetCurveFilter(which, value) {
+  checkinSyncFiltersFromDom();
   if (which === 'engineer') checkinCurveEngineer = value;
   else if (which === 'discipline') checkinCurveDiscipline = value;
+  else if (which === 'shift') checkinCurveShift = value;
   else if (which === 'company') checkinCurveCompany = value;
   else if (which === 'weekday') checkinCurveWeekday = value;
   else if (which === 'metric') checkinCurveMetric = value;
   else if (which === 'deviationOnly') checkinCurveDeviationOnly = Boolean(value);
   else checkinCurveDh = value;
+  const resultsEl = document.getElementById('checkinCurveResults');
+  if (resultsEl && checkinActiveTab === 'curva') {
+    resultsEl.innerHTML = checkinRenderCurveResults();
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return;
+  }
   renderCheckIn();
 }
 
 function checkinOpenReportPDF(initialScope = '') {
+  checkinSyncFiltersFromDom();
   const scope = initialScope || (checkinActiveTab === 'curva' ? 'curve' : 'daily');
   const isDaily = scope === 'daily';
 
@@ -2057,6 +2750,7 @@ function checkinOpenReportPDF(initialScope = '') {
   const endDate = isDaily ? checkinSelectedDate : checkinCurveEnd;
   const filterDh = isDaily ? checkinDhFilter : checkinCurveDh;
   const filterDisc = isDaily ? checkinDisciplineFilter : checkinCurveDiscipline;
+  const filterShift = isDaily ? checkinShiftFilter : checkinCurveShift;
   const filterCompany = isDaily ? checkinCompanyFilter : checkinCurveCompany;
   const filterEng = isDaily ? checkinEngineerFilter : checkinCurveEngineer;
   const filterWeekday = isDaily ? '' : checkinCurveWeekday;
@@ -2084,23 +2778,31 @@ function checkinOpenReportPDF(initialScope = '') {
   scopeReports.forEach(report => {
     (report.activities || []).forEach(activity => {
       const actDiscipline = checkinCurveActivityDiscipline(report, activity) || 'Sem disciplina';
+      const actShift = checkinGetActivityShift(report, activity);
       const actCompany = activity.contractor || report.contractor || '';
       if (filterDisc && actDiscipline !== filterDisc) return;
+      if (filterShift && actShift !== filterShift) return;
       if (filterCompany && actCompany !== filterCompany) return;
 
       const plannedM = checkinParseNumber(activity.plannedMeters);
       const executedM = checkinParseNumber(activity.executedMeters);
       const isCompleted = checkinIsActivityCompleted(activity);
       const isDeviation = checkinIsActivityDeviation(activity);
+      const { isExtra, plannedTask, executedTask, progressPct } = checkinActivityTaskProgress(activity);
 
       matchedActivities.push({
         report,
         activity,
         discipline: actDiscipline,
+        shift: actShift,
         company: actCompany,
+        isExtra,
+        plannedTask,
+        executedTask,
+        progressPct,
         plannedM,
         executedM,
-        diffM: executedM - plannedM,
+        diffM: executedM - (isExtra ? 0 : plannedM),
         isCompleted,
         isDeviation
       });
@@ -2122,12 +2824,15 @@ function checkinOpenReportPDF(initialScope = '') {
     const row = byDate.get(report.workDate) || { plannedTasks: 0, completedTasks: 0, plannedMeters: 0, executedMeters: 0 };
     (report.activities || []).forEach(activity => {
       const actDiscipline = checkinCurveActivityDiscipline(report, activity) || 'Sem disciplina';
+      const actShift = checkinGetActivityShift(report, activity);
       const actCompany = activity.contractor || report.contractor || '';
       if (filterDisc && actDiscipline !== filterDisc) return;
+      if (filterShift && actShift !== filterShift) return;
       if (filterCompany && actCompany !== filterCompany) return;
-      row.plannedTasks += 1;
-      if (checkinIsActivityCompleted(activity)) row.completedTasks += 1;
-      row.plannedMeters += checkinParseNumber(activity.plannedMeters);
+      const { isExtra, plannedTask, executedTask } = checkinActivityTaskProgress(activity);
+      row.plannedTasks += plannedTask;
+      row.completedTasks += executedTask;
+      row.plannedMeters += isExtra ? 0 : checkinParseNumber(activity.plannedMeters);
       row.executedMeters += checkinParseNumber(activity.executedMeters);
     });
     byDate.set(report.workDate, row);
@@ -2147,6 +2852,7 @@ function checkinOpenReportPDF(initialScope = '') {
   });
 
   const maxValue = Math.max(1, ...points.map(p => Math.max(p.planned, p.executed)));
+  const tickDigits = isTasksMetric && maxValue < 10 ? 1 : 0;
   const width = 880, height = 230, left = 48, right = 20, top = 18, bottom = 38;
   const chartWidth = width - left - right, chartHeight = height - top - bottom;
   const x = index => left + (points.length <= 1 ? chartWidth / 2 : index * chartWidth / (points.length - 1));
@@ -2159,26 +2865,32 @@ function checkinOpenReportPDF(initialScope = '') {
   const ticks = [0, maxValue / 2, maxValue];
 
   // KPIs
-  const totalTasks = matchedActivities.length;
+  const totalPlannedTasks = matchedActivities.reduce((s, item) => s + item.plannedTask, 0);
+  const totalExtraTasks = matchedActivities.filter(item => item.isExtra).length;
+  const totalExecutedTasks = matchedActivities.reduce((s, item) => s + item.executedTask, 0);
   const totalCompletedTasks = matchedActivities.filter(item => item.isCompleted).length;
+  const totalPartialTasks = matchedActivities.filter(item => checkinActivityBucket(item.activity) === 'partial').length;
   const totalDeviationTasks = matchedActivities.filter(item => item.isDeviation).length;
-  const totalPlannedM = matchedActivities.reduce((s, item) => s + item.plannedM, 0);
+  const totalPlannedM = matchedActivities.reduce((s, item) => s + (item.isExtra ? 0 : item.plannedM), 0);
   const totalExecutedM = matchedActivities.reduce((s, item) => s + item.executedM, 0);
   const totalCrew = matchedActivities.reduce((s, item) => s + (Number(item.activity.actualCrew) || 0), 0);
   const totalPta = matchedActivities.reduce((s, item) => s + (Number(item.activity.ptaCount) || 0), 0);
   const totalForklift = matchedActivities.reduce((s, item) => s + (Number(item.activity.forkliftCount) || 0), 0);
-  const adherencePct = totalTasks ? Math.round((totalCompletedTasks / totalTasks) * 100) : 0;
+  const adherencePct = totalPlannedTasks > 0 ? Math.round((totalExecutedTasks / totalPlannedTasks) * 100) : (totalExecutedTasks > 0 ? 100 : 0);
 
   // Resumo por disciplina
   const discOrder = checkinUniqueOptions([...CHECKIN_DISCIPLINES, ...matchedActivities.map(m => m.discipline)]);
   const byDiscipline = discOrder.map(disc => {
     const items = matchedActivities.filter(m => m.discipline === disc);
     if (!items.length) return null;
+    const plannedTasks = items.reduce((s, m) => s + m.plannedTask, 0);
+    const extraCount = items.filter(m => m.isExtra).length;
+    const executedTasks = items.reduce((s, m) => s + m.executedTask, 0);
     const completed = items.filter(m => checkinActivityBucket(m.activity) === 'completed').length;
     const partial = items.filter(m => checkinActivityBucket(m.activity) === 'partial').length;
     const notStarted = items.filter(m => checkinActivityBucket(m.activity) === 'notStarted').length;
     const deviations = items.filter(m => m.isDeviation).length;
-    const plannedM = items.reduce((s, m) => s + m.plannedM, 0);
+    const plannedM = items.reduce((s, m) => s + (m.isExtra ? 0 : m.plannedM), 0);
     const executedM = items.reduce((s, m) => s + m.executedM, 0);
     const crew = items.reduce((s, m) => s + (Number(m.activity.actualCrew) || 0), 0);
     const topProblems = new Map();
@@ -2190,12 +2902,14 @@ function checkinOpenReportPDF(initialScope = '') {
     const topProblemStr = [...topProblems.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k, v]) => `${k} (${v})`).join(', ') || '—';
     return {
       discipline: disc,
-      total: items.length,
+      total: plannedTasks,
+      extraCount,
+      executedTasks,
       completed,
       partial,
       notStarted,
       deviations,
-      adherencePct: Math.round((completed / items.length) * 100),
+      adherencePct: plannedTasks > 0 ? Math.round((executedTasks / plannedTasks) * 100) : (executedTasks > 0 ? 100 : 0),
       plannedM,
       executedM,
       diffM: executedM - plannedM,
@@ -2218,10 +2932,15 @@ function checkinOpenReportPDF(initialScope = '') {
   const filterSummary = [
     isDaily ? `Data: ${checkinFormatDate(checkinSelectedDate)}` : `Período: ${checkinFormatDate(startDate)} a ${checkinFormatDate(endDate)}`,
     filterDh || 'Todos os DHs',
+    filterShift ? `Turno ${filterShift}` : 'Todos os turnos',
     filterDisc || 'Todas as disciplinas',
     filterCompany || 'Todas as empresas',
     filterEng || 'Todos os engenheiros'
   ].join(' · ');
+
+  const pdfFileName = isDaily
+    ? `Relatorio-Checkin-Checkout-${startDate}`
+    : `Relatorio-CurvaS-Checkin-${startDate}-a-${endDate}`;
 
   const content = `
     <div class="no-print" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px; padding:10px 14px; background:#f8fafc; border:1.5px solid #cbd5e1; border-radius:8px;">
@@ -2239,74 +2958,66 @@ function checkinOpenReportPDF(initialScope = '') {
       </div>
     </div>
 
-    <article class="report-document" style="padding:22px 26px; background:#ffffff; color:#0f172a; min-width:980px; box-shadow:0 4px 18px rgba(0,0,0,0.06); border-radius:8px;">
-      <header class="report-document-head" style="display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:20px; border-bottom:2.5px solid #0f172a; padding-bottom:12px; margin-bottom:14px;">
-        <div class="report-logos" style="display:flex; align-items:center; gap:14px;">
-          <img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling" style="height:46px; max-width:140px; object-fit:contain;">
-          <div style="height:34px; width:1.5px; background:#cbd5e1;"></div>
-          <img src="assets/afonso-franca-logo.png" alt="Afonso França Engenharia" style="height:42px; max-width:140px; object-fit:contain;">
+    <article class="checkin-pdf-document">
+      <header class="checkin-pdf-head">
+        <div class="checkin-pdf-logos">
+          <img src="assets/heating-cooling-logo.jpg" alt="Heating Cooling">
+          <div class="checkin-pdf-logo-sep"></div>
+          <img src="assets/afonso-franca-logo.png" alt="Afonso França Engenharia">
         </div>
-        <div style="text-align:center;">
-          <small style="color:#15803d; font-weight:800; letter-spacing:1px; text-transform:uppercase; font-size:10px; display:block;">
-            HEATING COOLING TECNOLOGIA & AFONSO FRANÇA ENGENHARIA
-          </small>
-          <h1 style="margin:4px 0 0; font-size:16px; font-weight:900; color:#0f172a; letter-spacing:-0.3px;">
-            ${esc(reportTitle)}
-          </h1>
-          <p style="margin:4px 0 0; font-size:10.5px; color:#475569; font-weight:600;">
-            ${esc(filterSummary)}
-          </p>
+        <div class="checkin-pdf-title-wrap">
+          <small>HEATING COOLING TECNOLOGIA &amp; AFONSO FRANÇA ENGENHARIA</small>
+          <h1>${esc(reportTitle)}</h1>
+          <p>${esc(filterSummary)}</p>
         </div>
-        <aside style="text-align:right; font-size:10px; color:#475569; display:grid; gap:3px; padding-left:14px; border-left:1px solid #cbd5e1;">
-          <strong style="color:#0f172a; font-size:11px;">DATA CENTER OMNIA</strong>
+        <aside class="checkin-pdf-meta">
+          <strong>DATA CENTER OMNIA</strong>
           <span>Check-in / Check-out HVAC</span>
           <span>Emissão: ${esc(nowFormatted)}</span>
         </aside>
       </header>
 
       <!-- KPIS -->
-      <div class="report-summary" style="display:grid; grid-template-columns:repeat(6, 1fr); margin-bottom:14px; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; background:#f8fafc;">
-        <span style="padding:9px 12px; border-right:1px solid #e2e8f0; display:grid; gap:2px;">
-          <b style="font-size:17px; color:#0f172a; font-weight:900;">${totalTasks}</b>
-          <small style="font-size:9.5px; font-weight:800; color:#64748b; text-transform:uppercase;">Tarefas Planejadas</small>
-        </span>
-        <span style="padding:9px 12px; border-right:1px solid #e2e8f0; display:grid; gap:2px; background:#f0fdf4;">
-          <b style="font-size:17px; color:#15803d; font-weight:900;">${totalCompletedTasks} (${adherencePct}%)</b>
-          <small style="font-size:9.5px; font-weight:800; color:#15803d; text-transform:uppercase;">Tarefas Concluídas</small>
-        </span>
-        <span style="padding:9px 12px; border-right:1px solid #e2e8f0; display:grid; gap:2px; background:#fef2f2;">
-          <b style="font-size:17px; color:#b91c1c; font-weight:900;">${totalDeviationTasks}</b>
-          <small style="font-size:9.5px; font-weight:800; color:#b91c1c; text-transform:uppercase;">Tarefas c/ Desvio</small>
-        </span>
-        <span style="padding:9px 12px; border-right:1px solid #e2e8f0; display:grid; gap:2px;">
-          <b style="font-size:17px; color:#1e40af; font-weight:900;">${checkinNumber(totalPlannedM)} / ${checkinNumber(totalExecutedM)}</b>
-          <small style="font-size:9.5px; font-weight:800; color:#475569; text-transform:uppercase;">Volume Prev. / Exec.</small>
-        </span>
-        <span style="padding:9px 12px; border-right:1px solid #e2e8f0; display:grid; gap:2px;">
-          <b style="font-size:17px; color:#0f172a; font-weight:900;">${totalCrew} pessoas</b>
-          <small style="font-size:9.5px; font-weight:800; color:#64748b; text-transform:uppercase;">Efetivo Apontado</small>
-        </span>
-        <span style="padding:9px 12px; display:grid; gap:2px;">
-          <b style="font-size:17px; color:#0f172a; font-weight:900;">${totalPta} PTA · ${totalForklift} Emp.</b>
-          <small style="font-size:9.5px; font-weight:800; color:#64748b; text-transform:uppercase;">Equipamentos</small>
-        </span>
+      <div class="checkin-pdf-summary">
+        <div class="checkin-pdf-kpi">
+          <b>${totalPlannedTasks}${totalExtraTasks ? ` <small class="checkin-pdf-extra-tag">(+${totalExtraTasks} extra)</small>` : ''}</b>
+          <small>Tarefas Planejadas</small>
+        </div>
+        <div class="checkin-pdf-kpi is-green">
+          <b>${checkinNumber(totalExecutedTasks, 2)} (${adherencePct}%)</b>
+          <small>Avanço Tarefas (${totalCompletedTasks} concl. · ${totalPartialTasks} parc.)</small>
+        </div>
+        <div class="checkin-pdf-kpi is-red">
+          <b>${totalDeviationTasks}</b>
+          <small>Tarefas c/ Desvio</small>
+        </div>
+        <div class="checkin-pdf-kpi is-blue">
+          <b>${checkinNumber(totalPlannedM)} / ${checkinNumber(totalExecutedM)}</b>
+          <small>Volume Prev. / Exec.</small>
+        </div>
+        <div class="checkin-pdf-kpi">
+          <b>${totalCrew} pessoas</b>
+          <small>Efetivo Apontado</small>
+        </div>
+        <div class="checkin-pdf-kpi">
+          <b>${totalPta} PTA · ${totalForklift} Emp.</b>
+          <small>Equipamentos</small>
+        </div>
       </div>
 
       <!-- GRÁFICO CURVA S -->
-      <section class="report-section" style="margin-bottom:16px; padding:12px 14px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; page-break-inside:avoid;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <div>
-            <h2 style="margin:0; font-size:12.5px; font-weight:800; color:#0f172a; border-left:3px solid #15803d; padding-left:8px;">
-              Curva S — ${isTasksMetric ? 'Tarefas Planejadas x Concluídas' : 'Volume Planejado x Executado'} (${checkinFormatDate(chartStart)} a ${checkinFormatDate(chartEnd)})
-            </h2>
-          </div>
-          <div style="display:flex; gap:14px; font-size:10.5px; font-weight:800;">
-            <span style="color:#2777c7;">● Planejado (${checkinNumber(points.at(-1)?.planned || 0)})</span>
-            <span style="color:#24a269;">● Executado / Concluído (${checkinNumber(points.at(-1)?.executed || 0)})</span>
+      <section class="checkin-pdf-section checkin-pdf-chart-section">
+        <div class="checkin-pdf-chart-head">
+          <h2 class="checkin-pdf-h2 is-green">
+            Curva S — ${isTasksMetric ? 'Tarefas Planejadas x Avanço Executado (Proporcional)' : 'Volume Planejado x Executado'} (${checkinFormatDate(chartStart)} a ${checkinFormatDate(chartEnd)})
+          </h2>
+          <div class="checkin-pdf-chart-legend">
+            <span style="color:#2777c7;">● Planejado (${checkinNumber(points.at(-1)?.planned || 0, isTasksMetric ? 2 : 1)})</span>
+            <span style="color:#24a269;">● Avanço Executado (${checkinNumber(points.at(-1)?.executed || 0, isTasksMetric ? 2 : 1)})</span>
           </div>
         </div>
-        <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;">
-          ${ticks.map(val => `<g><line x1="${left}" y1="${y(val)}" x2="${width - right}" y2="${y(val)}" stroke="#e2e8f0" stroke-width="1"/><text x="${left - 6}" y="${y(val) + 4}" text-anchor="end" fill="#64748b" font-size="9.5" font-family="Arial">${checkinNumber(val, 0)}</text></g>`).join('')}
+        <svg class="checkin-pdf-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+          ${ticks.map(val => `<g><line x1="${left}" y1="${y(val)}" x2="${width - right}" y2="${y(val)}" stroke="#e2e8f0" stroke-width="1"/><text x="${left - 6}" y="${y(val) + 4}" text-anchor="end" fill="#64748b" font-size="9.5" font-family="Arial">${checkinNumber(val, tickDigits)}</text></g>`).join('')}
           <path d="${pathFor('planned')}" fill="none" stroke="#2777c7" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="${pathFor('executed')}" fill="none" stroke="#24a269" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
           ${points.map((pt, idx) => `<g>
@@ -2318,41 +3029,54 @@ function checkinOpenReportPDF(initialScope = '') {
       </section>
 
       <!-- RESUMO POR DISCIPLINA -->
-      <section class="report-section" style="margin-bottom:16px; page-break-inside:avoid;">
-        <h2 style="font-size:12.5px; font-weight:800; margin:0 0 8px; color:#0f172a; border-left:3px solid #2777c7; padding-left:8px;">
+      <section class="checkin-pdf-section checkin-pdf-disc-section">
+        <h2 class="checkin-pdf-h2 is-blue">
           Desempenho e Desvios por Disciplina
         </h2>
         ${byDiscipline.length ? `
-          <table class="report-table" style="width:100%; font-size:10px; border-collapse:collapse;">
+          <table class="checkin-pdf-table checkin-pdf-table-disc">
+            <colgroup>
+              <col style="width:10%;">
+              <col style="width:8%;">
+              <col style="width:6%;">
+              <col style="width:6%;">
+              <col style="width:7%;">
+              <col style="width:6.5%;">
+              <col style="width:9.5%;">
+              <col style="width:10%;">
+              <col style="width:7.5%;">
+              <col style="width:6.5%;">
+              <col style="width:23%;">
+            </colgroup>
             <thead>
-              <tr style="background:#0f172a; color:#ffffff;">
-                <th style="padding:6px 8px; border:1px solid #475569; text-align:left;">DISCIPLINA</th>
-                <th style="padding:6px 8px; border:1px solid #475569; text-align:center;">TAREFAS PLANEJADAS</th>
-                <th style="padding:6px 8px; border:1px solid #475569; text-align:center;">CONCLUÍDAS</th>
-                <th style="padding:6px 8px; border:1px solid #475569; text-align:center;">PARCIAIS</th>
-                <th style="padding:6px 8px; border:1px solid #475569; text-align:center;">NÃO INIC. / SUSP.</th>
-                <th style="padding:6px 8px; border:1px solid #475569; text-align:center;">C/ DESVIO</th>
-                <th style="padding:6px 8px; border:1px solid #475569; text-align:center;">% ADERÊNCIA</th>
-                <th style="padding:6px 8px; border:1px solid #475569; text-align:center;">QTD PREV. / EXEC.</th>
-                <th style="padding:6px 8px; border:1px solid #475569; text-align:center;">SALDO QTD</th>
-                <th style="padding:6px 8px; border:1px solid #475569; text-align:center;">EFETIVO</th>
-                <th style="padding:6px 8px; border:1px solid #475569; text-align:left;">PRINCIPAIS MOTIVOS DE DESVIO</th>
+              <tr>
+                <th class="col-left">DISCIPLINA</th>
+                <th class="col-center">TAREFAS PLAN.</th>
+                <th class="col-center">CONCL.</th>
+                <th class="col-center">PARC.</th>
+                <th class="col-center">NÃO INIC. / SUSP.</th>
+                <th class="col-center">C/ DESVIO</th>
+                <th class="col-center">AVANÇO (TAREFAS)</th>
+                <th class="col-center">QTD PREV. / EXEC.</th>
+                <th class="col-center">SALDO QTD</th>
+                <th class="col-center">EFETIVO</th>
+                <th class="col-left">PRINCIPAIS MOTIVOS DE DESVIO</th>
               </tr>
             </thead>
             <tbody>
               ${byDiscipline.map(d => `
                 <tr>
-                  <td style="padding:5px 8px; border:1px solid #cbd5e1; font-weight:800;">${esc(d.discipline)}</td>
-                  <td style="padding:5px 8px; border:1px solid #cbd5e1; text-align:center; font-weight:700;">${d.total}</td>
-                  <td style="padding:5px 8px; border:1px solid #cbd5e1; text-align:center; color:#15803d; font-weight:800;">${d.completed}</td>
-                  <td style="padding:5px 8px; border:1px solid #cbd5e1; text-align:center; color:#b45309; font-weight:700;">${d.partial}</td>
-                  <td style="padding:5px 8px; border:1px solid #cbd5e1; text-align:center; color:#64748b;">${d.notStarted}</td>
-                  <td style="padding:5px 8px; border:1px solid #cbd5e1; text-align:center; color:${d.deviations ? '#b91c1c' : '#15803d'}; font-weight:800;">${d.deviations}</td>
-                  <td style="padding:5px 8px; border:1px solid #cbd5e1; text-align:center; font-weight:800;">${d.adherencePct}%</td>
-                  <td style="padding:5px 8px; border:1px solid #cbd5e1; text-align:center;">${checkinNumber(d.plannedM)} / ${checkinNumber(d.executedM)}</td>
-                  <td style="padding:5px 8px; border:1px solid #cbd5e1; text-align:center; font-weight:700; color:${d.diffM < 0 ? '#b91c1c' : '#15803d'};">${d.diffM > 0 ? '+' : ''}${checkinNumber(d.diffM)}</td>
-                  <td style="padding:5px 8px; border:1px solid #cbd5e1; text-align:center;">${d.crew}</td>
-                  <td style="padding:5px 8px; border:1px solid #cbd5e1; font-size:9.5px;">${esc(d.topProblemStr)}</td>
+                  <td class="col-left" style="font-weight:800;">${esc(d.discipline)}</td>
+                  <td class="col-center" style="font-weight:700;">${d.total}${d.extraCount ? ` (+${d.extraCount})` : ''}</td>
+                  <td class="col-center" style="color:#15803d; font-weight:800;">${d.completed}</td>
+                  <td class="col-center" style="color:#b45309; font-weight:700;">${d.partial}</td>
+                  <td class="col-center" style="color:#64748b;">${d.notStarted}</td>
+                  <td class="col-center" style="color:${d.deviations ? '#b91c1c' : '#15803d'}; font-weight:800;">${d.deviations}</td>
+                  <td class="col-center" style="font-weight:800; color:${d.adherencePct >= 100 ? '#15803d' : '#0f172a'};">${checkinNumber(d.executedTasks, 2)} (${d.adherencePct}%)</td>
+                  <td class="col-center">${checkinNumber(d.plannedM)} / ${checkinNumber(d.executedM)}</td>
+                  <td class="col-center" style="font-weight:700; color:${d.diffM < 0 ? '#b91c1c' : '#15803d'};">${d.diffM > 0 ? '+' : ''}${checkinNumber(d.diffM)}</td>
+                  <td class="col-center">${d.crew}</td>
+                  <td class="col-left">${esc(d.topProblemStr)}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -2361,69 +3085,84 @@ function checkinOpenReportPDF(initialScope = '') {
       </section>
 
       <!-- RELAÇÃO DE TAREFAS E DESVIOS -->
-      <section class="report-section">
-        <h2 style="font-size:12.5px; font-weight:800; margin:0 0 8px; color:#0f172a; border-left:3px solid #0f172a; padding-left:8px;">
+      <section class="checkin-pdf-section checkin-pdf-tasks-section">
+        <h2 class="checkin-pdf-h2 is-dark">
           Detalhamento de Atividades, Horários e Desvios (${sortedTasks.length} tarefas)
         </h2>
         ${sortedTasks.length ? `
-          <table class="report-table" style="width:100%; font-size:9.8px; border-collapse:collapse;">
+          <table class="checkin-pdf-table checkin-pdf-table-tasks">
+            <colgroup>
+              <col style="width:7.5%;">
+              <col style="width:8.5%;">
+              <col style="width:11%;">
+              <col style="width:24%;">
+              <col style="width:7.5%;">
+              <col style="width:4%;">
+              <col style="width:5.5%;">
+              <col style="width:5.5%;">
+              <col style="width:5%;">
+              <col style="width:7.5%;">
+              <col style="width:14%;">
+            </colgroup>
             <thead>
-              <tr style="background:#0f172a; color:#ffffff;">
-                <th style="padding:6px 6px; border:1px solid #475569; text-align:center;">DATA / DH</th>
-                <th style="padding:6px 6px; border:1px solid #475569; text-align:left;">DISCIPLINA</th>
-                <th style="padding:6px 6px; border:1px solid #475569; text-align:left;">ENG. / EMPRESA</th>
-                <th style="padding:6px 6px; border:1px solid #475569; text-align:left;">LOCAL / ATIVIDADE</th>
-                <th style="padding:6px 6px; border:1px solid #475569; text-align:center;">INÍCIO / FIM</th>
-                <th style="padding:6px 6px; border:1px solid #475569; text-align:center;">EFET.</th>
-                <th style="padding:6px 6px; border:1px solid #475569; text-align:center;">PREV.</th>
-                <th style="padding:6px 6px; border:1px solid #475569; text-align:center;">EXEC.</th>
-                <th style="padding:6px 6px; border:1px solid #475569; text-align:center;">SALDO</th>
-                <th style="padding:6px 6px; border:1px solid #475569; text-align:center;">STATUS</th>
-                <th style="padding:6px 6px; border:1px solid #475569; text-align:left;">DESVIO / OBSERVAÇÕES</th>
+              <tr>
+                <th class="col-center">DATA / DH</th>
+                <th class="col-left">DISCIPLINA / TURNO</th>
+                <th class="col-left">ENG. / EMPRESA</th>
+                <th class="col-left">LOCAL / ATIVIDADE</th>
+                <th class="col-center">INÍCIO / FIM</th>
+                <th class="col-center">EFET.</th>
+                <th class="col-center">PREV.</th>
+                <th class="col-center">EXEC.</th>
+                <th class="col-center">SALDO</th>
+                <th class="col-center">STATUS</th>
+                <th class="col-left">DESVIO / OBSERVAÇÕES</th>
               </tr>
             </thead>
             <tbody>
-              ${sortedTasks.map(({ report, activity, discipline, company, plannedM, executedM, diffM, isDeviation }) => {
-                const prob = activity.problemCode ? checkinProblemLabel(activity.problemCode, activity.problemOther) : '';
-                const obs = [prob ? `[${prob}]` : '', activity.notes || ''].filter(Boolean).join(' ') || '—';
-                const timeStr = `${checkinFormatTime(activity.checkinAt)} → ${checkinFormatTime(activity.checkoutAt)}`;
-                return `
-                  <tr style="${isDeviation ? 'background:#fff8f8;' : ''}">
-                    <td style="padding:5px 6px; border:1px solid #cbd5e1; text-align:center; font-weight:700;">${checkinFormatDate(report.workDate)}<br><small style="color:#475569;">${esc(report.dh)}</small></td>
-                    <td style="padding:5px 6px; border:1px solid #cbd5e1; font-weight:800;">${esc(discipline)}</td>
-                    <td style="padding:5px 6px; border:1px solid #cbd5e1;"><strong>${esc(report.engineer)}</strong><br><small style="color:#475569;">${esc(company || '—')}</small></td>
-                    <td style="padding:5px 6px; border:1px solid #cbd5e1;"><strong>${esc(activity.location || '—')}</strong><br><span style="color:#334155;">${esc([activity.pstItem, activity.scheduleId, activity.activity].filter(Boolean).join(' · '))}</span></td>
-                    <td style="padding:5px 6px; border:1px solid #cbd5e1; text-align:center; white-space:nowrap;">${esc(timeStr)}</td>
-                    <td style="padding:5px 6px; border:1px solid #cbd5e1; text-align:center;">${Number(activity.actualCrew || 0) || '—'}</td>
-                    <td style="padding:5px 6px; border:1px solid #cbd5e1; text-align:center;">${checkinNumber(plannedM)} ${esc(activity.unit || 'm')}</td>
-                    <td style="padding:5px 6px; border:1px solid #cbd5e1; text-align:center; font-weight:800;">${checkinNumber(executedM)} ${esc(activity.unit || 'm')}</td>
-                    <td style="padding:5px 6px; border:1px solid #cbd5e1; text-align:center; font-weight:800; color:${diffM < 0 ? '#b91c1c' : '#15803d'};">${diffM > 0 ? '+' : ''}${checkinNumber(diffM)}</td>
-                    <td style="padding:5px 6px; border:1px solid #cbd5e1; text-align:center; font-weight:700;">${esc(activity.status || 'Não iniciado')}</td>
-                    <td style="padding:5px 6px; border:1px solid #cbd5e1; color:${prob ? '#b91c1c' : '#334155'}; font-weight:${prob ? '700' : '400'};">${esc(obs)}</td>
+              ${sortedTasks.map(({ report, activity, discipline, shift, company, isExtra, plannedM, executedM, diffM, isDeviation }) => {
+    const prob = activity.problemCode ? checkinProblemLabel(activity.problemCode, activity.problemOther) : '';
+    const obs = [prob ? `[${prob}]` : '', activity.notes || ''].filter(Boolean).join(' ') || '—';
+    const startTimeStr = checkinFormatTime(activity.checkinAt);
+    const endTimeStr = checkinFormatTime(activity.checkoutAt);
+    const currentStatus = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
+    return `
+                  <tr class="${isDeviation ? 'is-deviation' : ''}">
+                    <td class="col-center" style="font-weight:700;">${checkinFormatDate(report.workDate)}<br><small style="color:#475569;">${esc(report.dh)}</small></td>
+                    <td class="col-left" style="font-weight:800;">${esc(discipline)}<br><small style="color:${shift === 'Noturno' ? '#1e3a8a' : '#b45309'}; font-weight:700;">${shift === 'Noturno' ? 'Noturno' : 'Diurno'}</small></td>
+                    <td class="col-left"><strong>${esc(report.engineer)}</strong><br><small style="color:#475569;">${esc(company || '—')}</small></td>
+                    <td class="col-left">${isExtra ? `<span class="checkin-pdf-badge-extra">EXTRA</span> ` : ''}<strong>${esc(activity.location || '—')}</strong><br><span style="color:#334155;">${esc([activity.pstItem, activity.scheduleId, activity.activity].filter(Boolean).join(' · '))}</span></td>
+                    <td class="col-center">${esc(startTimeStr)}<br><small style="color:#475569;">→ ${esc(endTimeStr)}</small></td>
+                    <td class="col-center">${Number(activity.actualCrew || 0) || '—'}</td>
+                    <td class="col-center">${checkinNumber(plannedM)} ${esc(activity.unit || 'm')}</td>
+                    <td class="col-center" style="font-weight:800;">${checkinNumber(executedM)} ${esc(activity.unit || 'm')}</td>
+                    <td class="col-center" style="font-weight:800; color:${diffM < 0 ? '#b91c1c' : '#15803d'};">${diffM > 0 ? '+' : ''}${checkinNumber(diffM)}</td>
+                    <td class="col-center" style="font-weight:700;">${esc(currentStatus)}</td>
+                    <td class="col-left" style="color:${prob ? '#b91c1c' : '#334155'}; font-weight:${prob ? '700' : '400'};">${esc(obs)}</td>
                   </tr>
                 `;
-              }).join('')}
+  }).join('')}
             </tbody>
           </table>
         ` : `<div style="padding:20px; text-align:center; color:#64748b; border:1px dashed #cbd5e1; border-radius:6px;">Nenhuma tarefa encontrada para este filtro.</div>`}
       </section>
 
       <!-- ASSINATURAS -->
-      <div style="margin-top:30px; padding-top:18px; border-top:1px solid #cbd5e1; display:grid; grid-template-columns:1fr 1fr; gap:48px; page-break-inside:avoid;">
-        <div style="text-align:center;">
-          <div style="border-bottom:1.5px solid #0f172a; height:28px; margin-bottom:6px;"></div>
-          <strong style="font-size:11.5px; color:#0f172a; display:block;">HEATING COOLING TECNOLOGIA</strong>
-          <span style="font-size:10px; color:#64748b; font-weight:600;">Engenharia de Campo / Produção HVAC</span>
+      <div class="checkin-pdf-signatures">
+        <div>
+          <div class="checkin-pdf-sig-line"></div>
+          <strong>HEATING COOLING TECNOLOGIA</strong>
+          <span>Engenharia de Campo / Produção HVAC</span>
         </div>
-        <div style="text-align:center;">
-          <div style="border-bottom:1.5px solid #0f172a; height:28px; margin-bottom:6px;"></div>
-          <strong style="font-size:11.5px; color:#0f172a; display:block;">COORDENAÇÃO / FISCALIZAÇÃO</strong>
-          <span style="font-size:10px; color:#64748b; font-weight:600;">Acompanhamento e Controle de Planejamento</span>
+        <div>
+          <div class="checkin-pdf-sig-line"></div>
+          <strong>COORDENAÇÃO / FISCALIZAÇÃO</strong>
+          <span>Acompanhamento e Controle de Planejamento</span>
         </div>
       </div>
 
-      <footer class="report-footer" style="margin-top:20px; padding-top:8px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; font-size:9px; color:#94a3b8;">
-        <span>Heating Cooling Tecnologia · Data Center Omnia (DC01) · Check-in & Curva S</span>
+      <footer class="checkin-pdf-footer">
+        <span>Heating Cooling Tecnologia · Data Center Omnia (DC01) · Check-in &amp; Curva S</span>
         <span>Emitido em ${esc(nowFormatted)}</span>
       </footer>
     </article>
@@ -2434,14 +3173,14 @@ function checkinOpenReportPDF(initialScope = '') {
       <div class="modal-head no-print" style="padding:14px 20px; background:#0f172a; color:#ffffff; display:flex; justify-content:space-between; align-items:center;">
         <div>
           <h3 style="margin:0; font-size:15px; font-weight:900; color:#ffffff;">
-            📄 Relatório em PDF · Fechamento Diário, Desvios & Curva S
+            📄 Relatório em PDF · Fechamento Diário, Desvios &amp; Curva S
           </h3>
           <p style="margin:2px 0 0; font-size:11px; color:#94a3b8;">
             Escolha "Fechamento do Dia" ou "Período da Curva S" abaixo e clique em "Imprimir / Salvar em PDF".
           </p>
         </div>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="button button-green" onclick="window.print()" style="font-weight:800; font-size:12px; padding:8px 16px;">
+          <button type="button" class="button button-green" onclick="checkinPrintReportPDF('${esc(pdfFileName)}')" style="font-weight:800; font-size:12px; padding:8px 16px;">
             🖨️ Imprimir / Salvar em PDF
           </button>
           <button type="button" class="button button-outline" onclick="closeModal()" style="color:#ffffff; border-color:#475569; font-size:12px; padding:8px 14px;">
@@ -2454,11 +3193,11 @@ function checkinOpenReportPDF(initialScope = '') {
       </div>
       <div class="modal-foot no-print" style="padding:12px 20px; background:#ffffff; border-top:1px solid #cbd5e1; display:flex; justify-content:space-between; align-items:center;">
         <span style="font-size:11px; color:#64748b; font-weight:600;">
-          Dica: Na impressão do navegador, selecione <strong>"Salvar como PDF"</strong> em orientação <strong>Paisagem (Landscape)</strong>.
+          Dica: Na janela de impressão, selecione <strong>"Salvar como PDF"</strong> em orientação <strong>Paisagem (Landscape)</strong>.
         </span>
         <div style="display:flex; gap:8px;">
           <button type="button" class="button button-outline" onclick="closeModal()">Fechar</button>
-          <button type="button" class="button button-green" onclick="window.print()" style="font-weight:800;">
+          <button type="button" class="button button-green" onclick="checkinPrintReportPDF('${esc(pdfFileName)}')" style="font-weight:800;">
             🖨️ Imprimir / Salvar em PDF
           </button>
         </div>
@@ -2468,8 +3207,19 @@ function checkinOpenReportPDF(initialScope = '') {
 
   const backdrop = document.querySelector('.modal-backdrop');
   if (backdrop) {
-    backdrop.classList.add('print-area', 'report-print-area');
+    backdrop.classList.add('print-area', 'checkin-print-area');
   }
+}
+
+function checkinPrintReportPDF(filename = 'Relatorio-Checkin-Checkout') {
+  const prevTitle = document.title;
+  document.title = filename;
+  const restore = () => {
+    document.title = prevTitle;
+  };
+  window.addEventListener('afterprint', restore, { once: true });
+  setTimeout(restore, 15000);
+  window.print();
 }
 
 window.renderCheckIn = renderCheckIn;
@@ -2494,7 +3244,9 @@ window.checkinSetPlanRange = checkinSetPlanRange;
 window.checkinSetPlanEngineerFilter = checkinSetPlanEngineerFilter;
 window.checkinSetPlanCompanyFilter = checkinSetPlanCompanyFilter;
 window.checkinSetPlanDisciplineFilter = checkinSetPlanDisciplineFilter;
+window.checkinSetPlanShiftFilter = checkinSetPlanShiftFilter;
 window.checkinGetActivityDiscipline = checkinGetActivityDiscipline;
+window.checkinGetActivityShift = checkinGetActivityShift;
 window.checkinUpdateContractor = checkinUpdateContractor;
 window.checkinUpdateCardTotals = checkinUpdateCardTotals;
 window.checkinReportContractorsDisplay = checkinReportContractorsDisplay;
@@ -2507,6 +3259,9 @@ window.checkinToggleExtraReason = checkinToggleExtraReason;
 window.checkinToggleExtraReasonOther = checkinToggleExtraReasonOther;
 window.checkinAutoSaveReport = checkinAutoSaveReport;
 window.checkinOnTaskDisciplineChange = checkinOnTaskDisciplineChange;
+window.checkinOnTaskShiftChange = checkinOnTaskShiftChange;
+window.checkinOnTaskExtraChange = checkinOnTaskExtraChange;
 window.checkinUpdateTaskTime = checkinUpdateTaskTime;
 window.checkinReopenTask = checkinReopenTask;
 window.checkinOpenReportPDF = checkinOpenReportPDF;
+window.checkinPrintReportPDF = checkinPrintReportPDF;
