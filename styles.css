@@ -13666,6 +13666,24 @@ body.sidebar-collapsed .mobile-menu {
   font-weight: 800;
 }
 
+.checkin-carryover-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px 4px;
+  padding: 2px 7px;
+  border: 1px solid #fcd34d;
+  border-radius: 99px;
+  background: #fffbeb;
+  color: #b45309;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.checkin-activity-row.is-carryover-task {
+  background: #fffdf5;
+}
+
 .checkin-activity-table td .checkin-extra-toggle {
   display: inline-flex;
   align-items: center;
@@ -14698,5 +14716,106 @@ body.sidebar-collapsed .mobile-menu {
   .checkin-print-area .checkin-pdf-footer {
     margin-top: 10px !important;
     font-size: 7pt !important;
+  }
+}
+
+/* Gestão de Usuários & Aprovações: garante visibilidade dos botões em tablets e celulares */
+.user-management-table-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.user-management-actions-cell {
+  text-align: right;
+}
+
+.user-management-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 1180px) {
+  .user-management-table-card {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .data-table.user-management-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    display: block;
+  }
+
+  .data-table.user-management-table thead {
+    display: none;
+  }
+
+  .data-table.user-management-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .data-table.user-management-table tbody tr {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border: 1px solid var(--line) !important;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  }
+
+  .data-table.user-management-table tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 !important;
+    border: 0 !important;
+    text-align: right;
+  }
+
+  .data-table.user-management-table tbody td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    text-align: left;
+    flex-shrink: 0;
+  }
+
+  .data-table.user-management-table tbody td.user-management-actions-cell {
+    display: block;
+    margin-top: 6px;
+    padding-top: 10px !important;
+    border-top: 1px solid var(--line) !important;
+    text-align: left;
+  }
+
+  .data-table.user-management-table tbody td.user-management-actions-cell::before {
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .data-table.user-management-table .user-management-actions {
+    display: flex;
+    justify-content: flex-start;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .data-table.user-management-table .user-management-actions .button {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 38px;
   }
 }

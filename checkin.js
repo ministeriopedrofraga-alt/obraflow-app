@@ -179,6 +179,165 @@ function checkinIsExtraActivity(activity) {
   );
 }
 
+function checkinIsCarryoverActivity(activity) {
+  if (!activity) return false;
+  return Boolean(
+    activity.isCarryover
+    || activity.carryoverSourceId
+    || String(activity.id || '').includes('-carry-')
+  );
+}
+
+function checkinActivityRemainingMeters(activity) {
+  if (!activity || activity.carryoverDismissed) return 0;
+  const status = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
+  if (status === 'Concluído') return 0;
+  const planned = checkinParseNumber(activity.plannedMeters);
+  const executed = checkinParseNumber(activity.executedMeters);
+  if (planned <= 0) return 0;
+  const remaining = Math.round((planned - executed) * 100) / 100;
+  return remaining > 0 ? remaining : 0;
+}
+
+function checkinShouldAutoCarryoverActivity(report, activity, { includeUnstartedPast = false } = {}) {
+  const remaining = checkinActivityRemainingMeters(activity);
+  if (remaining <= 0) return false;
+  const executed = checkinParseNumber(activity.executedMeters);
+  const status = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
+  if (executed > 0 || activity.checkoutAt || status === 'Parcial' || status === 'Suspenso') return true;
+  if (includeUnstartedPast && report?.workDate && report.workDate < checkinToday()) return true;
+  return false;
+}
+
+function checkinSyncCarryoverForReport(sourceReport, { includeUnstartedPast = false } = {}) {
+  if (!sourceReport || !sourceReport.workDate || !sourceReport.dh || !sourceReport.engineer) return null;
+  const nextDate = checkinDateOffset(sourceReport.workDate, 1);
+  if (!nextDate) return null;
+  const nextReportId = checkinReportId(nextDate, sourceReport.dh, sourceReport.engineer);
+  const existingNextReport = checkinGetReport(nextReportId);
+  let nextReport = existingNextReport ? structuredClone(existingNextReport) : null;
+  let changed = false;
+  let addedCount = 0;
+  let updatedCount = 0;
+  let removedCount = 0;
+
+  (sourceReport.activities || []).forEach(activity => {
+    if (!activity || !activity.id) return;
+    const remaining = checkinActivityRemainingMeters(activity);
+    const shouldCarry = checkinShouldAutoCarryoverActivity(sourceReport, activity, { includeUnstartedPast });
+    const carryIdx = nextReport
+      ? (nextReport.activities || []).findIndex(item => item.carryoverSourceId === activity.id)
+      : -1;
+
+    if (shouldCarry && remaining > 0) {
+      if (!nextReport) {
+        nextReport = checkinCreateReport({
+          workDate: nextDate,
+          dh: sourceReport.dh,
+          engineer: sourceReport.engineer,
+          discipline: checkinGetActivityDiscipline(sourceReport, activity) || sourceReport.discipline || '',
+          stage: sourceReport.stage || '',
+          front: sourceReport.front || '',
+          contractor: activity.contractor || sourceReport.contractor || '',
+          hcEngineer: sourceReport.hcEngineer || sourceReport.engineer || '',
+          supervisor: sourceReport.supervisor || '',
+          shift: checkinGetActivityShift(sourceReport, activity) || sourceReport.shift || ''
+        });
+      }
+      if (carryIdx < 0) {
+        const carryId = `${nextReport.id}-carry-${checkinSlug(activity.id)}`;
+        nextReport.activities.push({
+          id: carryId,
+          pstItem: activity.pstItem || '',
+          scheduleId: activity.scheduleId || '',
+          discipline: checkinGetActivityDiscipline(sourceReport, activity) || sourceReport.discipline || '',
+          shift: checkinGetActivityShift(sourceReport, activity),
+          contractor: activity.contractor || '',
+          actualCrew: null,
+          ptaCount: null,
+          forkliftCount: null,
+          location: activity.location || '',
+          activity: activity.activity || '',
+          unit: activity.unit || 'm',
+          plannedMeters: remaining,
+          executedMeters: 0,
+          status: 'Não iniciado',
+          problemCode: '',
+          problemOther: '',
+          notes: '',
+          checkinAt: '',
+          checkoutAt: '',
+          isCarryover: true,
+          carryoverFromDate: sourceReport.workDate,
+          carryoverOriginDate: activity.carryoverOriginDate || sourceReport.workDate,
+          carryoverSourceId: activity.id,
+          carryoverOriginalPlanned: checkinParseNumber(activity.carryoverOriginalPlanned || activity.plannedMeters)
+        });
+        changed = true;
+        addedCount += 1;
+      } else {
+        const existingCarry = nextReport.activities[carryIdx];
+        const untouched = !existingCarry.checkinAt && !existingCarry.checkoutAt && !checkinParseNumber(existingCarry.executedMeters);
+        if (untouched && checkinParseNumber(existingCarry.plannedMeters) !== remaining) {
+          existingCarry.plannedMeters = remaining;
+          existingCarry.unit = activity.unit || existingCarry.unit || 'm';
+          changed = true;
+          updatedCount += 1;
+        }
+      }
+    } else if (carryIdx >= 0 && nextReport) {
+      const existingCarry = nextReport.activities[carryIdx];
+      const untouched = !existingCarry.checkinAt && !existingCarry.checkoutAt && !checkinParseNumber(existingCarry.executedMeters);
+      if (untouched) {
+        nextReport.activities.splice(carryIdx, 1);
+        changed = true;
+        removedCount += 1;
+      }
+    }
+  });
+
+  if (!changed || !nextReport) return null;
+  const checkedIn = nextReport.activities.filter(item => item.checkinAt);
+  const checkedOut = nextReport.activities.filter(item => item.checkoutAt);
+  nextReport.checkinAt = checkedIn.map(item => item.checkinAt).sort()[0] || '';
+  nextReport.checkoutAt = nextReport.activities.length && checkedOut.length === nextReport.activities.length
+    ? checkedOut.map(item => item.checkoutAt).sort().at(-1) : '';
+  nextReport.status = nextReport.checkoutAt ? 'fechado' : nextReport.checkinAt ? 'iniciado' : 'planejado';
+  nextReport.contractor = checkinUniqueContractors([
+    ...nextReport.activities.map(a => a.contractor),
+    nextReport.contractor
+  ]).join(', ');
+  return { nextReport, nextDate, addedCount, updatedCount, removedCount };
+}
+
+async function checkinSyncCarryoverFromPreviousDay(targetDate, { persist = true, forceIncludeUnstarted = false } = {}) {
+  if (!targetDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(targetDate))) {
+    return { totalAdded: 0, totalUpdated: 0, totalRemoved: 0, changedReports: [] };
+  }
+  const prevDate = checkinDateOffset(targetDate, -1);
+  const prevReports = checkinReports.filter(report => report.workDate === prevDate);
+  const includeUnstartedPast = forceIncludeUnstarted || prevDate < checkinToday();
+  const changedReports = [];
+  let totalAdded = 0;
+  let totalUpdated = 0;
+  let totalRemoved = 0;
+
+  prevReports.forEach(report => {
+    const result = checkinSyncCarryoverForReport(report, { includeUnstartedPast });
+    if (result?.nextReport) {
+      changedReports.push(result.nextReport);
+      totalAdded += result.addedCount;
+      totalUpdated += result.updatedCount;
+      totalRemoved += result.removedCount;
+    }
+  });
+
+  if (changedReports.length && persist) {
+    await checkinPersistReports(changedReports, { silent: true });
+  }
+  return { prevDate, totalAdded, totalUpdated, totalRemoved, changedReports };
+}
+
 function checkinResolveMigratedStatus(activity, checkinAt, checkoutAt) {
   const rawStatus = String(activity?.status || '').trim();
   const planned = checkinParseNumber(activity?.plannedMeters);
@@ -901,6 +1060,9 @@ async function renderCheckIn() {
     app.innerHTML = '<div class="checkin-loading">Carregando planejamento diário…</div>';
   }
   await checkinLoadReports();
+  if (checkinActiveTab === 'diario') {
+    await checkinSyncCarryoverFromPreviousDay(checkinSelectedDate, { persist: true });
+  }
 
   const engineers = checkinUniqueOptions(checkinReports.map(report => report.engineer));
   const dataHalls = CHECKIN_DATA_HALLS;
@@ -1015,12 +1177,13 @@ function checkinRenderActivityRow(report, activity, companies = checkinCompanies
   const planned = checkinParseNumber(activity.plannedMeters);
   const executed = checkinParseNumber(activity.executedMeters);
   const isExtra = checkinIsExtraActivity(activity);
+  const isCarryover = checkinIsCarryoverActivity(activity);
   const percent = planned > 0 ? `${checkinNumber(executed / planned * 100, 0)}%` : executed ? '100%' : '—';
   const isClosed = Boolean(activity.checkoutAt);
   const isRunning = Boolean(activity.checkinAt && !activity.checkoutAt);
   const actShift = checkinGetActivityShift(report, activity);
   const isNightShift = actShift === 'Noturno';
-  const rowStateClass = `${isRunning ? 'is-running' : isClosed ? 'is-closed' : 'is-pending'} ${isNightShift ? 'is-night-shift' : 'is-day-shift'} ${isExtra ? 'is-extra-task' : ''}`;
+  const rowStateClass = `${isRunning ? 'is-running' : isClosed ? 'is-closed' : 'is-pending'} ${isNightShift ? 'is-night-shift' : 'is-day-shift'} ${isExtra ? 'is-extra-task' : ''} ${isCarryover ? 'is-carryover-task' : ''}`;
   const actDiscipline = checkinGetActivityDiscipline(report, activity);
   const rawTaskContractors = checkinUniqueContractors([activity.contractor]);
   const fallbackReportContractors = checkinUniqueContractors([report.contractor]);
@@ -1037,9 +1200,12 @@ function checkinRenderActivityRow(report, activity, companies = checkinCompanies
       : `<span class="checkin-status-pill pending">${isNightShift ? '🌙 Aguardando Noturno' : 'Não iniciada'}</span>`;
 
   const extraPill = `<span class="checkin-extra-pill" data-extra-pill style="${isExtra ? '' : 'display:none'}">➕ Extra (não programada)</span>`;
+  const carryoverPill = isCarryover
+    ? `<span class="checkin-carryover-pill" title="Saldo não cumprido puxado automaticamente do dia ${esc(checkinFormatDate(activity.carryoverFromDate))}">↩️ Saldo de ${esc(checkinFormatDate(activity.carryoverFromDate))}</span>`
+    : '';
 
   return `<tr class="checkin-activity-row ${rowStateClass}" data-report-id="${esc(report.id)}" data-activity-id="${esc(activity.id)}">
-    <td>${statusPill}${extraPill}<strong>${esc(activity.pstItem || (isExtra ? 'EXTRA' : '—'))}</strong><small>${esc(activity.scheduleId || (isExtra ? 'Atividade não programada' : 'Sem ID de cronograma'))}</small></td>
+    <td>${statusPill}${extraPill}${carryoverPill}<strong>${esc(activity.pstItem || (isExtra ? 'EXTRA' : '—'))}</strong><small>${esc(activity.scheduleId || (isExtra ? 'Atividade não programada' : 'Sem ID de cronograma'))}</small></td>
     <td>
       <input class="checkin-inline-text strong" type="text" data-activity-field="location" value="${esc(activity.location || '')}" placeholder="Local / sala" onchange="checkinAutoSaveReport('${esc(report.id)}')">
       <textarea class="checkin-inline-textarea" rows="2" data-activity-field="activity" placeholder="Descrição da atividade" oninput="checkinResizeNote(this)" onchange="checkinAutoSaveReport('${esc(report.id)}')">${esc(activity.activity || '')}</textarea>
@@ -1192,7 +1358,9 @@ function checkinCaptureReport(reportId) {
 async function checkinAutoSaveReport(reportId) {
   const report = checkinCaptureReport(reportId);
   if (!report) return;
-  await checkinPersistReports(report, { silent: true });
+  const carryResult = checkinSyncCarryoverForReport(report);
+  const toPersist = carryResult?.nextReport ? [report, carryResult.nextReport] : report;
+  await checkinPersistReports(toPersist, { silent: true });
 }
 
 async function checkinOnTaskDisciplineChange(select, reportId) {
@@ -1268,7 +1436,12 @@ async function checkinReopenTask(reportId, activityId) {
 async function checkinSaveDraft(reportId) {
   const report = checkinCaptureReport(reportId);
   if (!report) return;
-  await checkinPersistReports(report);
+  const carryResult = checkinSyncCarryoverForReport(report);
+  const toPersist = carryResult?.nextReport ? [report, carryResult.nextReport] : report;
+  await checkinPersistReports(toPersist);
+  if (carryResult && (carryResult.addedCount > 0 || carryResult.updatedCount > 0)) {
+    toast(`Saldo não cumprido puxado automaticamente para ${checkinFormatDate(carryResult.nextDate)}.`);
+  }
   renderCheckIn();
 }
 
@@ -1339,7 +1512,15 @@ async function checkinRegister(reportId, action, activityId) {
   report.checkoutAt = report.activities.length && checkedOut.length === report.activities.length
     ? checkedOut.map(item => item.checkoutAt).sort().at(-1) : '';
   report.status = report.checkoutAt ? 'fechado' : report.checkinAt ? 'iniciado' : 'planejado';
-  await checkinPersistReports(report);
+  const carryResult = action === 'checkout' ? checkinSyncCarryoverForReport(report) : null;
+  const toPersist = carryResult?.nextReport ? [report, carryResult.nextReport] : report;
+  await checkinPersistReports(toPersist);
+  if (carryResult && (carryResult.addedCount > 0 || carryResult.updatedCount > 0)) {
+    const remaining = checkinActivityRemainingMeters(activity);
+    toast(remaining > 0
+      ? `Saldo não cumprido (${checkinNumber(remaining)} ${activity.unit || 'm'}) puxado automaticamente para ${checkinFormatDate(carryResult.nextDate)}.`
+      : `Saldo pendente atualizado para ${checkinFormatDate(carryResult.nextDate)}.`);
+  }
   renderCheckIn();
 }
 
@@ -1424,6 +1605,10 @@ function checkinFormatWhatsAppActivity(report, activity, index, { isCheckout, is
 
   if (checkinIsExtraActivity(activity)) {
     block.push('➕ *Informação:* Atividade extra (não programada)');
+  }
+
+  if (checkinIsCarryoverActivity(activity) && activity.carryoverFromDate) {
+    block.push(`↩️ *Saldo pendente:* Puxado de ${checkinFormatDate(activity.carryoverFromDate)}`);
   }
 
   if (activity.problemCode || activity.problemOther) {
@@ -1599,9 +1784,10 @@ function checkinSetTab(tab) {
   renderCheckIn();
 }
 
-function checkinSetDay(value) {
+async function checkinSetDay(value) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(String(value).trim())) return;
   checkinSelectedDate = String(value).trim();
+  await checkinSyncCarryoverFromPreviousDay(checkinSelectedDate, { persist: true });
   const resultsEl = document.getElementById('checkinDailyResults');
   if (resultsEl && checkinActiveTab === 'diario') {
     const { visibleReports, companies, totalPlanned, totalExecuted, openReports } = checkinComputeDailyView();
@@ -2403,6 +2589,19 @@ async function checkinDeleteActivity(reportId, activityId) {
   const deleteReportToo = report.activities.length === 1;
   const warning = deleteReportToo ? ' Esta e a ultima atividade; excluir tambem apagara o diario e os registros de check-in/check-out.' : '';
   if (!activity || !confirm(`Excluir a atividade "${activity.activity || activity.pstItem || 'sem descricao'}" do diario de ${report.engineer} em ${checkinFormatDate(report.workDate)}?${warning}`)) return;
+  let dismissedSourceReport = null;
+  if (checkinIsCarryoverActivity(activity) && activity.carryoverSourceId && activity.carryoverFromDate) {
+    const srcId = checkinReportId(activity.carryoverFromDate, report.dh, report.engineer);
+    const srcReport = checkinGetReport(srcId);
+    if (srcReport) {
+      const clonedSrc = structuredClone(srcReport);
+      const srcAct = (clonedSrc.activities || []).find(item => item.id === activity.carryoverSourceId);
+      if (srcAct) {
+        srcAct.carryoverDismissed = true;
+        dismissedSourceReport = clonedSrc;
+      }
+    }
+  }
   const remainingActivities = report.activities.filter(item => item.id !== activityId);
   if (!remainingActivities.length) {
     if (typeof supabaseRestRequest === 'function' && navigator.onLine === false) {
@@ -2417,13 +2616,17 @@ async function checkinDeleteActivity(reportId, activityId) {
       }
       checkinReports = checkinReports.filter(item => item.id !== reportId);
       checkinSaveLocal();
+      if (dismissedSourceReport) {
+        await checkinPersistReports(dismissedSourceReport, { silent: true });
+      }
     } catch (error) {
       console.warn('Falha ao excluir o planejamento compartilhado:', error);
       return toast('A atividade nao foi excluida do banco. Verifique a conexao e tente novamente.', true);
     }
   } else {
     report.activities = remainingActivities;
-    const synced = await checkinPersistReports(report, { silent: true });
+    const toSave = dismissedSourceReport ? [report, dismissedSourceReport] : report;
+    const synced = await checkinPersistReports(toSave, { silent: true });
     if (!synced) {
       toast('Atividade removida neste aparelho; sincronizacao com o banco pendente.', true);
       renderCheckIn();
@@ -2481,17 +2684,21 @@ function checkinActivityBucket(activity) {
 }
 
 function checkinActivityTaskProgress(activity) {
-  if (!activity) return { isExtra: false, plannedTask: 0, executedTask: 0, progressPct: 0 };
+  if (!activity) return { isExtra: false, isCarryover: false, plannedTask: 0, executedTask: 0, progressPct: 0 };
   const isExtra = checkinIsExtraActivity(activity);
+  const isCarryover = checkinIsCarryoverActivity(activity);
   const planned = checkinParseNumber(activity.plannedMeters);
   const executed = checkinParseNumber(activity.executedMeters);
   const status = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
+  const taskDenominator = isCarryover
+    ? (checkinParseNumber(activity.carryoverOriginalPlanned) || planned)
+    : planned;
 
   let executedTask = 0;
-  if (planned > 0) {
+  if (taskDenominator > 0) {
     if (executed > 0) {
-      executedTask = executed / planned; // ex.: 20/30 = 0.67 (67%), 36/30 = 1.20 (120%)
-    } else if (status === 'Concluído') {
+      executedTask = executed / taskDenominator; // ex.: 20/30 = 0.67 no dia 1 + 10/30 = 0.33 no saldo do dia 2 = 1.00
+    } else if (status === 'Concluído' && !isCarryover) {
       executedTask = 1;
     }
   } else {
@@ -2504,7 +2711,8 @@ function checkinActivityTaskProgress(activity) {
 
   return {
     isExtra,
-    plannedTask: isExtra ? 0 : 1,
+    isCarryover,
+    plannedTask: (isExtra || isCarryover) ? 0 : 1,
     executedTask,
     progressPct: executedTask * 100
   };
@@ -2550,12 +2758,12 @@ function checkinRenderCurveResults() {
       const executedM = checkinParseNumber(activity.executedMeters);
       const isCompleted = checkinIsActivityCompleted(activity);
       const isDeviation = checkinIsActivityDeviation(activity);
-      const { isExtra, plannedTask, executedTask, progressPct } = checkinActivityTaskProgress(activity);
+      const { isExtra, isCarryover, plannedTask, executedTask, progressPct } = checkinActivityTaskProgress(activity);
 
       row.plannedTasks += plannedTask;
       row.completedTasks += executedTask;
       if (isDeviation) row.deviationTasks += 1;
-      row.plannedMeters += isExtra ? 0 : plannedM;
+      row.plannedMeters += (isExtra || isCarryover) ? 0 : plannedM;
       row.executedMeters += executedM;
 
       matchedActivities.push({
@@ -2565,12 +2773,13 @@ function checkinRenderCurveResults() {
         shift: actShift,
         company: actCompany,
         isExtra,
+        isCarryover,
         plannedTask,
         executedTask,
         progressPct,
         plannedM,
         executedM,
-        diffM: executedM - (isExtra ? 0 : plannedM),
+        diffM: executedM - ((isExtra || isCarryover) ? 0 : plannedM),
         isCompleted,
         isDeviation
       });
@@ -2738,7 +2947,7 @@ function checkinRenderCurveResults() {
         <th>Observações</th>
       </tr></thead>
       <tbody>
-        ${taskRows.map(({ report, activity, discipline, shift, company, isExtra, executedTask, plannedM, executedM, diffM, isDeviation }) => {
+        ${taskRows.map(({ report, activity, discipline, shift, company, isExtra, isCarryover, executedTask, plannedM, executedM, diffM, isDeviation }) => {
     const pct = plannedM > 0 ? `${checkinNumber(executedM / plannedM * 100, 0)}%` : executedM > 0 ? '100%' : '0%';
     const probLabel = activity.problemCode ? checkinProblemLabel(activity.problemCode, activity.problemOther) : '—';
     const currentStatus = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
@@ -2746,8 +2955,8 @@ function checkinRenderCurveResults() {
             <td><strong>${checkinFormatDate(report.workDate)}</strong><small>${esc(report.dh)}</small></td>
             <td><span class="checkin-discipline-tag">${esc(discipline)}</span><small>${shift === 'Noturno' ? '🌙 Noturno' : '☀️ Diurno'}</small></td>
             <td><strong>${esc(report.engineer)}</strong><small>${esc(company || '—')}</small></td>
-            <td>${isExtra ? `<span class="checkin-extra-pill">➕ Extra (não programada)</span>` : ''}<strong>${esc(activity.location || '—')}</strong><small>${esc([activity.pstItem, activity.scheduleId, activity.activity].filter(Boolean).join(' · '))}</small></td>
-            <td>${checkinNumber(plannedM)} ${esc(activity.unit || 'm')}${isExtra ? '<small style="color:#6d28d9;font-weight:700;">Estimado (Extra)</small>' : ''}</td>
+            <td>${isExtra ? `<span class="checkin-extra-pill">➕ Extra (não programada)</span>` : ''}${isCarryover ? `<span class="checkin-carryover-pill">↩️ Saldo de ${esc(checkinFormatDate(activity.carryoverFromDate))}</span>` : ''}<strong>${esc(activity.location || '—')}</strong><small>${esc([activity.pstItem, activity.scheduleId, activity.activity].filter(Boolean).join(' · '))}</small></td>
+            <td>${checkinNumber(plannedM)} ${esc(activity.unit || 'm')}${isExtra ? '<small style="color:#6d28d9;font-weight:700;">Estimado (Extra)</small>' : isCarryover ? '<small style="color:#b45309;font-weight:700;">Saldo reprogramado</small>' : ''}</td>
             <td><strong>${checkinNumber(executedM)} ${esc(activity.unit || 'm')}</strong></td>
             <td style="color:${diffM < 0 ? '#b91c1c' : '#15803d'};font-weight:800">${diffM > 0 ? '+' : ''}${checkinNumber(diffM)} ${esc(activity.unit || 'm')}</td>
             <td><strong>${pct}</strong><small>${checkinNumber(executedTask, 2)} tarefa</small></td>

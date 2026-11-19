@@ -324,6 +324,7 @@ let workforceView = 'control';
 let workforceControlSubView = 'table';
 
 const DEFAULT_WORKFORCE_COMPANIES = [
+  'A.L.A Comercio e Instalação de AR Condicionado',
   'AIR TEC',
   'CORDEIRO',
   'DM Isolamento',
@@ -338,13 +339,13 @@ const DEFAULT_WORKFORCE_COMPANIES = [
 
 const DEFAULT_COMPANY_ALIASES = {
   'la': 'L.A Comercio e Instalações de Ar Condicionado',
-  'ala': 'L.A Comercio e Instalações de Ar Condicionado',
   'lacomercioeinstalacaodearcondicionado': 'L.A Comercio e Instalações de Ar Condicionado',
-  'alacomercioeinstalacaodearcondicionado': 'L.A Comercio e Instalações de Ar Condicionado',
   'lacomercioeinstalacoesdearcondicionado': 'L.A Comercio e Instalações de Ar Condicionado',
-  'alacomercioeinstalacoesdearcondicionado': 'L.A Comercio e Instalações de Ar Condicionado',
   'lacomercioeinstalacoesdearcondicionadoltda': 'L.A Comercio e Instalações de Ar Condicionado',
-  'alacomercioeinstalacoesdearcondicionadoltda': 'L.A Comercio e Instalações de Ar Condicionado',
+  'ala': 'A.L.A Comercio e Instalação de AR Condicionado',
+  'alacomercioeinstalacaodearcondicionado': 'A.L.A Comercio e Instalação de AR Condicionado',
+  'alacomercioeinstalacoesdearcondicionado': 'A.L.A Comercio e Instalação de AR Condicionado',
+  'alacomercioeinstalacoesdearcondicionadoltda': 'A.L.A Comercio e Instalação de AR Condicionado',
   'airtec': 'AIR TEC',
   'heatingcooling': 'HEATING COOLING',
   'ji': 'JI',
@@ -360,6 +361,21 @@ const DEFAULT_COMPANY_ALIASES = {
   'fortunck': 'FORT MUNCK',
   'lctendas': 'LC TENDAS'
 };
+
+function sanitizeWorkforceCompanyRenames(renames) {
+  if (!renames || typeof renames !== 'object' || Array.isArray(renames)) return {};
+  const cleaned = {};
+  Object.entries(renames).forEach(([k, v]) => {
+    const key = companyComparisonKey(k);
+    const target = String(v || '').replace(/\s+/g, ' ').trim();
+    const targetKey = companyComparisonKey(target);
+    if (!key || !target) return;
+    // Evita que um rename antigo volte a mesclar A.L.A em L.A (são empresas distintas)
+    if (key.startsWith('ala') && targetKey.startsWith('la')) return;
+    cleaned[key] = target;
+  });
+  return cleaned;
+}
 
 function companyComparisonKey(value) {
   return String(value || '')
@@ -2660,7 +2676,7 @@ function loadLocalStorageBackup() {
     const localWfCompanyRenames = localStorage.getItem('obraflow_workforce_company_renames');
     if (localWfCompanyRenames) {
       const parsed = JSON.parse(localWfCompanyRenames);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) workforceCompanyRenames = parsed;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) workforceCompanyRenames = sanitizeWorkforceCompanyRenames(parsed);
     }
     const localWfDeletedCompanies = localStorage.getItem('obraflow_workforce_deleted_companies');
     if (localWfDeletedCompanies) {
@@ -3391,9 +3407,9 @@ function persistWorkforceControlRemote() {
         const localTime = Date.parse(localSnapshot.updatedAt || '') || 0;
         const remoteTime = Date.parse(remoteSnapshot.updatedAt || '') || 0;
         const localWins = localTime >= remoteTime;
-        workforceCompanyRenames = localWins
+        workforceCompanyRenames = sanitizeWorkforceCompanyRenames(localWins
           ? { ...(remoteSnapshot.companyRenames || {}), ...(localSnapshot.companyRenames || {}) }
-          : { ...(localSnapshot.companyRenames || {}), ...(remoteSnapshot.companyRenames || {}) };
+          : { ...(localSnapshot.companyRenames || {}), ...(remoteSnapshot.companyRenames || {}) });
         workforceDeletedCompanies = localWins
           ? { ...(remoteSnapshot.deletedCompanies || {}), ...(localSnapshot.deletedCompanies || {}) }
           : { ...(localSnapshot.deletedCompanies || {}), ...(remoteSnapshot.deletedCompanies || {}) };
@@ -3486,9 +3502,9 @@ async function syncWorkforceFromSupabase() {
       const localChangedDuringSync = workforceDataRevision !== revisionAtStart;
       const localWins = localChangedDuringSync || localTime > remoteTime;
 
-      workforceCompanyRenames = localWins
+      workforceCompanyRenames = sanitizeWorkforceCompanyRenames(localWins
         ? { ...(remoteSnapshot.companyRenames || {}), ...(workforceCompanyRenames || {}) }
-        : { ...(workforceCompanyRenames || {}), ...(remoteSnapshot.companyRenames || {}) };
+        : { ...(workforceCompanyRenames || {}), ...(remoteSnapshot.companyRenames || {}) });
       workforceDeletedCompanies = localWins
         ? { ...(remoteSnapshot.deletedCompanies || {}), ...(workforceDeletedCompanies || {}) }
         : { ...(workforceDeletedCompanies || {}), ...(remoteSnapshot.deletedCompanies || {}) };
@@ -4267,7 +4283,7 @@ function renderUserManagement() {
     </section>
 
     ${pendingList.length > 0 ? `
-      <div style="background:#fffbe6; border:1px solid #ffe58f; padding:16px 20px; border-radius:12px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; gap:16px; box-shadow:0 2px 8px rgba(212,107,8,0.06);">
+      <div style="background:#fffbe6; border:1px solid #ffe58f; padding:16px 20px; border-radius:12px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; box-shadow:0 2px 8px rgba(212,107,8,0.06);">
         <div style="display:flex; align-items:center; gap:14px;">
           <span style="font-size:26px;">⏳</span>
           <div>
@@ -4318,8 +4334,8 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
         </div>`;
     }
     return `
-      <section class="table-card" style="border:1px solid var(--line); border-radius:12px; background:white; overflow:hidden;">
-        <table class="data-table" style="width:100%; border-collapse:collapse; font-size:13px;">
+      <section class="table-card user-management-table-card">
+        <table class="data-table user-management-table" style="width:100%; border-collapse:collapse; font-size:13px;">
           <thead>
             <tr style="background:#f7f9f8; border-bottom:1px solid var(--line); text-align:left;">
               <th style="padding:12px 16px;">Colaborador</th>
@@ -4333,10 +4349,10 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
           <tbody>
             ${pendingList.map(u => `
               <tr style="border-bottom:1px solid var(--line);">
-                <td style="padding:14px 16px;"><strong>${esc(u.name)}</strong></td>
-                <td style="padding:14px 16px; color:var(--muted);">${esc(u.email)}</td>
-                <td style="padding:14px 16px;">${esc(u.company || '—')}</td>
-                <td style="padding:14px 16px;">
+                <td data-label="Colaborador" style="padding:14px 16px;"><strong>${esc(u.name)}</strong></td>
+                <td data-label="E-mail" style="padding:14px 16px; color:var(--muted); word-break:break-word;">${esc(u.email)}</td>
+                <td data-label="Empresa" style="padding:14px 16px;">${esc(u.company || '—')}</td>
+                <td data-label="Função Solicitada" style="padding:14px 16px;">
                   <select onchange="updatePendingUserRole('${esc(u.id)}', this.value, '${esc(u.email)}')" style="padding:4px 8px; border-radius:6px; border:1px solid var(--line); font-size:12px;">
                     <option value="operador" ${u.role === 'operador' ? 'selected' : ''}>Operador de Campo</option>
                     <option value="engenheiro" ${u.role === 'engenheiro' ? 'selected' : ''}>Engenheiro</option>
@@ -4344,11 +4360,13 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
                     <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Master / Administrador</option>
                   </select>
                 </td>
-                <td style="padding:14px 16px; color:var(--muted); font-size:12px;">${fullDate(u.created_at)}</td>
-                <td style="padding:14px 16px; text-align:right; white-space:nowrap;">
-                  <button class="button button-green compact" onclick="approveUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('check')} Aprovar Acesso</button>
-                  <button class="button button-outline compact" style="color:var(--muted); margin-left:4px;" onclick="rejectUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('close')} Rejeitar</button>
-                  <button class="button button-outline compact" style="color:var(--red); margin-left:4px;" title="Excluir cadastro" onclick="deleteUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('trash')} Excluir</button>
+                <td data-label="Data" style="padding:14px 16px; color:var(--muted); font-size:12px;">${fullDate(u.created_at)}</td>
+                <td data-label="Ações do Gestor" class="user-management-actions-cell" style="padding:14px 16px;">
+                  <div class="user-management-actions">
+                    <button class="button button-green compact" onclick="approveUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('check')} Aprovar Acesso</button>
+                    <button class="button button-outline compact" style="color:var(--muted);" onclick="rejectUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('close')} Rejeitar</button>
+                    <button class="button button-outline compact" style="color:var(--red);" title="Excluir cadastro" onclick="deleteUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('trash')} Excluir</button>
+                  </div>
                 </td>
               </tr>
             `).join('')}
@@ -4360,8 +4378,8 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
   if (userManagementTab === 'ativos') {
     const masterCred = getUserCredential('pedro.alves@heatingcooling.com.br');
     return `
-      <section class="table-card" style="border:1px solid var(--line); border-radius:12px; background:white; overflow:hidden;">
-        <table class="data-table" style="width:100%; border-collapse:collapse; font-size:13px;">
+      <section class="table-card user-management-table-card">
+        <table class="data-table user-management-table" style="width:100%; border-collapse:collapse; font-size:13px;">
           <thead>
             <tr style="background:#f7f9f8; border-bottom:1px solid var(--line); text-align:left;">
               <th style="padding:12px 16px;">Nome</th>
@@ -4374,17 +4392,19 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
           </thead>
           <tbody>
             <tr style="border-bottom:1px solid var(--line); background:#fdfdfd;">
-              <td style="padding:14px 16px;"><strong>Pedro Alves</strong> <span class="badge" style="background:#e7f5ee; color:#206b49; font-size:10px; padding:2px 6px; border-radius:6px; margin-left:6px;">Master</span></td>
-              <td style="padding:14px 16px; color:var(--muted);">pedro.alves@heatingcooling.com.br</td>
-              <td style="padding:14px 16px;">HEATING COOLING</td>
-              <td style="padding:14px 16px;"><strong>Administrador Master</strong></td>
-              <td style="padding:14px 16px;">
+              <td data-label="Nome" style="padding:14px 16px;"><strong>Pedro Alves</strong> <span class="badge" style="background:#e7f5ee; color:#206b49; font-size:10px; padding:2px 6px; border-radius:6px; margin-left:6px;">Master</span></td>
+              <td data-label="E-mail" style="padding:14px 16px; color:var(--muted); word-break:break-word;">pedro.alves@heatingcooling.com.br</td>
+              <td data-label="Empresa" style="padding:14px 16px;">HEATING COOLING</td>
+              <td data-label="Nível de Acesso" style="padding:14px 16px;"><strong>Administrador Master</strong></td>
+              <td data-label="Status da Senha" style="padding:14px 16px;">
                 <span class="badge" style="background:${masterCred?.password ? '#e7f5ee' : '#fef3c7'}; color:${masterCred?.password ? '#206b49' : '#92400e'}; font-size:11px; padding:3px 8px; border-radius:6px; font-weight:700;">
                   ${masterCred?.password ? '🔑 Senha ativa' : '🔑 Padrão / Definir'}
                 </span>
               </td>
-              <td style="padding:14px 16px; text-align:right; white-space:nowrap;">
-                ${isMasterUser() ? `<button class="button button-outline compact" onclick="openAdminChangePasswordModal('', 'pedro.alves@heatingcooling.com.br', 'Pedro Alves')">${icon('key')} Alterar Senha</button>` : '<span style="color:var(--muted); font-size:12px;">Conta Principal</span>'}
+              <td data-label="Ações" class="user-management-actions-cell" style="padding:14px 16px;">
+                <div class="user-management-actions">
+                  ${isMasterUser() ? `<button class="button button-outline compact" onclick="openAdminChangePasswordModal('', 'pedro.alves@heatingcooling.com.br', 'Pedro Alves')">${icon('key')} Alterar Senha</button>` : '<span style="color:var(--muted); font-size:12px;">Conta Principal</span>'}
+                </div>
               </td>
             </tr>
             ${approvedList.map(u => {
@@ -4392,10 +4412,10 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
       const hasPass = Boolean(uCred?.password || u.password);
       return `
               <tr style="border-bottom:1px solid var(--line);">
-                <td style="padding:14px 16px;"><strong>${esc(u.name)}</strong></td>
-                <td style="padding:14px 16px; color:var(--muted);">${esc(u.email)}</td>
-                <td style="padding:14px 16px;">${esc(normalizeCompanyName(u.company) || '—')}</td>
-                <td style="padding:14px 16px;">
+                <td data-label="Nome" style="padding:14px 16px;"><strong>${esc(u.name)}</strong></td>
+                <td data-label="E-mail" style="padding:14px 16px; color:var(--muted); word-break:break-word;">${esc(u.email)}</td>
+                <td data-label="Empresa" style="padding:14px 16px;">${esc(normalizeCompanyName(u.company) || '—')}</td>
+                <td data-label="Nível de Acesso" style="padding:14px 16px;">
                   <select onchange="updateApprovedUserRole('${esc(u.id)}', this.value, '${esc(u.email)}')" style="padding:4px 8px; border-radius:6px; border:1px solid var(--line); font-size:12px; font-weight:700; color:${u.role === 'admin' ? '#206b49' : u.role === 'gestor' ? '#206b49' : '#334155'};">
                     <option value="operador" ${u.role === 'operador' ? 'selected' : ''}>Operador de Campo</option>
                     <option value="engenheiro" ${u.role === 'engenheiro' ? 'selected' : ''}>Engenheiro</option>
@@ -4403,16 +4423,18 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
                     <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Master / Administrador</option>
                   </select>
                 </td>
-                <td style="padding:14px 16px;">
+                <td data-label="Status da Senha" style="padding:14px 16px;">
                   <span class="badge" style="background:${hasPass ? '#e7f5ee' : '#fef3c7'}; color:${hasPass ? '#206b49' : '#92400e'}; font-size:11px; padding:3px 8px; border-radius:6px; font-weight:700;">
                     ${hasPass ? '🔑 Senha definida' : '⚠️ Sem senha'}
                   </span>
                 </td>
-                <td style="padding:14px 16px; text-align:right; white-space:nowrap;">
-                  <button class="button button-outline compact" style="margin-right:6px;" title="Definir ou trocar senha (derruba sessões antigas)" onclick="openAdminChangePasswordModal('${esc(u.id)}', '${esc(u.email)}', '${esc(u.name)}')">${icon('key')} Senha</button>
-                  <button class="button button-outline compact" style="margin-right:6px;" onclick="copyUserAccessLink('${esc(u.id)}', '${esc(u.email)}')">${icon('clipboard')} Copiar Acesso</button>
-                  <button class="button button-outline compact" style="color:#d97706; margin-right:6px;" title="Bloquear acesso temporariamente" onclick="revokeUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('close')} Revogar</button>
-                  <button class="button button-outline compact" style="color:var(--red);" title="Excluir permanentemente do sistema" onclick="deleteUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('trash')} Excluir</button>
+                <td data-label="Ações" class="user-management-actions-cell" style="padding:14px 16px;">
+                  <div class="user-management-actions">
+                    <button class="button button-outline compact" title="Definir ou trocar senha (derruba sessões antigas)" onclick="openAdminChangePasswordModal('${esc(u.id)}', '${esc(u.email)}', '${esc(u.name)}')">${icon('key')} Senha</button>
+                    <button class="button button-outline compact" onclick="copyUserAccessLink('${esc(u.id)}', '${esc(u.email)}')">${icon('clipboard')} Copiar Acesso</button>
+                    <button class="button button-outline compact" style="color:#d97706;" title="Bloquear acesso temporariamente" onclick="revokeUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('close')} Revogar</button>
+                    <button class="button button-outline compact" style="color:var(--red);" title="Excluir permanentemente do sistema" onclick="deleteUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('trash')} Excluir</button>
+                  </div>
                 </td>
               </tr>
             `;
@@ -4432,8 +4454,8 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
         </div>`;
     }
     return `
-      <section class="table-card" style="border:1px solid var(--line); border-radius:12px; background:white; overflow:hidden;">
-        <table class="data-table" style="width:100%; border-collapse:collapse; font-size:13px;">
+      <section class="table-card user-management-table-card">
+        <table class="data-table user-management-table" style="width:100%; border-collapse:collapse; font-size:13px;">
           <thead>
             <tr style="background:#f7f9f8; border-bottom:1px solid var(--line); text-align:left;">
               <th style="padding:12px 16px;">Colaborador</th>
@@ -4447,18 +4469,20 @@ function renderUserManagementBody(pendingList, approvedList, rejectedList = []) 
           <tbody>
             ${rejectedList.map(u => `
               <tr style="border-bottom:1px solid var(--line); opacity:0.88;">
-                <td style="padding:14px 16px;"><strong>${esc(u.name || 'Sem nome')}</strong></td>
-                <td style="padding:14px 16px; color:var(--muted);">${esc(u.email)}</td>
-                <td style="padding:14px 16px;">${esc(u.company || '—')}</td>
-                <td style="padding:14px 16px;">
+                <td data-label="Colaborador" style="padding:14px 16px;"><strong>${esc(u.name || 'Sem nome')}</strong></td>
+                <td data-label="E-mail" style="padding:14px 16px; color:var(--muted); word-break:break-word;">${esc(u.email)}</td>
+                <td data-label="Empresa" style="padding:14px 16px;">${esc(u.company || '—')}</td>
+                <td data-label="Função Anterior" style="padding:14px 16px;">
                   <span class="badge" style="background:#f1f3f4; color:#5f6368; padding:3px 8px; border-radius:6px; font-weight:700; font-size:11px;">
                     ${u.role === 'gestor' || u.role === 'admin' ? 'Gestor' : u.role === 'engenheiro' ? 'Engenheiro' : 'Operador'}
                   </span>
                 </td>
-                <td style="padding:14px 16px;"><span class="badge" style="background:#fee2e2; color:#b91c1c; padding:3px 8px; border-radius:6px; font-weight:700; font-size:11px;">Acesso Revogado</span></td>
-                <td style="padding:14px 16px; text-align:right; white-space:nowrap;">
-                  <button class="button button-green compact" style="margin-right:6px;" onclick="approveUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('check')} Reativar Acesso</button>
-                  <button class="button button-outline compact" style="color:var(--red);" title="Excluir permanentemente do banco" onclick="deleteUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('trash')} Excluir</button>
+                <td data-label="Status" style="padding:14px 16px;"><span class="badge" style="background:#fee2e2; color:#b91c1c; padding:3px 8px; border-radius:6px; font-weight:700; font-size:11px;">Acesso Revogado</span></td>
+                <td data-label="Ações" class="user-management-actions-cell" style="padding:14px 16px;">
+                  <div class="user-management-actions">
+                    <button class="button button-green compact" onclick="approveUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('check')} Reativar Acesso</button>
+                    <button class="button button-outline compact" style="color:var(--red);" title="Excluir permanentemente do banco" onclick="deleteUserAccess('${esc(u.id)}', '${esc(u.email)}')">${icon('trash')} Excluir</button>
+                  </div>
                 </td>
               </tr>
             `).join('')}
