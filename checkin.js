@@ -727,12 +727,33 @@ function checkinAvailableEngineers() {
   ]);
 }
 
+const CHECKIN_DEFAULT_SUBAREAS = [
+  { id: 'corredor-pdu', name: 'CORREDOR PDU' },
+  { id: 'salas-eletricas', name: 'SALAS ELÉTRICAS' }
+];
+
 function checkinExtraSectors() {
-  if (typeof spoolGetAvailableSectors !== 'function') return [];
-  const items = typeof spoolGetAllControlItems === 'function'
-    ? spoolGetAllControlItems()
-    : (typeof spoolDb !== 'undefined' ? spoolDb : []);
-  return spoolGetAvailableSectors(items);
+  const sectors = [];
+  const seenKeys = new Set();
+  const pushSector = (sector) => {
+    const id = String(sector?.id || '').trim();
+    const name = String(sector?.name || '').trim();
+    if (!id || !name) return;
+    const nameKey = checkinSlug(name);
+    const idKey = checkinSlug(id);
+    if (seenKeys.has(idKey) || seenKeys.has(nameKey)) return;
+    seenKeys.add(idKey);
+    seenKeys.add(nameKey);
+    sectors.push({ ...sector, id, name });
+  };
+  if (typeof spoolGetAvailableSectors === 'function') {
+    const items = typeof spoolGetAllControlItems === 'function'
+      ? spoolGetAllControlItems()
+      : (typeof spoolDb !== 'undefined' ? spoolDb : []);
+    spoolGetAvailableSectors(items).forEach(pushSector);
+  }
+  CHECKIN_DEFAULT_SUBAREAS.forEach(pushSector);
+  return sectors;
 }
 
 function checkinExtraSectorOptions(selected = '') {
@@ -744,6 +765,55 @@ function checkinExtraSectorOptions(selected = '') {
 
 function checkinExtraSectorFromForm(value) {
   return checkinExtraSectors().find(sector => sector.id === String(value || '')) || null;
+}
+
+function checkinExtraSubAreas() {
+  const subAreas = [];
+  const seenKeys = new Set();
+  const pushSubArea = (subArea) => {
+    const id = String(subArea?.id || '').trim();
+    const name = String(subArea?.name || '').trim();
+    if (!id || !name) return;
+    const nameKey = checkinSlug(name);
+    const idKey = checkinSlug(id);
+    if (seenKeys.has(idKey) || seenKeys.has(nameKey)) return;
+    seenKeys.add(idKey);
+    seenKeys.add(nameKey);
+    subAreas.push({ id, name });
+  };
+  if (typeof spoolGetAvailableSubAreas === 'function') {
+    const items = typeof spoolGetAllControlItems === 'function'
+      ? spoolGetAllControlItems()
+      : (typeof spoolDb !== 'undefined' ? spoolDb : []);
+    spoolGetAvailableSubAreas(items, 'all').forEach(pushSubArea);
+  }
+  CHECKIN_DEFAULT_SUBAREAS.forEach(pushSubArea);
+  return subAreas;
+}
+
+function checkinExtraSubAreaOptions(selected = '') {
+  const subAreas = checkinExtraSubAreas();
+  return `<option value="">Selecione uma subárea</option>${subAreas.map(subArea =>
+    `<option value="${esc(subArea.id)}" ${selected === subArea.id ? 'selected' : ''}>${esc(subArea.name)}</option>`
+  ).join('')}`;
+}
+
+function checkinExtraSubAreaFromForm(value) {
+  return checkinExtraSubAreas().find(subArea => subArea.id === String(value || '')) || null;
+}
+
+function checkinComposeExtraLocation(rawLocation, subArea, sector) {
+  const parts = [];
+  const seen = new Set();
+  [rawLocation, subArea?.name, sector?.name].forEach(value => {
+    const clean = String(value || '').trim();
+    if (!clean) return;
+    const key = checkinSlug(clean);
+    if (seen.has(key)) return;
+    seen.add(key);
+    parts.push(clean);
+  });
+  return parts.join(' - ');
 }
 
 function checkinNormalizeDataHall(value) {
@@ -2179,8 +2249,9 @@ async function checkinOpenStandaloneExtra() {
       <label><span>Turno</span><select name="shift" required><option value="Diurno" ${defaultShift === 'Diurno' ? 'selected' : ''}>☀️ Diurno</option><option value="Noturno" ${defaultShift === 'Noturno' ? 'selected' : ''}>🌙 Noturno</option></select></label>
       <label><span>Engenheiro</span><input name="engineer" list="checkinEngineersDatalist" required value="${esc(checkinEngineerFilter || (typeof currentUser !== 'undefined' && currentUser?.name ? currentUser.name : ''))}" placeholder="Selecione ou digite o engenheiro"><datalist id="checkinEngineersDatalist">${engineers.map(eng => `<option value="${esc(eng)}">`).join('')}</datalist></label>
       <label><span>Empreiteira</span><input name="contractor" list="checkinCompaniesDatalist" value="${esc(checkinCompanyFilter || '')}" placeholder="Selecione ou digite a empresa"><datalist id="checkinCompaniesDatalist">${companies.map(comp => `<option value="${esc(comp)}">`).join('')}</datalist></label>
-      <label><span>Local / sala</span><input name="location" placeholder="Ex.: Sala RMU 4.4"></label>
+      <label><span>Local / sala</span><input name="location" list="checkinStandaloneSubAreasList" placeholder="Ex.: CORREDOR PDU, SALAS ELÉTRICAS, Sala RMU 4.4"><datalist id="checkinStandaloneSubAreasList">${checkinExtraSubAreas().map(sub => `<option value="${esc(sub.name)}">`).join('')}</datalist></label>
       <label><span>Setor (opcional)</span><select name="sector">${checkinExtraSectorOptions()}</select></label>
+      <label><span>Subárea (opcional)</span><select name="subArea">${checkinExtraSubAreaOptions()}</select></label>
       <label class="wide"><span>Atividade / serviço</span><input name="activity" required placeholder="Descreva o serviço fora do planejamento"></label>
       ${checkinExtraReasonFields()}
       <label><span>Unidade</span><select name="unit">${CHECKIN_UNITS.map((value, index) => `<option value="${value}" ${index === 0 ? 'selected' : ''}>${value}</option>`).join('')}</select></label>
@@ -2201,6 +2272,7 @@ async function checkinAddStandaloneExtra(event) {
     return toast('Descreva o motivo quando escolher Outro.', true);
   }
   const sector = checkinExtraSectorFromForm(data.sector);
+  const subArea = checkinExtraSubAreaFromForm(data.subArea);
   const id = checkinReportId(workDate, dh, engineer);
   const selectedShift = checkinNormalizeShift(data.shift) || 'Diurno';
   let report = checkinGetReport(id);
@@ -2217,8 +2289,8 @@ async function checkinAddStandaloneExtra(event) {
   }
   const taskId = `${id}-extra-${Date.now().toString(36)}`;
   report.activities.push({
-    id: taskId, pstItem: '', scheduleId: '', location: [String(data.location || '').trim(), sector?.name].filter(Boolean).join(' - '),
-    sector: sector?.id || '', sectorName: sector?.name || '', discipline: data.discipline,
+    id: taskId, pstItem: '', scheduleId: '', location: checkinComposeExtraLocation(data.location, subArea, sector),
+    sector: sector?.id || '', sectorName: sector?.name || '', subArea: subArea?.name || '', discipline: data.discipline,
     shift: selectedShift,
     contractor: String(data.contractor || report.contractor || '').trim(),
     actualCrew: null,
@@ -2259,8 +2331,9 @@ async function checkinOpenManualActivity(reportId = '', isExtra = false) {
       <label><span>Turno</span><select name="shift" required><option value="Diurno" ${defaultShift === 'Diurno' ? 'selected' : ''}>☀️ Diurno</option><option value="Noturno" ${defaultShift === 'Noturno' ? 'selected' : ''}>🌙 Noturno</option></select></label>
       <label><span>Engenheiro</span><input name="engineer" list="checkinManualEngineersList" required value="${esc(current.engineer)}"><datalist id="checkinManualEngineersList">${engineers.map(eng => `<option value="${esc(eng)}">`).join('')}</datalist></label>
       <label><span>Empreiteira</span><input name="contractor" list="checkinManualCompaniesList" value="${esc(current.contractor || '')}" placeholder="Empresa"><datalist id="checkinManualCompaniesList">${companies.map(comp => `<option value="${esc(comp)}">`).join('')}</datalist></label>
-      <label><span>Local / sala</span><input name="location" placeholder="Ex.: Sala RMU / Corredor"></label>
+      <label><span>Local / sala</span><input name="location" list="checkinManualSubAreasList" placeholder="Ex.: CORREDOR PDU, SALAS ELÉTRICAS, Sala RMU"><datalist id="checkinManualSubAreasList">${checkinExtraSubAreas().map(sub => `<option value="${esc(sub.name)}">`).join('')}</datalist></label>
       <label><span>Setor (opcional)</span><select name="sector">${checkinExtraSectorOptions()}</select></label>
+      <label><span>Subárea (opcional)</span><select name="subArea">${checkinExtraSubAreaOptions()}</select></label>
       <label class="wide"><span>Atividade / serviço (texto livre)</span><input name="activity" required placeholder="Digite a descrição da atividade extra"></label>
       ${checkinExtraReasonFields()}
       <label><span>Unidade</span><select name="unit">${CHECKIN_UNITS.map((value, index) => `<option value="${value}" ${index === 0 ? 'selected' : ''}>${value}</option>`).join('')}</select></label>
@@ -2284,6 +2357,7 @@ async function checkinAddManualActivity(event) {
   const engineer = String(data.engineer || '').trim();
   if (!dh || !engineer) return toast('Selecione um DH e informe o engenheiro.', true);
   const sector = checkinExtraSectorFromForm(data.sector);
+  const subArea = checkinExtraSubAreaFromForm(data.subArea);
   const selectedShift = checkinNormalizeShift(data.shift) || 'Diurno';
   const targetReportId = checkinReportId(date, dh, engineer);
   let report = checkinGetReport(targetReportId);
@@ -2298,12 +2372,12 @@ async function checkinAddManualActivity(event) {
   const taskId = `${report.id}-extra-${Date.now().toString(36)}`;
   report.activities.push({
     id: taskId, pstItem: '', scheduleId: '',
-    sector: sector?.id || '', sectorName: sector?.name || '',
+    sector: sector?.id || '', sectorName: sector?.name || '', subArea: subArea?.name || '',
     discipline: String(data.discipline || report.discipline || '').trim(),
     shift: selectedShift,
     contractor: String(data.contractor || report.contractor || '').trim(),
     actualCrew: null,
-    location: [data.location.trim(), sector?.name].filter(Boolean).join(' - '), activity: data.activity.trim(), unit: data.unit.trim() || 'm',
+    location: checkinComposeExtraLocation(data.location, subArea, sector), activity: data.activity.trim(), unit: data.unit.trim() || 'm',
     plannedMeters: checkinParseNumber(data.plannedMeters), executedMeters: 0,
     isExtra: data.taskType === 'extra',
     status: 'Não iniciado',

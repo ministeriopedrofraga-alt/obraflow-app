@@ -99,6 +99,7 @@ function spoolLengthText(spool, prefix = 'Comprimento: ') {
 function normalizeSector(rawSec) {
   if (!rawSec) return '';
   const s = String(rawSec).toLowerCase().trim();
+  if (/pdu/.test(s)) return 'corredor-pdu';
   if (/gerador/.test(s)) return 'gerador';
   if (/el[eé]tric/.test(s)) return 'eletricas';
   if (/cag|chiller|gelada|central.*[aá]gua/.test(s)) return 'cag';
@@ -109,11 +110,12 @@ function normalizeSector(rawSec) {
   return s;
 }
 
-// Setores Oficiais da Obra Atualizados com Corredor Gerador, Salas Elétricas e CAG
+// Setores Oficiais da Obra Atualizados com Corredor Gerador, Corredor PDU, Salas Elétricas e CAG
 const SPOOL_SECTORS = {
   'fw-a': { id: 'fw-a', name: 'Corredor FW A', icon: '🏢', line: 'Alimentação AAG (Água Gelada CWS)' },
   'fw-b': { id: 'fw-b', name: 'Corredor FW B', icon: '🏢', line: 'Retorno RAG (Água Gelada CWR)' },
   'gerador': { id: 'gerador', name: 'Corredor Gerador', icon: '⚙️', line: 'Tubulações & Resfriamento dos Geradores' },
+  'corredor-pdu': { id: 'corredor-pdu', name: 'Corredor PDU', icon: '⚡', line: 'Corredor de Distribuição Elétrica (PDU)' },
   'eletricas': { id: 'eletricas', name: 'Salas Elétricas', icon: '💡', line: 'Alimentação & Infra Elétrica' },
   'cag': { id: 'cag', name: 'CAG', icon: '❄️', line: 'Central de Água Gelada (Chillers & Bombas)' },
   'supercore': { id: 'supercore', name: 'SUPERCORE', icon: '⚡', line: 'Barramento Principal & Prumadas' },
@@ -2107,6 +2109,24 @@ function spoolToggleMultiFilter(key, value, checked) {
   const filterIds = { dh: 'spoolFilterDhSelect', sector: 'spoolFilterSectorSelect', subarea: 'spoolFilterSubAreaSelect', type: 'spoolFilterTypeSelect', diameter: 'spoolFilterDiaSelect' };
   const filter = document.getElementById(filterIds[key]);
   if (filter && value !== 'all') filter.open = true;
+}
+
+if (!window.__spoolMultiselectAutoCloseBound) {
+  window.__spoolMultiselectAutoCloseBound = true;
+  const spoolCloseOpenMultiselects = (event) => {
+    const openMenus = document.querySelectorAll('details.spool-status-multiselect[open]');
+    if (!openMenus.length) return;
+    openMenus.forEach(details => {
+      if (!event || !details.contains(event.target)) {
+        details.open = false;
+      }
+    });
+  };
+  document.addEventListener('pointerdown', spoolCloseOpenMultiselects);
+  document.addEventListener('click', spoolCloseOpenMultiselects);
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') spoolCloseOpenMultiselects(null);
+  });
 }
 let spoolTypeFilter = 'all'; // 'all', 'straight', 'valve', 'branch'
 let spoolDiameterFilter = 'all';
