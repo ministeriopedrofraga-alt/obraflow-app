@@ -28,6 +28,7 @@ let checkinDisciplineFilter = '';
 let checkinShiftFilter = '';
 let checkinEngineerFilter = '';
 let checkinDhFilter = '';
+let checkinAreaFilter = '';
 let checkinCompanyFilter = '';
 let checkinPlanStart = checkinToday();
 let checkinPlanEnd = checkinDateOffset(checkinToday(), 6);
@@ -35,17 +36,43 @@ let checkinPlanDisciplineFilter = '';
 let checkinPlanShiftFilter = '';
 let checkinPlanEngineerFilter = '';
 let checkinPlanCompanyFilter = '';
+let checkinPlanSearch = '';
 let checkinCurveStart = checkinDateOffset(checkinToday(), -29);
 let checkinCurveEnd = checkinToday();
 let checkinCurveEngineer = '';
 let checkinCurveDh = '';
+let checkinCurveArea = '';
+let checkinCurveLocationSearch = '';
 let checkinCurveDiscipline = '';
 let checkinCurveShift = '';
 let checkinCurveCompany = '';
 let checkinCurveWeekday = '';
 let checkinCurveMetric = 'tasks';
 let checkinCurveDeviationOnly = false;
+let checkinCurveBreakdownMode = 'task';
+let checkinCurvePendingOnly = false;
+let checkinSummaryStart = checkinWeekBounds(checkinToday()).start;
+let checkinSummaryEnd = checkinWeekBounds(checkinToday()).end;
+let checkinSummaryDh = '';
+let checkinSummaryArea = '';
+let checkinSummarySearch = '';
+let checkinSummaryDiscipline = '';
+let checkinSummaryEngineer = '';
+let checkinSummaryCompany = '';
+let checkinSummaryRepeatedOnly = false;
 const CHECKIN_WEEKDAYS = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+
+function checkinWeekBounds(dateStr) {
+  const base = /^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || '').slice(0, 10))
+    ? String(dateStr).slice(0, 10)
+    : checkinToday();
+  const date = new Date(`${base}T12:00:00`);
+  const day = date.getDay(); // 0=Dom, 1=Seg ... 6=Sab
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const start = checkinDateOffset(base, diffToMonday);
+  const end = checkinDateOffset(start, 6);
+  return { start, end };
+}
 
 function checkinToday() {
   const now = new Date();
@@ -188,6 +215,152 @@ function checkinIsCarryoverActivity(activity) {
   );
 }
 
+function checkinNormalizeSearchText(value) {
+  return checkinNormalizeHeader(value)
+    .replace(/\bcag\s*0?(\d{1,2})\b/g, 'cag $1')
+    .replace(/\bdh\s*0?(\d{1,2})\b/g, 'dh $1');
+}
+
+function checkinExtractAreaLabel(report, activity) {
+  const loc = String(activity?.location || '').trim();
+  const idStr = String(activity?.id || '');
+  const cagLocMatch = loc.match(/\bCAG\s*0?(\d{1,2})\b/i);
+  if (cagLocMatch) return `CAG ${Number(cagLocMatch[1])}`;
+  const cagIdMatch = idStr.match(/-task-cag-0?(\d{1,2})-/i);
+  if (cagIdMatch) return `CAG ${Number(cagIdMatch[1])}`;
+  return String(report?.dh || '').trim() || 'Sem área';
+}
+
+function checkinExtractLocationLabel(report, activity) {
+  const loc = String(activity?.location || '').trim();
+  return loc || checkinExtractAreaLabel(report, activity);
+}
+
+function checkinDetectSubItemTemplate(activityText) {
+  const text = String(activityText || '');
+  const match = text.match(/\b(\d{1,2})\s*x?\s*(crah'?s?|maquinas?|máquinas?|equipamentos?|pecas?|peças?|chillers?|bombas?|fcu'?s?|fan\s*walls?|unidades?|salas?)\b/i);
+  if (!match) return null;
+  const count = Number(match[1]);
+  if (count < 2 || count > 20) return null;
+  const rawName = match[2].toUpperCase().replace(/'S$/i, '').replace(/S$/i, '');
+  const labelMap = {
+    'CRAH': 'CRAH',
+    'MAQUINA': 'Máquina',
+    'MÁQUINA': 'Máquina',
+    'EQUIPAMENTO': 'Equip.',
+    'PECA': 'Peça',
+    'PEÇA': 'Peça',
+    'CHILLER': 'Chiller',
+    'BOMBA': 'Bomba',
+    'FCU': 'FCU',
+    'FAN WALL': 'Fan Wall',
+    'UNIDADE': 'Unid.',
+    'SALA': 'Sala'
+  };
+  return { count, prefix: labelMap[rawName] || rawName };
+}
+
+function checkinSubItemsSummary(subItems) {
+  if (!Array.isArray(subItems) || !subItems.length) return null;
+  const done = subItems.filter(item => item && item.done).length;
+  const pendingLabels = subItems.filter(item => item && !item.done).map(item => item.label).filter(Boolean);
+  return { total: subItems.length, done, pendingCount: subItems.length - done, pendingLabels };
+}
+
+function checkinAllAreas() {
+  const areas = [];
+  (Array.isArray(checkinReports) ? checkinReports : []).forEach(report => {
+    if (report?.dh) areas.push(report.dh);
+    (report?.activities || []).forEach(activity => {
+      areas.push(checkinExtractAreaLabel(report, activity));
+    });
+  });
+  return checkinUniqueOptions(areas).sort((a, b) => {
+    const aCag = /^CAG\s+/i.test(a) ? 0 : 1;
+    const bCag = /^CAG\s+/i.test(b) ? 0 : 1;
+    if (aCag !== bCag) return aCag - bCag;
+    return a.localeCompare(b, 'pt-BR', { numeric: true });
+  });
+}
+
+function checkinActivityRecurrenceKey(dh, activity) {
+  if (!activity) return '';
+  const dhKey = checkinSlug(dh || '');
+  const sid = String(activity.scheduleId || '').trim();
+  const pst = String(activity.pstItem || '').trim();
+  const loc = String(activity.location || '').trim();
+  const act = String(activity.activity || '').trim();
+  const cagMatch = loc.match(/\bCAG\s*0?(\d{1,2})\b/i);
+  const areaKey = cagMatch ? `cag-${Number(cagMatch[1])}` : '';
+  if (sid) {
+    return `${dhKey}|${areaKey}|sid:${checkinSlug(sid)}`;
+  }
+  if (pst) {
+    return `${dhKey}|${areaKey}|pst:${checkinSlug(pst)}|loc:${checkinSlug(loc)}|act:${checkinSlug(act)}`;
+  }
+  return `${dhKey}|${areaKey}|loc:${checkinSlug(loc)}|act:${checkinSlug(act)}`;
+}
+
+function checkinActivityOriginalPlannedMeters(activity) {
+  if (!activity) return 0;
+  if (checkinIsCarryoverActivity(activity)) return 0;
+  const planned = checkinParseNumber(activity.plannedMeters);
+  const carried = checkinParseNumber(activity.carryoverAddedMeters);
+  if (carried > 0) {
+    if (activity.basePlannedMeters !== undefined && activity.basePlannedMeters !== null) {
+      return checkinParseNumber(activity.basePlannedMeters);
+    }
+    return Math.max(0, Math.round((planned - carried) * 100) / 100);
+  }
+  return planned;
+}
+
+function checkinBuildWeeklyRecurrenceIndex(anchorDate) {
+  const { start, end } = checkinWeekBounds(anchorDate);
+  const byKey = new Map();
+  checkinReports
+    .filter(r => r.workDate >= start && r.workDate <= end)
+    .forEach(report => {
+      (report.activities || []).forEach(activity => {
+        const key = checkinActivityRecurrenceKey(report.dh, activity);
+        if (!key) return;
+        const entry = byKey.get(key) || {
+          key,
+          dates: new Set(),
+          plannedTotal: 0,
+          executedTotal: 0,
+          unit: activity.unit || 'm',
+          weekStart: start,
+          weekEnd: end
+        };
+        entry.dates.add(report.workDate);
+        entry.plannedTotal = Math.round((entry.plannedTotal + checkinActivityOriginalPlannedMeters(activity)) * 100) / 100;
+        entry.executedTotal = Math.round((entry.executedTotal + checkinParseNumber(activity.executedMeters)) * 100) / 100;
+        if (!entry.unit && activity.unit) entry.unit = activity.unit;
+        byKey.set(key, entry);
+      });
+    });
+
+  const result = new Map();
+  byKey.forEach((entry, key) => {
+    const remainingTotal = Math.max(0, Math.round((entry.plannedTotal - entry.executedTotal) * 100) / 100);
+    const pct = entry.plannedTotal > 0
+      ? Math.round((entry.executedTotal / entry.plannedTotal) * 100)
+      : (entry.executedTotal > 0 ? 100 : 0);
+    result.set(key, {
+      daysCount: entry.dates.size,
+      plannedTotal: entry.plannedTotal,
+      executedTotal: entry.executedTotal,
+      remainingTotal,
+      unit: entry.unit || 'm',
+      pct,
+      weekStart: entry.weekStart,
+      weekEnd: entry.weekEnd
+    });
+  });
+  return result;
+}
+
 function checkinActivityRemainingMeters(activity) {
   if (!activity || activity.carryoverDismissed) return 0;
   const status = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
@@ -225,78 +398,184 @@ function checkinSyncCarryoverForReport(sourceReport, { includeUnstartedPast = fa
     if (!activity || !activity.id) return;
     const remaining = checkinActivityRemainingMeters(activity);
     const shouldCarry = checkinShouldAutoCarryoverActivity(sourceReport, activity, { includeUnstartedPast });
+    const srcKey = checkinActivityRecurrenceKey(sourceReport.dh, activity);
     const carryIdx = nextReport
       ? (nextReport.activities || []).findIndex(item => item.carryoverSourceId === activity.id)
       : -1;
+    const mergedTargetIdx = nextReport
+      ? (nextReport.activities || []).findIndex(item =>
+        !checkinIsCarryoverActivity(item)
+        && (item.carryoverMergedFromId === activity.id
+          || (srcKey && checkinActivityRecurrenceKey(nextReport.dh, item) === srcKey))
+      )
+      : -1;
 
     if (shouldCarry && remaining > 0) {
-      if (!nextReport) {
-        nextReport = checkinCreateReport({
-          workDate: nextDate,
-          dh: sourceReport.dh,
-          engineer: sourceReport.engineer,
-          discipline: checkinGetActivityDiscipline(sourceReport, activity) || sourceReport.discipline || '',
-          stage: sourceReport.stage || '',
-          front: sourceReport.front || '',
-          contractor: activity.contractor || sourceReport.contractor || '',
-          hcEngineer: sourceReport.hcEngineer || sourceReport.engineer || '',
-          supervisor: sourceReport.supervisor || '',
-          shift: checkinGetActivityShift(sourceReport, activity) || sourceReport.shift || ''
-        });
-      }
-      if (carryIdx < 0) {
-        const carryId = `${nextReport.id}-carry-${checkinSlug(activity.id)}`;
-        nextReport.activities.push({
-          id: carryId,
-          pstItem: activity.pstItem || '',
-          scheduleId: activity.scheduleId || '',
-          discipline: checkinGetActivityDiscipline(sourceReport, activity) || sourceReport.discipline || '',
-          shift: checkinGetActivityShift(sourceReport, activity),
-          contractor: activity.contractor || '',
-          actualCrew: null,
-          ptaCount: null,
-          forkliftCount: null,
-          location: activity.location || '',
-          activity: activity.activity || '',
-          unit: activity.unit || 'm',
-          plannedMeters: remaining,
-          executedMeters: 0,
-          status: 'Não iniciado',
-          problemCode: '',
-          problemOther: '',
-          notes: '',
-          checkinAt: '',
-          checkoutAt: '',
-          isCarryover: true,
-          carryoverFromDate: sourceReport.workDate,
-          carryoverOriginDate: activity.carryoverOriginDate || sourceReport.workDate,
-          carryoverSourceId: activity.id,
-          carryoverOriginalPlanned: checkinParseNumber(activity.carryoverOriginalPlanned || activity.plannedMeters)
-        });
-        changed = true;
-        addedCount += 1;
-      } else {
-        const existingCarry = nextReport.activities[carryIdx];
-        const untouched = !existingCarry.checkinAt && !existingCarry.checkoutAt && !checkinParseNumber(existingCarry.executedMeters);
-        if (untouched && checkinParseNumber(existingCarry.plannedMeters) !== remaining) {
-          existingCarry.plannedMeters = remaining;
-          existingCarry.unit = activity.unit || existingCarry.unit || 'm';
+      if (mergedTargetIdx >= 0 && nextReport) {
+        // A atividade já está programada no dia seguinte: consolida o saldo em uma única linha!
+        const target = nextReport.activities[mergedTargetIdx];
+        const basePlanned = (target.basePlannedMeters !== undefined && target.basePlannedMeters !== null)
+          ? checkinParseNumber(target.basePlannedMeters)
+          : checkinParseNumber(target.plannedMeters);
+        const newPlanned = Math.round((basePlanned + remaining) * 100) / 100;
+        if (
+          target.carryoverMergedFromId !== activity.id
+          || checkinParseNumber(target.carryoverAddedMeters) !== remaining
+          || checkinParseNumber(target.plannedMeters) !== newPlanned
+        ) {
+          target.basePlannedMeters = basePlanned;
+          target.carryoverAddedMeters = remaining;
+          target.carryoverMergedFromId = activity.id;
+          target.carryoverFromDate = sourceReport.workDate;
+          target.carryoverOriginDate = activity.carryoverOriginDate || sourceReport.workDate;
+          target.plannedMeters = newPlanned;
           changed = true;
           updatedCount += 1;
         }
+        // Se existia uma linha duplicada de carryover antigo sem apontamento, remove a duplicata
+        if (carryIdx >= 0 && carryIdx !== mergedTargetIdx) {
+          const dupCarry = nextReport.activities[carryIdx];
+          const untouched = !dupCarry.checkinAt && !dupCarry.checkoutAt && !checkinParseNumber(dupCarry.executedMeters);
+          if (untouched) {
+            nextReport.activities.splice(carryIdx, 1);
+            changed = true;
+            removedCount += 1;
+          }
+        }
+      } else {
+        if (!nextReport) {
+          nextReport = checkinCreateReport({
+            workDate: nextDate,
+            dh: sourceReport.dh,
+            engineer: sourceReport.engineer,
+            discipline: checkinGetActivityDiscipline(sourceReport, activity) || sourceReport.discipline || '',
+            stage: sourceReport.stage || '',
+            front: sourceReport.front || '',
+            contractor: activity.contractor || sourceReport.contractor || '',
+            hcEngineer: sourceReport.hcEngineer || sourceReport.engineer || '',
+            supervisor: sourceReport.supervisor || '',
+            shift: checkinGetActivityShift(sourceReport, activity) || sourceReport.shift || ''
+          });
+        }
+        if (carryIdx < 0) {
+          const carryId = `${nextReport.id}-carry-${checkinSlug(activity.id)}`;
+          nextReport.activities.push({
+            id: carryId,
+            pstItem: activity.pstItem || '',
+            scheduleId: activity.scheduleId || '',
+            discipline: checkinGetActivityDiscipline(sourceReport, activity) || sourceReport.discipline || '',
+            shift: checkinGetActivityShift(sourceReport, activity),
+            contractor: activity.contractor || '',
+            actualCrew: null,
+            ptaCount: null,
+            forkliftCount: null,
+            location: activity.location || '',
+            activity: activity.activity || '',
+            unit: activity.unit || 'm',
+            plannedMeters: remaining,
+            executedMeters: 0,
+            status: 'Não iniciado',
+            problemCode: '',
+            problemOther: '',
+            notes: '',
+            checkinAt: '',
+            checkoutAt: '',
+            isCarryover: true,
+            carryoverFromDate: sourceReport.workDate,
+            carryoverOriginDate: activity.carryoverOriginDate || sourceReport.workDate,
+            carryoverSourceId: activity.id,
+            carryoverOriginalPlanned: checkinParseNumber(activity.carryoverOriginalPlanned || activity.plannedMeters)
+          });
+          changed = true;
+          addedCount += 1;
+        } else {
+          const existingCarry = nextReport.activities[carryIdx];
+          const untouched = !existingCarry.checkinAt && !existingCarry.checkoutAt && !checkinParseNumber(existingCarry.executedMeters);
+          if (untouched && checkinParseNumber(existingCarry.plannedMeters) !== remaining) {
+            existingCarry.plannedMeters = remaining;
+            existingCarry.unit = activity.unit || existingCarry.unit || 'm';
+            changed = true;
+            updatedCount += 1;
+          }
+        }
       }
-    } else if (carryIdx >= 0 && nextReport) {
-      const existingCarry = nextReport.activities[carryIdx];
-      const untouched = !existingCarry.checkinAt && !existingCarry.checkoutAt && !checkinParseNumber(existingCarry.executedMeters);
-      if (untouched) {
-        nextReport.activities.splice(carryIdx, 1);
-        changed = true;
-        removedCount += 1;
+    } else if (nextReport) {
+      // Sem saldo pendente: reverte saldo consolidado ou remove linha de carryover se ainda não apontada
+      if (mergedTargetIdx >= 0) {
+        const target = nextReport.activities[mergedTargetIdx];
+        if (target.carryoverMergedFromId === activity.id && checkinParseNumber(target.carryoverAddedMeters) > 0) {
+          const basePlanned = (target.basePlannedMeters !== undefined && target.basePlannedMeters !== null)
+            ? checkinParseNumber(target.basePlannedMeters)
+            : Math.max(0, Math.round((checkinParseNumber(target.plannedMeters) - checkinParseNumber(target.carryoverAddedMeters)) * 100) / 100);
+          target.plannedMeters = basePlanned;
+          delete target.basePlannedMeters;
+          delete target.carryoverAddedMeters;
+          delete target.carryoverMergedFromId;
+          delete target.carryoverFromDate;
+          delete target.carryoverOriginDate;
+          changed = true;
+          removedCount += 1;
+        }
+      }
+      if (carryIdx >= 0) {
+        const existingCarry = nextReport.activities[carryIdx];
+        const untouched = !existingCarry.checkinAt && !existingCarry.checkoutAt && !checkinParseNumber(existingCarry.executedMeters);
+        if (untouched) {
+          nextReport.activities.splice(carryIdx, 1);
+          changed = true;
+          removedCount += 1;
+        }
       }
     }
   });
 
+  // Limpeza adicional: consolida qualquer linha antiga de carryover isolada que duplique uma tarefa já programada no mesmo diário
+  if (nextReport && Array.isArray(nextReport.activities) && nextReport.activities.length > 1) {
+    const scheduledByKey = new Map();
+    nextReport.activities.forEach(item => {
+      if (!checkinIsCarryoverActivity(item)) {
+        const key = checkinActivityRecurrenceKey(nextReport.dh, item);
+        if (key && !scheduledByKey.has(key)) scheduledByKey.set(key, item);
+      }
+    });
+    for (let idx = nextReport.activities.length - 1; idx >= 0; idx -= 1) {
+      const item = nextReport.activities[idx];
+      if (!checkinIsCarryoverActivity(item)) continue;
+      const untouched = !item.checkinAt && !item.checkoutAt && !checkinParseNumber(item.executedMeters);
+      if (!untouched) continue;
+      const key = checkinActivityRecurrenceKey(nextReport.dh, item);
+      const target = key ? scheduledByKey.get(key) : null;
+      if (target) {
+        if (!target.carryoverMergedFromId && checkinParseNumber(item.plannedMeters) > 0) {
+          const basePlanned = (target.basePlannedMeters !== undefined && target.basePlannedMeters !== null)
+            ? checkinParseNumber(target.basePlannedMeters)
+            : checkinParseNumber(target.plannedMeters);
+          const added = checkinParseNumber(item.plannedMeters);
+          target.basePlannedMeters = basePlanned;
+          target.carryoverAddedMeters = added;
+          target.carryoverMergedFromId = item.carryoverSourceId || item.id;
+          target.carryoverFromDate = item.carryoverFromDate || sourceReport.workDate;
+          target.carryoverOriginDate = item.carryoverOriginDate || item.carryoverFromDate || sourceReport.workDate;
+          target.plannedMeters = Math.round((basePlanned + added) * 100) / 100;
+        }
+        nextReport.activities.splice(idx, 1);
+        changed = true;
+        removedCount += 1;
+      }
+    }
+  }
+
   if (!changed || !nextReport) return null;
+  if (!nextReport.activities.length) {
+    return {
+      nextReport: null,
+      deletedReportId: nextReport.id,
+      nextDate,
+      addedCount,
+      updatedCount,
+      removedCount
+    };
+  }
   const checkedIn = nextReport.activities.filter(item => item.checkinAt);
   const checkedOut = nextReport.activities.filter(item => item.checkoutAt);
   nextReport.checkinAt = checkedIn.map(item => item.checkinAt).sort()[0] || '';
@@ -307,17 +586,44 @@ function checkinSyncCarryoverForReport(sourceReport, { includeUnstartedPast = fa
     ...nextReport.activities.map(a => a.contractor),
     nextReport.contractor
   ]).join(', ');
-  return { nextReport, nextDate, addedCount, updatedCount, removedCount };
+  return { nextReport, deletedReportId: '', nextDate, addedCount, updatedCount, removedCount };
+}
+
+async function checkinDeleteReportById(reportId) {
+  if (!reportId) return false;
+  checkinReports = checkinReports.filter(item => item.id !== reportId);
+  checkinSaveLocal();
+  if (typeof supabaseRestRequest === 'function' && navigator.onLine !== false) {
+    try {
+      await supabaseRestRequest(`${CHECKIN_TABLE}?id=eq.${encodeURIComponent(reportId)}`, {
+        method: 'DELETE',
+        queueOffline: false
+      });
+    } catch (error) {
+      console.warn('Não foi possível remover diário vazio no banco:', error);
+    }
+  }
+  return true;
+}
+
+async function checkinPersistWithCarryover(report, carryResult, { silent = true } = {}) {
+  const toPersist = carryResult?.nextReport ? [report, carryResult.nextReport] : report;
+  const saved = await checkinPersistReports(toPersist, { silent });
+  if (carryResult?.deletedReportId) {
+    await checkinDeleteReportById(carryResult.deletedReportId);
+  }
+  return saved;
 }
 
 async function checkinSyncCarryoverFromPreviousDay(targetDate, { persist = true, forceIncludeUnstarted = false } = {}) {
   if (!targetDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(targetDate))) {
-    return { totalAdded: 0, totalUpdated: 0, totalRemoved: 0, changedReports: [] };
+    return { totalAdded: 0, totalUpdated: 0, totalRemoved: 0, changedReports: [], deletedReportIds: [] };
   }
   const prevDate = checkinDateOffset(targetDate, -1);
   const prevReports = checkinReports.filter(report => report.workDate === prevDate);
   const includeUnstartedPast = forceIncludeUnstarted || prevDate < checkinToday();
   const changedReports = [];
+  const deletedReportIds = [];
   let totalAdded = 0;
   let totalUpdated = 0;
   let totalRemoved = 0;
@@ -329,13 +635,21 @@ async function checkinSyncCarryoverFromPreviousDay(targetDate, { persist = true,
       totalAdded += result.addedCount;
       totalUpdated += result.updatedCount;
       totalRemoved += result.removedCount;
+    } else if (result?.deletedReportId) {
+      deletedReportIds.push(result.deletedReportId);
+      totalRemoved += result.removedCount;
     }
   });
 
   if (changedReports.length && persist) {
     await checkinPersistReports(changedReports, { silent: true });
   }
-  return { prevDate, totalAdded, totalUpdated, totalRemoved, changedReports };
+  if (deletedReportIds.length && persist) {
+    for (const delId of deletedReportIds) {
+      await checkinDeleteReportById(delId);
+    }
+  }
+  return { prevDate, totalAdded, totalUpdated, totalRemoved, changedReports, deletedReportIds };
 }
 
 function checkinResolveMigratedStatus(activity, checkinAt, checkoutAt) {
@@ -1025,6 +1339,14 @@ function checkinSyncFiltersFromDom() {
   if (curveEndEl && isIsoDate(curveEndEl.value)) {
     checkinCurveEnd = curveEndEl.value.trim();
   }
+  const summaryStartEl = document.querySelector('[data-checkin-summary-start]');
+  if (summaryStartEl && isIsoDate(summaryStartEl.value)) {
+    checkinSummaryStart = summaryStartEl.value.trim();
+  }
+  const summaryEndEl = document.querySelector('[data-checkin-summary-end]');
+  if (summaryEndEl && isIsoDate(summaryEndEl.value)) {
+    checkinSummaryEnd = summaryEndEl.value.trim();
+  }
 }
 
 function checkinComputeDailyView() {
@@ -1032,10 +1354,11 @@ function checkinComputeDailyView() {
   const companies = checkinCompanies();
   const visibleReports = dayReports
     .map(report => {
-      if (!checkinDisciplineFilter && !checkinShiftFilter) return report;
+      if (!checkinDisciplineFilter && !checkinShiftFilter && !checkinAreaFilter) return report;
       const filteredActivities = (report.activities || []).filter(activity =>
         (!checkinDisciplineFilter || checkinGetActivityDiscipline(report, activity) === checkinDisciplineFilter)
         && (!checkinShiftFilter || checkinGetActivityShift(report, activity) === checkinShiftFilter)
+        && (!checkinAreaFilter || checkinExtractAreaLabel(report, activity) === checkinAreaFilter)
       );
       if (!filteredActivities.length) return null;
       return { ...report, activities: filteredActivities };
@@ -1048,8 +1371,45 @@ function checkinComputeDailyView() {
     );
   const totalPlanned = visibleReports.reduce((sum, report) => sum + report.activities.reduce((total, activity) => total + checkinParseNumber(activity.plannedMeters), 0), 0);
   const totalExecuted = visibleReports.reduce((sum, report) => sum + report.activities.reduce((total, activity) => total + checkinParseNumber(activity.executedMeters), 0), 0);
+  const totalRemaining = Math.max(0, Math.round((totalPlanned - totalExecuted) * 100) / 100);
   const openReports = visibleReports.filter(report => !report.checkoutAt).length;
-  return { visibleReports, companies, totalPlanned, totalExecuted, openReports };
+  const recurrenceIndex = checkinBuildWeeklyRecurrenceIndex(checkinSelectedDate);
+
+  // Resumo acumulado da semana para o recorte atual (ex.: CAG 4, DH 04, ou tudo)
+  const { start: weekStart, end: weekEnd } = checkinWeekBounds(checkinSelectedDate);
+  let weekPlanned = 0;
+  let weekExecuted = 0;
+  const weekUniqueKeys = new Set();
+  checkinReports
+    .filter(r => r.workDate >= weekStart && r.workDate <= weekEnd)
+    .filter(r => (!checkinEngineerFilter || r.engineer === checkinEngineerFilter) && (!checkinDhFilter || r.dh === checkinDhFilter))
+    .forEach(r => {
+      (r.activities || []).forEach(a => {
+        if (checkinDisciplineFilter && checkinGetActivityDiscipline(r, a) !== checkinDisciplineFilter) return;
+        if (checkinShiftFilter && checkinGetActivityShift(r, a) !== checkinShiftFilter) return;
+        if (checkinAreaFilter && checkinExtractAreaLabel(r, a) !== checkinAreaFilter) return;
+        if (checkinCompanyFilter && (a.contractor ? a.contractor !== checkinCompanyFilter : r.contractor !== checkinCompanyFilter)) return;
+        weekPlanned += checkinActivityOriginalPlannedMeters(a);
+        weekExecuted += checkinParseNumber(a.executedMeters);
+        const key = checkinActivityRecurrenceKey(r.dh, a);
+        if (key) weekUniqueKeys.add(key);
+      });
+    });
+  weekPlanned = Math.round(weekPlanned * 100) / 100;
+  weekExecuted = Math.round(weekExecuted * 100) / 100;
+  const weekRemaining = Math.max(0, Math.round((weekPlanned - weekExecuted) * 100) / 100);
+  const weekPct = weekPlanned > 0 ? Math.round((weekExecuted / weekPlanned) * 100) : (weekExecuted > 0 ? 100 : 0);
+  const weekSummary = {
+    start: weekStart,
+    end: weekEnd,
+    planned: weekPlanned,
+    executed: weekExecuted,
+    remaining: weekRemaining,
+    pct: weekPct,
+    uniqueCount: weekUniqueKeys.size
+  };
+
+  return { visibleReports, companies, totalPlanned, totalExecuted, totalRemaining, openReports, recurrenceIndex, weekSummary };
 }
 
 async function renderCheckIn() {
@@ -1066,18 +1426,21 @@ async function renderCheckIn() {
 
   const engineers = checkinUniqueOptions(checkinReports.map(report => report.engineer));
   const dataHalls = CHECKIN_DATA_HALLS;
+  const areas = checkinAllAreas();
   const disciplines = checkinAllDisciplines();
-  const { visibleReports, companies, totalPlanned, totalExecuted, openReports } = checkinComputeDailyView();
+  const { visibleReports, companies, totalPlanned, totalExecuted, totalRemaining, openReports, recurrenceIndex, weekSummary } = checkinComputeDailyView();
   const canManagePlanning = checkinCanManagePlanning();
 
   app.innerHTML = `
     ${pageHeader('Check-in e Check-out Diário', 'Planeje as frentes por engenheiro e acompanhe o executado, desvios e Curva S.', 'PRODUÇÃO DE CAMPO', `<button class="button button-dark" onclick="checkinOpenReportPDF()">${icon('print')} Relatório PDF + Curva S</button><button class="button button-outline" onclick="checkinDownloadTemplate()">${icon('download')} Modelo semanal</button>${canManagePlanning ? `<button class="button button-green" onclick="checkinOpenImport()">${icon('upload')} Importar semana</button>` : ''}`)}
     <nav class="checkin-tabs" aria-label="Seções de check-in">
       <button class="${checkinActiveTab === 'diario' ? 'active' : ''}" onclick="checkinSetTab('diario')">Diário de campo</button>
+      <button class="${checkinActiveTab === 'resumo' ? 'active' : ''}" onclick="checkinSetTab('resumo')">Acumulado (Semana / Áreas)</button>
       <button class="${checkinActiveTab === 'planejamento' ? 'active' : ''}" onclick="checkinSetTab('planejamento')">Planejamento</button>
       <button class="${checkinActiveTab === 'curva' ? 'active' : ''}" onclick="checkinSetTab('curva')">Curva S</button>
     </nav>
-    ${checkinActiveTab === 'diario' ? checkinRenderDaily(visibleReports, engineers, dataHalls, disciplines, companies, totalPlanned, totalExecuted, openReports) : ''}
+    ${checkinActiveTab === 'diario' ? checkinRenderDaily(visibleReports, engineers, dataHalls, areas, disciplines, companies, totalPlanned, totalExecuted, totalRemaining, openReports, recurrenceIndex, weekSummary) : ''}
+    ${checkinActiveTab === 'resumo' ? checkinRenderSummary(engineers, dataHalls, areas, disciplines, companies) : ''}
     ${checkinActiveTab === 'planejamento' ? checkinRenderPlanning(engineers, dataHalls, disciplines, companies) : ''}
     ${checkinActiveTab === 'curva' ? checkinRenderCurve(engineers, dataHalls, disciplines, companies) : ''}
   `;
@@ -1085,19 +1448,34 @@ async function renderCheckIn() {
   if (typeof hydrateIcons === 'function') hydrateIcons();
 }
 
-function checkinRenderDailyResults(reports, companies, planned, executed, openReports) {
+function checkinRenderDailyResults(reports, companies, planned, executed, openReports, totalRemaining = Math.max(0, Math.round((planned - executed) * 100) / 100), recurrenceIndex = null, weekSummary = null) {
+  const recIndex = recurrenceIndex || checkinBuildWeeklyRecurrenceIndex(checkinSelectedDate);
+  const scopeLabel = [checkinAreaFilter, checkinDhFilter, checkinDisciplineFilter, checkinEngineerFilter].filter(Boolean).join(' · ') || 'Obra geral';
+  const weekBannerHtml = weekSummary && (weekSummary.planned > 0 || weekSummary.executed > 0)
+    ? `<section class="checkin-week-banner">
+        <div class="checkin-week-banner-stats">
+          <span><strong>📅 Acumulado da semana (${checkinFormatDate(weekSummary.start)} a ${checkinFormatDate(weekSummary.end)}) — ${esc(scopeLabel)}:</strong></span>
+          <span>Programado: <strong>${checkinNumber(weekSummary.planned)} m</strong></span>
+          <span>Instalado: <strong style="color:#15803d;">${checkinNumber(weekSummary.executed)} m (${weekSummary.pct}%)</strong></span>
+          <span>Falta: <strong style="color:${weekSummary.remaining > 0 ? '#b45309' : '#15803d'};">${checkinNumber(weekSummary.remaining)} m</strong></span>
+        </div>
+        <button class="button button-outline compact" onclick="checkinOpenSummaryFromDaily()">Ver detalhamento por atividade / área</button>
+      </section>`
+    : '';
   return `
     <section class="checkin-metrics">
       <article><small>ATIVIDADES DO DIA</small><strong>${reports.reduce((sum, report) => sum + report.activities.length, 0)}</strong></article>
-      <article><small>PLANEJADO</small><strong>${checkinNumber(planned)} m</strong></article>
-      <article><small>EXECUTADO</small><strong>${checkinNumber(executed)} m</strong></article>
+      <article><small>PLANEJADO (DIA)</small><strong>${checkinNumber(planned)} m</strong></article>
+      <article><small>EXECUTADO (DIA)</small><strong>${checkinNumber(executed)} m</strong></article>
+      <article><small>FALTA (DIA)</small><strong style="color:${totalRemaining > 0 ? '#b45309' : '#15803d'}">${checkinNumber(totalRemaining)} m</strong></article>
       <article><small>DIÁRIOS EM ABERTO</small><strong>${openReports}</strong></article>
     </section>
-    ${reports.length ? reports.map(report => checkinRenderDailyReport(report, companies)).join('') : `<section class="checkin-empty"><span>${icon('calendar')}</span><h2>Nenhuma atividade planejada para ${checkinFormatDate(checkinSelectedDate)}</h2><p>Importe a planilha semanal ou cadastre uma atividade planejada para abrir o diário de campo.</p><button class="button button-green" onclick="checkinSetTab('planejamento')">Abrir planejamento</button></section>`}
+    ${weekBannerHtml}
+    ${reports.length ? reports.map(report => checkinRenderDailyReport(report, companies, recIndex)).join('') : `<section class="checkin-empty"><span>${icon('calendar')}</span><h2>Nenhuma atividade planejada para ${checkinFormatDate(checkinSelectedDate)}</h2><p>Importe a planilha semanal ou cadastre uma atividade planejada para abrir o diário de campo.</p><button class="button button-green" onclick="checkinSetTab('planejamento')">Abrir planejamento</button></section>`}
   `;
 }
 
-function checkinRenderDaily(reports, engineers, dataHalls, disciplines, companies, planned, executed, openReports) {
+function checkinRenderDaily(reports, engineers, dataHalls, areas, disciplines, companies, planned, executed, totalRemaining, openReports, recurrenceIndex, weekSummary) {
   return `
     <section class="checkin-filter-panel">
       <label><span>Data do diário</span><input type="date" data-checkin-daily-date value="${checkinSelectedDate}" oninput="checkinSetDay(this.value)" onchange="checkinSetDay(this.value)"></label>
@@ -1106,6 +1484,7 @@ function checkinRenderDaily(reports, engineers, dataHalls, disciplines, companie
       <label><span>Empresa</span><select onchange="checkinSetDailyFilter('company', this.value)">${checkinSelectOptions(companies, checkinCompanyFilter, 'Todas')}</select></label>
       <label><span>Engenheiro</span><select onchange="checkinSetDailyFilter('engineer', this.value)">${checkinSelectOptions(engineers, checkinEngineerFilter, 'Todos')}</select></label>
       <label><span>Data Hall</span><select onchange="checkinSetDailyFilter('dh', this.value)">${checkinSelectOptions(dataHalls, checkinDhFilter, 'Todos')}</select></label>
+      <label><span>Área / CAG</span><select onchange="checkinSetDailyFilter('area', this.value)">${checkinSelectOptions(areas, checkinAreaFilter, 'Todas')}</select></label>
       <button class="button button-outline" onclick="checkinOpenStandaloneExtra()">Planejar atividade extra</button>
       <button class="button button-outline" onclick="checkinLoadReports({force:true}).then(renderCheckIn)">${icon('refresh')} Atualizar</button>
       <button class="button button-outline" onclick="checkinCopyDayWhatsApp('checkin')">Copiar check-ins do dia</button>
@@ -1113,12 +1492,12 @@ function checkinRenderDaily(reports, engineers, dataHalls, disciplines, companie
       <button class="button button-dark" onclick="checkinOpenReportPDF('daily')">${icon('print')} Extrair PDF do dia</button>
     </section>
     <div id="checkinDailyResults">
-      ${checkinRenderDailyResults(reports, companies, planned, executed, openReports)}
+      ${checkinRenderDailyResults(reports, companies, planned, executed, openReports, totalRemaining, recurrenceIndex, weekSummary)}
     </div>
   `;
 }
 
-function checkinRenderDailyReport(report, companies = checkinCompanies()) {
+function checkinRenderDailyReport(report, companies = checkinCompanies(), recurrenceIndex = null) {
   const totalPlanned = report.activities.reduce((sum, activity) => sum + checkinParseNumber(activity.plannedMeters), 0);
   const totalExecuted = report.activities.reduce((sum, activity) => sum + checkinParseNumber(activity.executedMeters), 0);
   const checkinCount = report.activities.filter(activity => activity.checkinAt).length;
@@ -1143,7 +1522,7 @@ function checkinRenderDailyReport(report, companies = checkinCompanies()) {
     </div>
     <div class="checkin-activity-table-wrap"><table class="checkin-activity-table">
       <thead><tr><th>Item / cronograma</th><th>Local e atividade</th><th>Un.</th><th>Prev. dia</th><th>Exec. dia</th><th>%</th><th>Status</th><th>Cod. problema</th><th>Observacao</th><th>Efetivo / Check-in por tarefa</th>${checkinCanDeletePlanning() ? '<th>Excluir</th>' : ''}</tr></thead>
-      <tbody>${report.activities.map(activity => checkinRenderActivityRow(report, activity, companies)).join('')}</tbody>
+      <tbody>${report.activities.map(activity => checkinRenderActivityRow(report, activity, companies, recurrenceIndex)).join('')}</tbody>
       <tfoot><tr><th colspan="3">Total do diário</th><th>${checkinNumber(totalPlanned)} m</th><th>${checkinNumber(totalExecuted)} m</th><th>${totalPlanned ? `${checkinNumber(totalExecuted / totalPlanned * 100, 0)}%` : '—'}</th><th colspan="${checkinCanDeletePlanning() ? 5 : 4}"></th></tr></tfoot>
     </table></div>
     <footer class="checkin-report-actions">
@@ -1173,17 +1552,24 @@ function checkinActualCrewLabel(discipline) {
   return 'Efetivo real da disciplina';
 }
 
-function checkinRenderActivityRow(report, activity, companies = checkinCompanies()) {
+function checkinRenderActivityRow(report, activity, companies = checkinCompanies(), recurrenceIndex = null) {
   const planned = checkinParseNumber(activity.plannedMeters);
   const executed = checkinParseNumber(activity.executedMeters);
+  const unit = activity.unit || 'm';
   const isExtra = checkinIsExtraActivity(activity);
   const isCarryover = checkinIsCarryoverActivity(activity);
+  const mergedCarryMeters = checkinParseNumber(activity.carryoverAddedMeters);
+  const hasMergedCarry = !isCarryover && mergedCarryMeters > 0;
+  const basePlanned = checkinActivityOriginalPlannedMeters(activity);
   const percent = planned > 0 ? `${checkinNumber(executed / planned * 100, 0)}%` : executed ? '100%' : '—';
-  const isClosed = Boolean(activity.checkoutAt);
-  const isRunning = Boolean(activity.checkinAt && !activity.checkoutAt);
+  const currentStatus = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
+  const isClosed = Boolean(activity.checkoutAt || currentStatus === 'Concluído');
+  const isRunning = Boolean(activity.checkinAt && !isClosed);
+  const isSuspended = currentStatus === 'Suspenso';
+  const isPartial = currentStatus === 'Parcial';
   const actShift = checkinGetActivityShift(report, activity);
   const isNightShift = actShift === 'Noturno';
-  const rowStateClass = `${isRunning ? 'is-running' : isClosed ? 'is-closed' : 'is-pending'} ${isNightShift ? 'is-night-shift' : 'is-day-shift'} ${isExtra ? 'is-extra-task' : ''} ${isCarryover ? 'is-carryover-task' : ''}`;
+  const rowStateClass = `${isRunning ? 'is-running' : isClosed ? 'is-closed' : 'is-pending'} ${isSuspended ? 'is-suspended' : isPartial ? 'is-partial' : ''} ${isNightShift ? 'is-night-shift' : 'is-day-shift'} ${isExtra ? 'is-extra-task' : ''} ${isCarryover || hasMergedCarry ? 'is-carryover-task' : ''}`;
   const actDiscipline = checkinGetActivityDiscipline(report, activity);
   const rawTaskContractors = checkinUniqueContractors([activity.contractor]);
   const fallbackReportContractors = checkinUniqueContractors([report.contractor]);
@@ -1191,18 +1577,76 @@ function checkinRenderActivityRow(report, activity, companies = checkinCompanies
   const disciplineOptions = checkinUniqueOptions([...CHECKIN_DISCIPLINES, actDiscipline].filter(Boolean));
   const checkinTimeVal = checkinTimeInputValue(activity.checkinAt);
   const checkoutTimeVal = checkinTimeInputValue(activity.checkoutAt);
-  const currentStatus = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
 
-  const statusPill = isRunning
-    ? `<span class="checkin-status-pill running"><span class="pulse-dot"></span> Em andamento (${checkinFormatTime(activity.checkinAt)})</span>`
-    : isClosed
-      ? `<span class="checkin-status-pill closed">✓ Finalizada (${checkinFormatTime(activity.checkinAt)} → ${checkinFormatTime(activity.checkoutAt)})</span>`
-      : `<span class="checkin-status-pill pending">${isNightShift ? '🌙 Aguardando Noturno' : 'Não iniciada'}</span>`;
+  const timeSpanLabel = activity.checkinAt && activity.checkoutAt
+    ? `${checkinFormatTime(activity.checkinAt)} → ${checkinFormatTime(activity.checkoutAt)}`
+    : activity.checkinAt
+      ? checkinFormatTime(activity.checkinAt)
+      : activity.checkoutAt
+        ? checkinFormatTime(activity.checkoutAt)
+        : '';
+
+  let statusPill = '';
+  if (isSuspended) {
+    statusPill = `<span class="checkin-status-pill suspended">⏸ Suspensa${timeSpanLabel ? ` (${timeSpanLabel})` : ''}</span>`;
+  } else if (isClosed) {
+    if (isPartial) {
+      statusPill = `<span class="checkin-status-pill partial">◐ Parcial · Finalizada${timeSpanLabel ? ` (${timeSpanLabel})` : ''}</span>`;
+    } else {
+      statusPill = `<span class="checkin-status-pill closed">✓ Finalizada${timeSpanLabel ? ` (${timeSpanLabel})` : ''}</span>`;
+    }
+  } else if (isRunning) {
+    if (isPartial) {
+      statusPill = `<span class="checkin-status-pill partial"><span class="pulse-dot"></span> Parcial (${checkinFormatTime(activity.checkinAt)})</span>`;
+    } else {
+      statusPill = `<span class="checkin-status-pill running"><span class="pulse-dot"></span> Em andamento (${checkinFormatTime(activity.checkinAt)})</span>`;
+    }
+  } else if (isPartial) {
+    statusPill = `<span class="checkin-status-pill partial">◐ Parcial</span>`;
+  } else {
+    statusPill = `<span class="checkin-status-pill pending">${isNightShift ? '🌙 Aguardando Noturno' : 'Não iniciada'}</span>`;
+  }
 
   const extraPill = `<span class="checkin-extra-pill" data-extra-pill style="${isExtra ? '' : 'display:none'}">➕ Extra (não programada)</span>`;
   const carryoverPill = isCarryover
-    ? `<span class="checkin-carryover-pill" title="Saldo não cumprido puxado automaticamente do dia ${esc(checkinFormatDate(activity.carryoverFromDate))}">↩️ Saldo de ${esc(checkinFormatDate(activity.carryoverFromDate))}</span>`
+    ? `<span class="checkin-carryover-pill" title="Saldo não cumprido puxado automaticamente do dia ${esc(checkinFormatDate(activity.carryoverFromDate))}">↩️ Saldo de ${esc(checkinFormatDate(activity.carryoverFromDate))}</span><button type="button" class="checkin-carryover-dismiss" onclick="checkinDismissCarryover('${esc(report.id)}','${esc(activity.id)}')" title="Excluir este saldo deste dia">✕ Remover saldo</button>`
+    : hasMergedCarry
+      ? `<span class="checkin-carryover-pill" title="Saldo de ${checkinNumber(mergedCarryMeters)} ${esc(unit)} puxado de ${esc(checkinFormatDate(activity.carryoverFromDate))} e somado à programação de hoje (${checkinNumber(basePlanned)} ${esc(unit)})">↩️ +${checkinNumber(mergedCarryMeters)} ${esc(unit)} saldo de ${esc(checkinFormatDate(activity.carryoverFromDate))} (prog. dia: ${checkinNumber(basePlanned)} ${esc(unit)})</span><button type="button" class="checkin-carryover-dismiss" onclick="checkinDismissCarryover('${esc(report.id)}','${esc(activity.id)}')" title="Remover apenas o saldo somado e manter a metragem original de hoje">✕ Remover saldo</button>`
+      : '';
+
+  const recKey = checkinActivityRecurrenceKey(report.dh, activity);
+  const recInfo = recurrenceIndex && recKey ? recurrenceIndex.get(recKey) : null;
+  const recExcess = recInfo && recInfo.plannedTotal > 0 && recInfo.executedTotal > recInfo.plannedTotal
+    ? Math.round((recInfo.executedTotal - recInfo.plannedTotal) * 100) / 100
+    : 0;
+  const recBarClass = recExcess > 0 ? 'is-warn' : recInfo && recInfo.pct >= 100 ? '' : recInfo && recInfo.pct >= 50 ? 'is-warn' : 'is-low';
+  const recurrenceBadge = recInfo && recInfo.daysCount > 1
+    ? `<div class="checkin-recurrence-badge ${recExcess > 0 ? 'is-over' : ''}" title="Total acumulado desta atividade na semana (${checkinFormatDate(recInfo.weekStart)} a ${checkinFormatDate(recInfo.weekEnd)})">
+        <div>📅 <strong>Semana (${recInfo.daysCount} dias):</strong> Prog. <strong>${checkinNumber(recInfo.plannedTotal)} ${esc(recInfo.unit)}</strong> · Inst. <strong>${checkinNumber(recInfo.executedTotal)} ${esc(recInfo.unit)}</strong> · ${recExcess > 0 ? `<strong style="color:#b91c1c;">⚠️ Excedeu +${checkinNumber(recExcess)} ${esc(recInfo.unit)} (conferir)</strong>` : `Falta <strong>${checkinNumber(recInfo.remainingTotal)} ${esc(recInfo.unit)}</strong>`} (${recInfo.pct}%)</div>
+        <div class="checkin-mini-bar"><div class="checkin-mini-bar-fill ${recBarClass}" style="width:${Math.min(100, Math.max(0, recInfo.pct))}%"></div></div>
+      </div>`
     : '';
+
+  const subItems = Array.isArray(activity.subItems) ? activity.subItems : [];
+  const subSummary = checkinSubItemsSummary(subItems);
+  const detectedTpl = !subItems.length ? checkinDetectSubItemTemplate(activity.activity) : null;
+  const subItemsHtml = subItems.length
+    ? `<div class="checkin-subitems-box">
+        <div class="checkin-subitems-head">
+          <span>🔧 <strong>${subSummary.done}/${subSummary.total}</strong>${subSummary.pendingLabels.length ? ` · Falta: <strong>${esc(subSummary.pendingLabels.join(', '))}</strong>` : ' · <strong>Todas concluídas</strong>'}</span>
+          <button type="button" class="checkin-subitem-add" onclick="checkinEditSubItems('${esc(report.id)}','${esc(activity.id)}')" title="Editar ou limpar checklist de máquinas/itens">Editar</button>
+        </div>
+        <div class="checkin-subitems-list">
+          ${subItems.map((si, idx) => `<button type="button" class="checkin-subitem-pill ${si.done ? 'is-done' : 'is-pending'}" onclick="checkinToggleSubItem('${esc(report.id)}','${esc(activity.id)}',${idx})">${si.done ? '✓' : '○'} ${esc(si.label)}</button>`).join('')}
+        </div>
+      </div>`
+    : `<div class="checkin-subitems-actions">
+        ${detectedTpl
+    ? `<button type="button" class="checkin-subitem-add" onclick="checkinCreateSubItems('${esc(report.id)}','${esc(activity.id)}',${detectedTpl.count},'${esc(detectedTpl.prefix)}')">+ Checklist (${detectedTpl.count}x ${esc(detectedTpl.prefix)})</button>`
+    : `<button type="button" class="checkin-subitem-add" onclick="checkinCreateSubItems('${esc(report.id)}','${esc(activity.id)}',0,'')">+ Checklist máquinas / itens</button>`}
+      </div>`;
+
+  const unitOptions = checkinUniqueOptions([...CHECKIN_UNITS, unit].filter(Boolean));
 
   return `<tr class="checkin-activity-row ${rowStateClass}" data-report-id="${esc(report.id)}" data-activity-id="${esc(activity.id)}">
     <td>${statusPill}${extraPill}${carryoverPill}<strong>${esc(activity.pstItem || (isExtra ? 'EXTRA' : '—'))}</strong><small>${esc(activity.scheduleId || (isExtra ? 'Atividade não programada' : 'Sem ID de cronograma'))}</small></td>
@@ -1216,12 +1660,14 @@ function checkinRenderActivityRow(report, activity, companies = checkinCompanies
           <option value="Noturno" ${isNightShift ? 'selected' : ''}>🌙 Noturno</option>
         </select>
       </div>
+      ${subItemsHtml}
+      ${recurrenceBadge}
     </td>
-    <td>${esc(activity.unit || 'm')}</td>
-    <td><div class="checkin-planned-wrap"><input class="checkin-number-input" type="number" min="0" step="0.1" data-activity-field="plannedMeters" value="${esc(planned)}" oninput="checkinUpdatePercent(this)" onchange="checkinAutoSaveReport('${esc(report.id)}')"> <span>${esc(activity.unit || 'm')}</span></div></td>
-    <td><input class="checkin-number-input" type="number" min="0" step="0.1" data-activity-field="executedMeters" value="${esc(executed)}" oninput="checkinUpdatePercent(this)" onchange="checkinAutoSaveReport('${esc(report.id)}')"></td>
+    <td><select class="checkin-unit-select" data-activity-field="unit" onchange="checkinAutoSaveReport('${esc(report.id)}').then(() => checkinRefreshDailyDom())">${unitOptions.map(u => `<option value="${esc(u)}" ${unit === u ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select></td>
+    <td><div class="checkin-planned-wrap"><input class="checkin-number-input" type="number" min="0" step="0.1" data-activity-field="plannedMeters" value="${esc(planned)}" oninput="checkinUpdatePercent(this)" onchange="checkinAutoSaveReport('${esc(report.id)}')"> <span>${esc(unit)}</span></div></td>
+    <td><input class="checkin-number-input" type="number" min="0" step="0.1" data-activity-field="executedMeters" value="${esc(executed)}" oninput="checkinUpdatePercent(this)" onchange="checkinOnExecutedChange(this, '${esc(report.id)}', '${esc(activity.id)}')"></td>
     <td class="checkin-percent-cell">${percent}</td>
-    <td><select data-activity-field="status" onchange="checkinAutoSaveReport('${esc(report.id)}')">${CHECKIN_STATUS.map(status => `<option ${currentStatus === status ? 'selected' : ''}>${status}</option>`).join('')}</select></td>
+    <td><select data-activity-field="status" onchange="checkinOnTaskStatusChange(this, '${esc(report.id)}', '${esc(activity.id)}')">${CHECKIN_STATUS.map(status => `<option ${currentStatus === status ? 'selected' : ''}>${status}</option>`).join('')}</select></td>
     <td><select data-activity-field="problemCode" onchange="checkinToggleOther(this); checkinAutoSaveReport('${esc(report.id)}')"><option value="">—</option>${CHECKIN_PROBLEMS.map(([code, label]) => `<option value="${code}" ${activity.problemCode === code ? 'selected' : ''}>${code} - ${label}</option>`).join('')}</select><input class="checkin-problem-other" data-activity-field="problemOther" placeholder="Descreva outro motivo" value="${esc(activity.problemOther || '')}" style="${activity.problemCode === 'OUTRO' ? '' : 'display:none'}" onchange="checkinAutoSaveReport('${esc(report.id)}')"></td>
     <td><textarea class="checkin-note-input" data-activity-field="notes" rows="2" oninput="checkinResizeNote(this)" onchange="checkinAutoSaveReport('${esc(report.id)}')" placeholder="${isExtra ? 'Observação / motivo da atividade extra (opcional)' : 'Observação'}" maxlength="500">${esc(activity.notes || '')}</textarea></td>
     <td class="checkin-task-actions">
@@ -1240,7 +1686,7 @@ function checkinRenderActivityRow(report, activity, companies = checkinCompanies
         <button class="button button-green compact" onclick="checkinRegister('${esc(report.id)}','checkout','${esc(activity.id)}')">Registrar saída</button>
         <button class="button button-outline compact" onclick="checkinRegister('${esc(report.id)}','checkin','${esc(activity.id)}')">Salvar / atualizar entrada</button>
       ` : isClosed ? `
-        <div class="checkin-time-box closed"><strong>✓ Finalizada</strong><small>${checkinFormatTime(activity.checkinAt)} às ${checkinFormatTime(activity.checkoutAt)}</small></div>
+        <div class="checkin-time-box closed"><strong>✓ Finalizada</strong><small>${activity.checkinAt && activity.checkoutAt ? `${checkinFormatTime(activity.checkinAt)} às ${checkinFormatTime(activity.checkoutAt)}` : timeSpanLabel || 'Concluída'}</small></div>
         <button class="button button-outline compact" onclick="checkinRegister('${esc(report.id)}','checkout','${esc(activity.id)}')">Salvar / atualizar saída</button>
         <button class="button button-outline compact" onclick="checkinRegister('${esc(report.id)}','checkin','${esc(activity.id)}')">Salvar / atualizar entrada</button>
         <button class="button button-outline compact" onclick="checkinReopenTask('${esc(report.id)}','${esc(activity.id)}')">Reabrir tarefa</button>
@@ -1326,8 +1772,15 @@ function checkinCaptureReport(reportId) {
         return;
       } else if (field === 'isExtra') {
         activity.isExtra = Boolean(input.checked);
-      } else if (field === 'executedMeters' || field === 'plannedMeters') {
-        activity[field] = checkinParseNumber(input.value);
+      } else if (field === 'plannedMeters') {
+        const nextPlanned = checkinParseNumber(input.value);
+        activity.plannedMeters = nextPlanned;
+        const carried = checkinParseNumber(activity.carryoverAddedMeters);
+        if (carried > 0 && !checkinIsCarryoverActivity(activity)) {
+          activity.basePlannedMeters = Math.max(0, Math.round((nextPlanned - carried) * 100) / 100);
+        }
+      } else if (field === 'executedMeters') {
+        activity.executedMeters = checkinParseNumber(input.value);
       } else if (field === 'actualCrew' || field === 'ptaCount' || field === 'forkliftCount') {
         activity[field] = input.value === '' ? null : checkinParseNumber(input.value);
       } else {
@@ -1359,8 +1812,286 @@ async function checkinAutoSaveReport(reportId) {
   const report = checkinCaptureReport(reportId);
   if (!report) return;
   const carryResult = checkinSyncCarryoverForReport(report);
-  const toPersist = carryResult?.nextReport ? [report, carryResult.nextReport] : report;
-  await checkinPersistReports(toPersist, { silent: true });
+  await checkinPersistWithCarryover(report, carryResult, { silent: true });
+}
+
+function checkinRefreshDailyDom() {
+  const resultsEl = document.getElementById('checkinDailyResults');
+  if (resultsEl && checkinActiveTab === 'diario') {
+    const { visibleReports, companies, totalPlanned, totalExecuted, totalRemaining, openReports, recurrenceIndex, weekSummary } = checkinComputeDailyView();
+    resultsEl.innerHTML = checkinRenderDailyResults(visibleReports, companies, totalPlanned, totalExecuted, openReports, totalRemaining, recurrenceIndex, weekSummary);
+    resultsEl.querySelectorAll('.checkin-note-input, .checkin-inline-textarea').forEach(checkinResizeNote);
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return true;
+  }
+  return false;
+}
+
+async function checkinOnExecutedChange(input, reportId, activityId) {
+  const report = checkinCaptureReport(reportId);
+  if (!report) return;
+  const activity = report.activities.find(item => item.id === activityId);
+  if (!activity) return;
+
+  // Ao alterar a metragem executada, reabilita o cálculo dinâmico de saldo
+  activity.carryoverDismissed = false;
+  const planned = checkinParseNumber(activity.plannedMeters);
+  const executed = checkinParseNumber(activity.executedMeters);
+  const now = new Date().toISOString();
+
+  if (planned > 0 && executed > 0 && executed < planned) {
+    if (!activity.status || ['Não iniciado', 'Iniciado', 'Concluído'].includes(activity.status)) {
+      activity.status = 'Parcial';
+    }
+  } else if (planned > 0 && executed >= planned) {
+    if (!activity.status || ['Não iniciado', 'Iniciado', 'Parcial'].includes(activity.status)) {
+      activity.status = 'Concluído';
+      if (activity.checkinAt && !activity.checkoutAt) {
+        activity.checkoutAt = now;
+      }
+    }
+  }
+
+  const checkedIn = report.activities.filter(item => item.checkinAt);
+  const checkedOut = report.activities.filter(item => item.checkoutAt);
+  report.checkinAt = checkedIn.map(item => item.checkinAt).sort()[0] || '';
+  report.checkoutAt = report.activities.length && checkedOut.length === report.activities.length
+    ? checkedOut.map(item => item.checkoutAt).sort().at(-1) : '';
+  report.status = report.checkoutAt ? 'fechado' : report.checkinAt ? 'iniciado' : 'planejado';
+
+  const carryResult = checkinSyncCarryoverForReport(report);
+  await checkinPersistWithCarryover(report, carryResult, { silent: true });
+
+  // Verifica se o acumulado semanal desta atividade ultrapassou o total programado
+  const recIdx = checkinBuildWeeklyRecurrenceIndex(report.workDate);
+  const recKey = checkinActivityRecurrenceKey(report.dh, activity);
+  const recInfo = recKey ? recIdx.get(recKey) : null;
+  if (recInfo && recInfo.plannedTotal > 0 && recInfo.executedTotal > recInfo.plannedTotal) {
+    const excess = Math.round((recInfo.executedTotal - recInfo.plannedTotal) * 100) / 100;
+    toast(`⚠️ Atenção: o acumulado semanal desta tarefa (${checkinNumber(recInfo.executedTotal)} ${recInfo.unit}) ultrapassou o programado (${checkinNumber(recInfo.plannedTotal)} ${recInfo.unit}) em +${checkinNumber(excess)} ${recInfo.unit}. Confira se não foi lançado acumulado.`, true);
+  } else if (carryResult) {
+    const remaining = checkinActivityRemainingMeters(activity);
+    if (remaining > 0 && (carryResult.addedCount > 0 || carryResult.updatedCount > 0)) {
+      toast(`Saldo restante (${checkinNumber(remaining)} ${activity.unit || 'm'}) atualizado para ${checkinFormatDate(carryResult.nextDate)}.`);
+    } else if (carryResult.deletedReportId || carryResult.removedCount > 0) {
+      toast(`Saldo pendente de ${checkinFormatDate(carryResult.nextDate)} removido automaticamente.`);
+    }
+  }
+  if (!checkinRefreshDailyDom()) renderCheckIn();
+}
+
+async function checkinCreateSubItems(reportId, activityId, presetCount = 0, presetPrefix = '') {
+  const report = checkinCaptureReport(reportId) || checkinGetReport(reportId);
+  if (!report) return;
+  const activity = (report.activities || []).find(item => item.id === activityId);
+  if (!activity) return;
+
+  let count = Number(presetCount) || 0;
+  let prefix = String(presetPrefix || '').trim();
+  if (count < 1) {
+    const rawCount = prompt('Quantas máquinas / pontos / itens existem nesta tarefa? (ex.: 3)', '3');
+    if (rawCount === null) return;
+    count = Math.min(20, Math.max(1, parseInt(rawCount, 10) || 0));
+    if (!count) return;
+    const rawPrefix = prompt('Nome do item / máquina? (ex.: CRAH, Máquina, Peça)', 'CRAH');
+    if (rawPrefix === null) return;
+    prefix = String(rawPrefix || 'Item').trim() || 'Item';
+  }
+
+  activity.subItems = Array.from({ length: count }, (_, i) => ({
+    label: `${prefix} ${i + 1}`,
+    done: false
+  }));
+  await checkinPersistReports(report, { silent: true });
+  toast(`Checklist com ${count}x ${prefix} criado na tarefa.`);
+  if (!checkinRefreshDailyDom()) renderCheckIn();
+}
+
+async function checkinEditSubItems(reportId, activityId) {
+  const report = checkinCaptureReport(reportId) || checkinGetReport(reportId);
+  if (!report) return;
+  const activity = (report.activities || []).find(item => item.id === activityId);
+  if (!activity) return;
+
+  const currentLabels = (Array.isArray(activity.subItems) ? activity.subItems : []).map(i => i.label).join(', ');
+  const edited = prompt('Edite os itens separados por vírgula (deixe vazio para remover o checklist):', currentLabels);
+  if (edited === null) return;
+  const parts = edited.split(',').map(s => s.trim()).filter(Boolean);
+  if (!parts.length) {
+    delete activity.subItems;
+  } else {
+    const prevDone = new Map((activity.subItems || []).map(i => [checkinNormalizeHeader(i.label), Boolean(i.done)]));
+    activity.subItems = parts.map(label => ({
+      label,
+      done: prevDone.get(checkinNormalizeHeader(label)) || false
+    }));
+  }
+  await checkinPersistReports(report, { silent: true });
+  if (!checkinRefreshDailyDom()) renderCheckIn();
+}
+
+async function checkinToggleSubItem(reportId, activityId, index) {
+  const report = checkinCaptureReport(reportId) || checkinGetReport(reportId);
+  if (!report) return;
+  const activity = (report.activities || []).find(item => item.id === activityId);
+  if (!activity || !Array.isArray(activity.subItems) || !activity.subItems[index]) return;
+
+  activity.subItems[index].done = !activity.subItems[index].done;
+  const summary = checkinSubItemsSummary(activity.subItems);
+  // Se a unidade for "un", sincroniza automaticamente executado/planejado com o checklist
+  if (activity.unit === 'un') {
+    if (!checkinParseNumber(activity.plannedMeters)) {
+      activity.plannedMeters = summary.total;
+    }
+    activity.executedMeters = summary.done;
+    if (summary.done === summary.total) {
+      activity.status = 'Concluído';
+    } else if (summary.done > 0) {
+      activity.status = 'Parcial';
+    }
+  }
+  const carryResult = checkinSyncCarryoverForReport(report);
+  await checkinPersistWithCarryover(report, carryResult, { silent: true });
+  if (!checkinRefreshDailyDom()) renderCheckIn();
+}
+
+function checkinJumpToDay(workDate, dh = '', area = '') {
+  if (!workDate) return;
+  checkinSelectedDate = workDate;
+  if (dh) checkinDhFilter = dh;
+  if (area && /^CAG\s+/i.test(area)) checkinAreaFilter = area;
+  else checkinAreaFilter = '';
+  checkinActiveTab = 'diario';
+  renderCheckIn();
+}
+
+async function checkinOnTaskStatusChange(select, reportId, activityId) {
+  const report = checkinCaptureReport(reportId);
+  if (!report) return;
+  const activity = report.activities.find(item => item.id === activityId);
+  if (!activity) return;
+
+  const newStatus = String(select.value || '').trim();
+  activity.status = newStatus;
+
+  const row = select.closest('tr');
+  const checkinTimeInput = row?.querySelector('input[data-activity-field="checkinTime"]');
+  const checkoutTimeInput = row?.querySelector('input[data-activity-field="checkoutTime"]');
+  const typedCheckinTime = checkinTimeInput ? String(checkinTimeInput.value || '').trim() : '';
+  const typedCheckoutTime = checkoutTimeInput ? String(checkoutTimeInput.value || '').trim() : '';
+  const now = new Date().toISOString();
+
+  if (newStatus === 'Concluído') {
+    const planned = checkinParseNumber(activity.plannedMeters);
+    const executed = checkinParseNumber(activity.executedMeters);
+    if (planned > 0 && executed < planned) {
+      activity.executedMeters = planned;
+    }
+    activity.carryoverDismissed = false;
+    if (!activity.checkinAt) {
+      activity.checkinAt = typedCheckinTime ? checkinIsoFromTimeInput(report.workDate, typedCheckinTime, now) : now;
+    }
+    if (!activity.checkoutAt) {
+      activity.checkoutAt = typedCheckoutTime ? checkinIsoFromTimeInput(report.workDate, typedCheckoutTime, now) : now;
+    }
+  } else if (newStatus === 'Iniciado') {
+    activity.checkoutAt = '';
+    if (!activity.checkinAt) {
+      activity.checkinAt = typedCheckinTime ? checkinIsoFromTimeInput(report.workDate, typedCheckinTime, now) : now;
+    }
+  } else if (newStatus === 'Não iniciado') {
+    activity.checkinAt = '';
+    activity.checkoutAt = '';
+  } else if (newStatus === 'Parcial' || newStatus === 'Suspenso') {
+    activity.carryoverDismissed = false;
+  }
+
+  const checkedIn = report.activities.filter(item => item.checkinAt);
+  const checkedOut = report.activities.filter(item => item.checkoutAt);
+  report.checkinAt = checkedIn.map(item => item.checkinAt).sort()[0] || '';
+  report.checkoutAt = report.activities.length && checkedOut.length === report.activities.length
+    ? checkedOut.map(item => item.checkoutAt).sort().at(-1) : '';
+  report.status = report.checkoutAt ? 'fechado' : report.checkinAt ? 'iniciado' : 'planejado';
+
+  const carryResult = checkinSyncCarryoverForReport(report);
+  await checkinPersistWithCarryover(report, carryResult, { silent: true });
+
+  if (newStatus === 'Concluído') {
+    toast(carryResult?.deletedReportId || carryResult?.removedCount > 0
+      ? `Atividade concluída e saldo de ${checkinFormatDate(carryResult.nextDate)} removido automaticamente.`
+      : 'Atividade marcada como Concluída e finalizada.');
+  } else if (carryResult && (carryResult.addedCount > 0 || carryResult.updatedCount > 0)) {
+    const remaining = checkinActivityRemainingMeters(activity);
+    if (remaining > 0) {
+      toast(`Saldo restante (${checkinNumber(remaining)} ${activity.unit || 'm'}) puxado para ${checkinFormatDate(carryResult.nextDate)}.`);
+    }
+  }
+  if (!checkinRefreshDailyDom()) renderCheckIn();
+}
+
+async function checkinDismissCarryover(reportId, activityId) {
+  const report = checkinCaptureReport(reportId) || checkinGetReport(reportId);
+  if (!report) return;
+  const activity = (report.activities || []).find(item => item.id === activityId);
+  if (!activity) return;
+
+  const isStandaloneCarry = checkinIsCarryoverActivity(activity);
+  const hasMergedCarry = !isStandaloneCarry && checkinParseNumber(activity.carryoverAddedMeters) > 0;
+  if (!isStandaloneCarry && !hasMergedCarry) return;
+
+  const confirmMsg = isStandaloneCarry
+    ? `Remover o saldo "${activity.activity || activity.pstItem || 'atividade'}" deste dia (${checkinFormatDate(report.workDate)})?`
+    : `Remover o saldo somado (+${checkinNumber(activity.carryoverAddedMeters)} ${activity.unit || 'm'}) e manter apenas a programação original deste dia (${checkinNumber(checkinActivityOriginalPlannedMeters(activity))} ${activity.unit || 'm'})?`;
+  if (!confirm(confirmMsg)) return;
+
+  // Marca na origem para o saldo não voltar automaticamente (a menos que editem o dia anterior novamente)
+  let dismissedSourceReport = null;
+  const sourceId = isStandaloneCarry ? activity.carryoverSourceId : activity.carryoverMergedFromId;
+  if (sourceId && activity.carryoverFromDate) {
+    const srcReportId = checkinReportId(activity.carryoverFromDate, report.dh, report.engineer);
+    const srcReport = checkinGetReport(srcReportId);
+    if (srcReport) {
+      const clonedSrc = structuredClone(srcReport);
+      const srcAct = (clonedSrc.activities || []).find(item => item.id === sourceId);
+      if (srcAct) {
+        srcAct.carryoverDismissed = true;
+        dismissedSourceReport = clonedSrc;
+      }
+    }
+  }
+
+  if (isStandaloneCarry) {
+    report.activities = report.activities.filter(item => item.id !== activityId);
+    if (!report.activities.length) {
+      await checkinDeleteReportById(report.id);
+      if (dismissedSourceReport) {
+        await checkinPersistReports(dismissedSourceReport, { silent: true });
+      }
+      toast('Saldo removido e diário vazio excluído.');
+      if (!checkinRefreshDailyDom()) renderCheckIn();
+      return;
+    }
+  } else {
+    const basePlanned = checkinActivityOriginalPlannedMeters(activity);
+    activity.plannedMeters = basePlanned;
+    delete activity.basePlannedMeters;
+    delete activity.carryoverAddedMeters;
+    delete activity.carryoverMergedFromId;
+    delete activity.carryoverFromDate;
+    delete activity.carryoverOriginDate;
+  }
+
+  const checkedIn = report.activities.filter(item => item.checkinAt);
+  const checkedOut = report.activities.filter(item => item.checkoutAt);
+  report.checkinAt = checkedIn.map(item => item.checkinAt).sort()[0] || '';
+  report.checkoutAt = report.activities.length && checkedOut.length === report.activities.length
+    ? checkedOut.map(item => item.checkoutAt).sort().at(-1) : '';
+  report.status = report.checkoutAt ? 'fechado' : report.checkinAt ? 'iniciado' : 'planejado';
+
+  const toSave = dismissedSourceReport ? [report, dismissedSourceReport] : report;
+  await checkinPersistReports(toSave, { silent: true });
+  toast(isStandaloneCarry ? 'Saldo removido deste dia.' : 'Saldo somado removido; programação original mantida.');
+  if (!checkinRefreshDailyDom()) renderCheckIn();
 }
 
 async function checkinOnTaskDisciplineChange(select, reportId) {
@@ -1437,10 +2168,11 @@ async function checkinSaveDraft(reportId) {
   const report = checkinCaptureReport(reportId);
   if (!report) return;
   const carryResult = checkinSyncCarryoverForReport(report);
-  const toPersist = carryResult?.nextReport ? [report, carryResult.nextReport] : report;
-  await checkinPersistReports(toPersist);
+  await checkinPersistWithCarryover(report, carryResult, { silent: false });
   if (carryResult && (carryResult.addedCount > 0 || carryResult.updatedCount > 0)) {
     toast(`Saldo não cumprido puxado automaticamente para ${checkinFormatDate(carryResult.nextDate)}.`);
+  } else if (carryResult && (carryResult.deletedReportId || carryResult.removedCount > 0)) {
+    toast(`Saldo de ${checkinFormatDate(carryResult.nextDate)} removido automaticamente.`);
   }
   renderCheckIn();
 }
@@ -1513,13 +2245,14 @@ async function checkinRegister(reportId, action, activityId) {
     ? checkedOut.map(item => item.checkoutAt).sort().at(-1) : '';
   report.status = report.checkoutAt ? 'fechado' : report.checkinAt ? 'iniciado' : 'planejado';
   const carryResult = action === 'checkout' ? checkinSyncCarryoverForReport(report) : null;
-  const toPersist = carryResult?.nextReport ? [report, carryResult.nextReport] : report;
-  await checkinPersistReports(toPersist);
+  await checkinPersistWithCarryover(report, carryResult, { silent: false });
   if (carryResult && (carryResult.addedCount > 0 || carryResult.updatedCount > 0)) {
     const remaining = checkinActivityRemainingMeters(activity);
     toast(remaining > 0
       ? `Saldo não cumprido (${checkinNumber(remaining)} ${activity.unit || 'm'}) puxado automaticamente para ${checkinFormatDate(carryResult.nextDate)}.`
       : `Saldo pendente atualizado para ${checkinFormatDate(carryResult.nextDate)}.`);
+  } else if (carryResult && (carryResult.deletedReportId || carryResult.removedCount > 0)) {
+    toast(`Saldo de ${checkinFormatDate(carryResult.nextDate)} removido automaticamente.`);
   }
   renderCheckIn();
 }
@@ -1609,6 +2342,8 @@ function checkinFormatWhatsAppActivity(report, activity, index, { isCheckout, is
 
   if (checkinIsCarryoverActivity(activity) && activity.carryoverFromDate) {
     block.push(`↩️ *Saldo pendente:* Puxado de ${checkinFormatDate(activity.carryoverFromDate)}`);
+  } else if (checkinParseNumber(activity.carryoverAddedMeters) > 0 && activity.carryoverFromDate) {
+    block.push(`↩️ *Saldo somado:* +${checkinNumber(activity.carryoverAddedMeters)} ${unit} de ${checkinFormatDate(activity.carryoverFromDate)} (prog. dia: ${checkinNumber(checkinActivityOriginalPlannedMeters(activity))} ${unit})`);
   }
 
   if (activity.problemCode || activity.problemOther) {
@@ -1780,7 +2515,20 @@ function checkinCopyText(text, successMessage) {
 
 function checkinSetTab(tab) {
   checkinSyncFiltersFromDom();
-  checkinActiveTab = ['diario', 'planejamento', 'curva'].includes(tab) ? tab : 'diario';
+  checkinActiveTab = ['diario', 'resumo', 'planejamento', 'curva'].includes(tab) ? tab : 'diario';
+  renderCheckIn();
+}
+
+function checkinOpenSummaryFromDaily() {
+  const bounds = checkinWeekBounds(checkinSelectedDate);
+  checkinSummaryStart = bounds.start;
+  checkinSummaryEnd = bounds.end;
+  checkinSummaryDh = checkinDhFilter || '';
+  checkinSummaryArea = checkinAreaFilter || '';
+  checkinSummaryDiscipline = checkinDisciplineFilter || '';
+  checkinSummaryEngineer = checkinEngineerFilter || '';
+  checkinSummaryCompany = checkinCompanyFilter || '';
+  checkinActiveTab = 'resumo';
   renderCheckIn();
 }
 
@@ -1788,14 +2536,7 @@ async function checkinSetDay(value) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(String(value).trim())) return;
   checkinSelectedDate = String(value).trim();
   await checkinSyncCarryoverFromPreviousDay(checkinSelectedDate, { persist: true });
-  const resultsEl = document.getElementById('checkinDailyResults');
-  if (resultsEl && checkinActiveTab === 'diario') {
-    const { visibleReports, companies, totalPlanned, totalExecuted, openReports } = checkinComputeDailyView();
-    resultsEl.innerHTML = checkinRenderDailyResults(visibleReports, companies, totalPlanned, totalExecuted, openReports);
-    resultsEl.querySelectorAll('.checkin-note-input, .checkin-inline-textarea').forEach(checkinResizeNote);
-    if (typeof hydrateIcons === 'function') hydrateIcons();
-    return;
-  }
+  if (checkinRefreshDailyDom()) return;
   renderCheckIn();
 }
 
@@ -1805,12 +2546,320 @@ function checkinSetDailyFilter(key, value) {
   if (key === 'shift') checkinShiftFilter = value;
   if (key === 'engineer') checkinEngineerFilter = value;
   if (key === 'dh') checkinDhFilter = value;
+  if (key === 'area') checkinAreaFilter = value;
   if (key === 'company') checkinCompanyFilter = value;
-  const resultsEl = document.getElementById('checkinDailyResults');
-  if (resultsEl && checkinActiveTab === 'diario') {
-    const { visibleReports, companies, totalPlanned, totalExecuted, openReports } = checkinComputeDailyView();
-    resultsEl.innerHTML = checkinRenderDailyResults(visibleReports, companies, totalPlanned, totalExecuted, openReports);
-    resultsEl.querySelectorAll('.checkin-note-input, .checkin-inline-textarea').forEach(checkinResizeNote);
+  if (checkinRefreshDailyDom()) return;
+  renderCheckIn();
+}
+
+function checkinRenderSummaryResults() {
+  const searchNorm = checkinNormalizeSearchText(checkinSummarySearch);
+  const reports = checkinReports.filter(report =>
+    (!checkinSummaryStart || report.workDate >= checkinSummaryStart)
+    && (!checkinSummaryEnd || report.workDate <= checkinSummaryEnd)
+    && (!checkinSummaryDh || report.dh === checkinSummaryDh)
+    && (!checkinSummaryEngineer || report.engineer === checkinSummaryEngineer)
+  );
+
+  const areaMap = new Map();
+  const activityMap = new Map();
+  let totalPlanned = 0;
+  let totalExecuted = 0;
+  let totalEntries = 0;
+
+  reports.forEach(report => {
+    (report.activities || []).forEach(activity => {
+      const discipline = checkinGetActivityDiscipline(report, activity) || 'Sem disciplina';
+      const company = activity.contractor || report.contractor || '';
+      const areaLabel = checkinExtractAreaLabel(report, activity);
+
+      if (checkinSummaryDiscipline && discipline !== checkinSummaryDiscipline) return;
+      if (checkinSummaryCompany && company !== checkinSummaryCompany) return;
+      if (checkinSummaryArea && areaLabel !== checkinSummaryArea) return;
+      if (searchNorm) {
+        const haystack = checkinNormalizeSearchText([
+          areaLabel, report.dh, report.engineer, company, discipline,
+          activity.pstItem, activity.scheduleId, activity.location, activity.activity
+        ].filter(Boolean).join(' '));
+        if (!haystack.includes(searchNorm)) return;
+      }
+
+      const origPlanned = checkinActivityOriginalPlannedMeters(activity);
+      const executed = checkinParseNumber(activity.executedMeters);
+      const unit = activity.unit || 'm';
+      const recKey = checkinActivityRecurrenceKey(report.dh, activity) || `${report.dh}|${activity.id}`;
+
+      totalPlanned += origPlanned;
+      totalExecuted += executed;
+      totalEntries += 1;
+
+      // Agrupamento por Área / Frente (ex.: CAG 4, CAG 3, DH 04...)
+      const areaEntry = areaMap.get(areaLabel) || {
+        area: areaLabel,
+        dh: report.dh,
+        uniqueKeys: new Set(),
+        entries: 0,
+        planned: 0,
+        executed: 0
+      };
+      areaEntry.uniqueKeys.add(recKey);
+      areaEntry.entries += 1;
+      areaEntry.planned = Math.round((areaEntry.planned + origPlanned) * 100) / 100;
+      areaEntry.executed = Math.round((areaEntry.executed + executed) * 100) / 100;
+      areaMap.set(areaLabel, areaEntry);
+
+      // Agrupamento por Atividade recorrente
+      const actEntry = activityMap.get(recKey) || {
+        key: recKey,
+        dh: report.dh,
+        area: areaLabel,
+        discipline,
+        pstItem: activity.pstItem || '',
+        scheduleId: activity.scheduleId || '',
+        location: activity.location || '',
+        activity: activity.activity || '',
+        unit,
+        engineers: new Set(),
+        days: new Map(),
+        planned: 0,
+        executed: 0
+      };
+      if (report.engineer) actEntry.engineers.add(report.engineer);
+      if (!actEntry.pstItem && activity.pstItem) actEntry.pstItem = activity.pstItem;
+      if (!actEntry.scheduleId && activity.scheduleId) actEntry.scheduleId = activity.scheduleId;
+      if (!actEntry.location && activity.location) actEntry.location = activity.location;
+      if (!actEntry.activity && activity.activity) actEntry.activity = activity.activity;
+      if (Array.isArray(activity.subItems) && activity.subItems.length) actEntry.subItems = activity.subItems;
+      actEntry.planned = Math.round((actEntry.planned + origPlanned) * 100) / 100;
+      actEntry.executed = Math.round((actEntry.executed + executed) * 100) / 100;
+
+      const dayRow = actEntry.days.get(report.workDate) || { date: report.workDate, planned: 0, executed: 0, carryOnly: true };
+      dayRow.planned = Math.round((dayRow.planned + origPlanned) * 100) / 100;
+      dayRow.executed = Math.round((dayRow.executed + executed) * 100) / 100;
+      if (!checkinIsCarryoverActivity(activity)) dayRow.carryOnly = false;
+      actEntry.days.set(report.workDate, dayRow);
+
+      activityMap.set(recKey, actEntry);
+    });
+  });
+
+  totalPlanned = Math.round(totalPlanned * 100) / 100;
+  totalExecuted = Math.round(totalExecuted * 100) / 100;
+  const totalRemaining = Math.max(0, Math.round((totalPlanned - totalExecuted) * 100) / 100);
+  const totalPct = totalPlanned > 0 ? Math.round((totalExecuted / totalPlanned) * 100) : (totalExecuted > 0 ? 100 : 0);
+
+  const areaRows = [...areaMap.values()].sort((a, b) => {
+    const aCag = /^CAG\s+/i.test(a.area) ? 0 : 1;
+    const bCag = /^CAG\s+/i.test(b.area) ? 0 : 1;
+    if (aCag !== bCag) return aCag - bCag;
+    return a.area.localeCompare(b.area, 'pt-BR', { numeric: true });
+  });
+
+  const allActivityRows = [...activityMap.values()]
+    .map(item => {
+      const sortedDays = [...item.days.values()].sort((a, b) => a.date.localeCompare(b.date));
+      const remaining = Math.max(0, Math.round((item.planned - item.executed) * 100) / 100);
+      const excess = item.executed > item.planned ? Math.round((item.executed - item.planned) * 100) / 100 : 0;
+      const pct = item.planned > 0 ? Math.round((item.executed / item.planned) * 100) : (item.executed > 0 ? 100 : 0);
+      return { ...item, sortedDays, daysCount: sortedDays.length, remaining, excess, pct };
+    })
+    .sort((a, b) => b.daysCount - a.daysCount || a.area.localeCompare(b.area, 'pt-BR', { numeric: true }) || b.planned - a.planned);
+
+  const visibleActivityRows = checkinSummaryRepeatedOnly
+    ? allActivityRows.filter(item => item.daysCount > 1)
+    : allActivityRows;
+  const repeatedCount = allActivityRows.filter(item => item.daysCount > 1).length;
+
+  const periodText = checkinSummaryStart && checkinSummaryEnd
+    ? `${checkinFormatDate(checkinSummaryStart)} a ${checkinFormatDate(checkinSummaryEnd)}`
+    : 'Todo o período';
+
+  return `
+    <section class="checkin-metrics">
+      <article><small>TOTAL PROGRAMADO</small><strong>${checkinNumber(totalPlanned)} m</strong></article>
+      <article><small>TOTAL INSTALADO</small><strong style="color:${totalPct >= 100 ? '#15803d' : '#0f172a'}">${checkinNumber(totalExecuted)} m (${totalPct}%)</strong></article>
+      <article><small>FALTA INSTALAR (SALDO)</small><strong style="color:${totalRemaining > 0 ? '#b45309' : '#15803d'}">${checkinNumber(totalRemaining)} m</strong></article>
+      <article><small>ATIVIDADES ÚNICAS</small><strong>${allActivityRows.length}</strong><small style="display:block;margin-top:2px;font-size:10px;color:#475569;font-weight:700;">${repeatedCount} repetida(s) · ${totalEntries} apontamento(s)</small></article>
+    </section>
+
+    <article class="checkin-report-card">
+      <header class="checkin-report-head">
+        <div>
+          <p class="eyebrow">VISÃO POR FRENTE / ÁREA (CAG E DATA HALL)</p>
+          <h2>Resumo por Área (${areaRows.length})</h2>
+          <p>Clique em uma área (ex.: CAG 4) para filtrar o detalhamento abaixo · Período: ${esc(periodText)}</p>
+        </div>
+        ${checkinSummaryArea ? `<button class="button button-outline compact" onclick="checkinSetSummaryFilter('area', '')">Limpar filtro de área (${esc(checkinSummaryArea)})</button>` : ''}
+      </header>
+      ${areaRows.length ? `<div class="checkin-activity-table-wrap"><table class="checkin-activity-table checkin-plan-table">
+        <thead><tr>
+          <th>Área / Frente</th>
+          <th>Atividades únicas</th>
+          <th>Total Programado</th>
+          <th>Já Instalado</th>
+          <th>Falta (Saldo)</th>
+          <th>% Avanço</th>
+        </tr></thead>
+        <tbody>
+          ${areaRows.map(row => {
+    const remaining = Math.max(0, Math.round((row.planned - row.executed) * 100) / 100);
+    const pct = row.planned > 0 ? Math.round((row.executed / row.planned) * 100) : (row.executed > 0 ? 100 : 0);
+    const barClass = pct >= 100 ? '' : pct >= 50 ? 'is-warn' : 'is-low';
+    const isActive = checkinSummaryArea === row.area;
+    return `<tr>
+              <td><button type="button" class="checkin-area-row-btn ${isActive ? 'is-active' : ''}" onclick="checkinSetSummaryFilter('area', '${esc(isActive ? '' : row.area)}')">${esc(row.area)}${row.area !== row.dh ? ` <small style="color:#64748b;font-weight:600;">(${esc(row.dh)})</small>` : ''}</button></td>
+              <td><strong>${row.uniqueKeys.size}</strong> <small>(${row.entries} dia/apont.)</small></td>
+              <td><strong>${checkinNumber(row.planned)} m</strong></td>
+              <td style="color:#15803d;font-weight:800;">${checkinNumber(row.executed)} m</td>
+              <td style="color:${remaining > 0 ? '#b45309' : '#15803d'};font-weight:800;">${checkinNumber(remaining)} m</td>
+              <td style="min-width:130px;">
+                <strong>${pct}%</strong>
+                <div class="checkin-mini-bar" style="margin-top:4px;"><div class="checkin-mini-bar-fill ${barClass}" style="width:${Math.min(100, Math.max(0, pct))}%"></div></div>
+              </td>
+            </tr>`;
+  }).join('')}
+        </tbody>
+      </table></div>` : `<div class="checkin-empty"><p>Nenhuma área encontrada para o período e filtros selecionados.</p></div>`}
+    </article>
+
+    <article class="checkin-report-card">
+      <header class="checkin-report-head">
+        <div>
+          <p class="eyebrow">CONSOLIDADO DE ATIVIDADES RECORRENTES</p>
+          <h2>Total Programado x Instalado por Atividade (${visibleActivityRows.length})</h2>
+          <p>Soma automática dos dias em que a mesma atividade foi programada no período (sem duplicar saldo remanejado).</p>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;">
+          <input type="checkbox" ${checkinSummaryRepeatedOnly ? 'checked' : ''} onchange="checkinSetSummaryFilter('repeatedOnly', this.checked)">
+          Mostrar apenas atividades repetidas (2+ dias)
+        </label>
+      </header>
+      ${visibleActivityRows.length ? `<div class="checkin-activity-table-wrap"><table class="checkin-activity-table checkin-plan-table">
+        <thead><tr>
+          <th>Área / Disciplina</th>
+          <th>Item / Cronograma</th>
+          <th>Local e Atividade</th>
+          <th>Programação por dia</th>
+          <th>Total Programado</th>
+          <th>Total Instalado</th>
+          <th>Falta (Saldo)</th>
+          <th>% Avanço</th>
+          <th>Ação</th>
+        </tr></thead>
+        <tbody>
+          ${visibleActivityRows.map(item => {
+    const isOver = item.excess > 0 && item.planned > 0;
+    const barClass = isOver ? 'is-warn' : item.pct >= 100 ? '' : item.pct >= 50 ? 'is-warn' : 'is-low';
+    const subSum = checkinSubItemsSummary(item.subItems);
+    const dayChips = item.sortedDays.map(d => {
+      const shortDate = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(`${d.date}T12:00:00`));
+      const isCarryChip = d.carryOnly && d.planned === 0 && d.executed === 0;
+      const chipClass = isCarryChip ? '' : d.planned > 0 && d.executed > d.planned ? 'is-over' : d.planned > 0 && d.executed >= d.planned ? 'is-done' : d.executed > 0 ? 'is-partial' : '';
+      const label = isCarryChip ? `${shortDate}: saldo` : `${shortDate}: ${checkinNumber(d.executed)}/${checkinNumber(d.planned)} ${esc(item.unit)}`;
+      return `<button type="button" class="checkin-day-chip ${chipClass}" onclick="checkinJumpToDay('${esc(d.date)}','${esc(item.dh)}','${esc(item.area)}')" title="Clique para abrir ${checkinFormatDate(d.date)} no Diário e conferir/corrigir">${label}</button>`;
+    }).join('');
+    return `<tr>
+              <td><strong>${esc(item.area)}</strong><small>${esc(item.discipline)}</small></td>
+              <td><strong>${esc(item.pstItem || '—')}</strong><small>${esc(item.scheduleId || '—')}</small></td>
+              <td><strong>${esc(item.location || '—')}</strong><small>${esc(item.activity || '—')}</small>${subSum ? `<small style="display:block;margin-top:3px;color:#0369a1;font-weight:700;">🔧 ${subSum.done}/${subSum.total}${subSum.pendingLabels.length ? ` · Falta: ${esc(subSum.pendingLabels.join(', '))}` : ' · Concluídas'}</small>` : ''}</td>
+              <td style="min-width:210px;">
+                <small style="font-weight:700;color:#334155;">${item.daysCount} dia(s) <span style="font-weight:500;color:#64748b;">(clique no dia para editar)</span></small>
+                <div class="checkin-day-chips">${dayChips}</div>
+              </td>
+              <td><strong>${checkinNumber(item.planned)} ${esc(item.unit)}</strong></td>
+              <td style="color:${isOver ? '#b45309' : '#15803d'};font-weight:800;">${checkinNumber(item.executed)} ${esc(item.unit)}</td>
+              <td style="color:${isOver ? '#b91c1c' : item.remaining > 0 ? '#b45309' : '#15803d'};font-weight:800;">${isOver ? `⚠️ Excedeu +${checkinNumber(item.excess)} ${esc(item.unit)}` : item.remaining > 0 ? `${checkinNumber(item.remaining)} ${esc(item.unit)}` : `0 ${esc(item.unit)}`}</td>
+              <td style="min-width:120px;">
+                <strong style="color:${isOver ? '#b91c1c' : 'inherit'}">${item.pct}%</strong>
+                <div class="checkin-mini-bar" style="margin-top:4px;"><div class="checkin-mini-bar-fill ${barClass}" style="width:${Math.min(100, Math.max(0, item.pct))}%"></div></div>
+              </td>
+              <td><button type="button" class="button button-outline compact" onclick="checkinOpenTaskEditor('${esc(item.key)}','${esc(checkinSummaryStart)}','${esc(checkinSummaryEnd)}')">✏️ Editar</button></td>
+            </tr>`;
+  }).join('')}
+        </tbody>
+      </table></div>` : `<div class="checkin-empty"><p>Nenhuma atividade encontrada para os filtros selecionados.</p></div>`}
+    </article>
+  `;
+}
+
+function checkinRenderSummary(engineers, dataHalls, areas, disciplines, companies) {
+  return `
+    <div class="checkin-summary-quick-periods">
+      <button type="button" class="button button-outline compact" onclick="checkinSetSummaryPeriod('thisWeek')">Semana atual</button>
+      <button type="button" class="button button-outline compact" onclick="checkinSetSummaryPeriod('prevWeek')">Semana anterior</button>
+      <button type="button" class="button button-outline compact" onclick="checkinSetSummaryPeriod('thisMonth')">Mês atual</button>
+      <button type="button" class="button button-outline compact" onclick="checkinSetSummaryPeriod('all')">Todo o histórico</button>
+    </div>
+    <section class="checkin-filter-panel">
+      <label><span>De</span><input type="date" data-checkin-summary-start value="${checkinSummaryStart}" oninput="checkinSetSummaryRange('start', this.value)" onchange="checkinSetSummaryRange('start', this.value)"></label>
+      <label><span>Até</span><input type="date" data-checkin-summary-end value="${checkinSummaryEnd}" oninput="checkinSetSummaryRange('end', this.value)" onchange="checkinSetSummaryRange('end', this.value)"></label>
+      <label><span>Área / CAG</span><select onchange="checkinSetSummaryFilter('area', this.value)">${checkinSelectOptions(areas, checkinSummaryArea, 'Todas')}</select></label>
+      <label><span>Data Hall</span><select onchange="checkinSetSummaryFilter('dh', this.value)">${checkinSelectOptions(dataHalls, checkinSummaryDh, 'Todos')}</select></label>
+      <label><span>Disciplina</span><select onchange="checkinSetSummaryFilter('discipline', this.value)">${checkinSelectOptions(disciplines, checkinSummaryDiscipline, 'Todas')}</select></label>
+      <label><span>Engenheiro</span><select onchange="checkinSetSummaryFilter('engineer', this.value)">${checkinSelectOptions(engineers, checkinSummaryEngineer, 'Todos')}</select></label>
+      <label><span>Empresa</span><select onchange="checkinSetSummaryFilter('company', this.value)">${checkinSelectOptions(companies, checkinSummaryCompany, 'Todas')}</select></label>
+      <label><span>Buscar área / atividade</span><input type="search" value="${esc(checkinSummarySearch)}" placeholder="Ex.: CAG 4, tubulação, duto..." oninput="checkinSetSummaryFilter('search', this.value)"></label>
+    </section>
+    <div id="checkinSummaryResults">
+      ${checkinRenderSummaryResults()}
+    </div>
+  `;
+}
+
+function checkinSetSummaryPeriod(mode) {
+  const today = checkinToday();
+  if (mode === 'thisWeek') {
+    const b = checkinWeekBounds(checkinSelectedDate || today);
+    checkinSummaryStart = b.start;
+    checkinSummaryEnd = b.end;
+  } else if (mode === 'prevWeek') {
+    const b = checkinWeekBounds(checkinDateOffset(checkinSelectedDate || today, -7));
+    checkinSummaryStart = b.start;
+    checkinSummaryEnd = b.end;
+  } else if (mode === 'thisMonth') {
+    const base = today.slice(0, 7);
+    const [y, m] = base.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    checkinSummaryStart = `${base}-01`;
+    checkinSummaryEnd = `${base}-${String(lastDay).padStart(2, '0')}`;
+  } else if (mode === 'all') {
+    checkinSummaryStart = '';
+    checkinSummaryEnd = '';
+  }
+  renderCheckIn();
+}
+
+function checkinSetSummaryRange(which, value) {
+  const clean = String(value || '').trim();
+  if (clean && !/^\d{4}-\d{2}-\d{2}$/.test(clean)) return;
+  if (which === 'start') checkinSummaryStart = clean;
+  else checkinSummaryEnd = clean;
+  const resultsEl = document.getElementById('checkinSummaryResults');
+  if (resultsEl && checkinActiveTab === 'resumo') {
+    resultsEl.innerHTML = checkinRenderSummaryResults();
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return;
+  }
+  renderCheckIn();
+}
+
+function checkinSetSummaryFilter(which, value) {
+  checkinSyncFiltersFromDom();
+  if (which === 'dh') checkinSummaryDh = value;
+  else if (which === 'area') checkinSummaryArea = value;
+  else if (which === 'search') checkinSummarySearch = value;
+  else if (which === 'discipline') checkinSummaryDiscipline = value;
+  else if (which === 'engineer') checkinSummaryEngineer = value;
+  else if (which === 'company') checkinSummaryCompany = value;
+  else if (which === 'repeatedOnly') checkinSummaryRepeatedOnly = Boolean(value);
+  const resultsEl = document.getElementById('checkinSummaryResults');
+  if (resultsEl && checkinActiveTab === 'resumo') {
+    resultsEl.innerHTML = checkinRenderSummaryResults();
+    // Atualiza o select de Área se foi alterado via clique na tabela
+    if (which === 'area') {
+      const areaSelect = document.querySelector('.checkin-filter-panel select[onchange*="\'area\'"]');
+      if (areaSelect) areaSelect.value = checkinSummaryArea;
+    }
     if (typeof hydrateIcons === 'function') hydrateIcons();
     return;
   }
@@ -1818,6 +2867,7 @@ function checkinSetDailyFilter(key, value) {
 }
 
 function checkinRenderPlanningResults() {
+  const searchNorm = checkinNormalizeSearchText(checkinPlanSearch);
   const reports = checkinReports.filter(report => report.workDate >= checkinPlanStart && report.workDate <= checkinPlanEnd
     && (!checkinPlanEngineerFilter || report.engineer === checkinPlanEngineerFilter)
     && (!checkinPlanCompanyFilter || (report.contractor === checkinPlanCompanyFilter || (report.activities || []).some(a => a.contractor === checkinPlanCompanyFilter))));
@@ -1827,15 +2877,28 @@ function checkinRenderPlanningResults() {
       .filter(activity => !checkinPlanDisciplineFilter || checkinGetActivityDiscipline(report, activity) === checkinPlanDisciplineFilter)
       .filter(activity => !checkinPlanShiftFilter || checkinGetActivityShift(report, activity) === checkinPlanShiftFilter)
       .filter(activity => !checkinPlanCompanyFilter || (activity.contractor ? activity.contractor === checkinPlanCompanyFilter : report.contractor === checkinPlanCompanyFilter))
+      .filter(activity => {
+        if (!searchNorm) return true;
+        const area = checkinExtractAreaLabel(report, activity);
+        const hay = checkinNormalizeSearchText([
+          area, report.dh, report.engineer, activity.pstItem, activity.scheduleId, activity.location, activity.activity
+        ].filter(Boolean).join(' '));
+        return hay.includes(searchNorm);
+      })
       .map(activity => ({ report, activity }))
   ).sort((a, b) => a.report.workDate.localeCompare(b.report.workDate) || a.report.dh.localeCompare(b.report.dh) || a.report.engineer.localeCompare(b.report.engineer));
-  const planned = rows.reduce((sum, item) => sum + checkinParseNumber(item.activity.plannedMeters), 0);
+  const planned = rows.reduce((sum, item) => sum + checkinActivityOriginalPlannedMeters(item.activity), 0);
+  const executed = rows.reduce((sum, item) => sum + checkinParseNumber(item.activity.executedMeters), 0);
+  const remaining = Math.max(0, Math.round((planned - executed) * 100) / 100);
 
-  return `<section class="checkin-plan-summary"><strong>${rows.length}</strong> atividade(s) · <strong>${checkinNumber(planned)} m</strong> planejados · ${reports.length} diário(s) por engenheiro e DH</section>
-  ${rows.length ? `<article class="checkin-report-card"><div class="checkin-activity-table-wrap"><table class="checkin-activity-table checkin-plan-table"><thead><tr><th>Data / DH</th><th>Engenheiro / empreiteira</th><th>Disciplina / turno</th><th>Item / cronograma</th><th>Local / atividade</th><th>Planejado</th></tr></thead><tbody>${rows.map(({ report, activity }) => {
+  return `<section class="checkin-plan-summary"><strong>${rows.length}</strong> atividade(s) · <strong>${checkinNumber(planned)} m</strong> planejados · <strong style="color:#15803d;">${checkinNumber(executed)} m</strong> executados · <strong style="color:${remaining > 0 ? '#b45309' : '#15803d'};">${checkinNumber(remaining)} m</strong> faltando · ${reports.length} diário(s)</section>
+  ${rows.length ? `<article class="checkin-report-card"><div class="checkin-activity-table-wrap"><table class="checkin-activity-table checkin-plan-table"><thead><tr><th>Data / DH</th><th>Engenheiro / empreiteira</th><th>Disciplina / turno</th><th>Item / cronograma</th><th>Local / atividade</th><th>Planejado</th><th>Executado</th><th>Status</th><th>Editar</th></tr></thead><tbody>${rows.map(({ report, activity }) => {
     const shift = checkinGetActivityShift(report, activity);
-    return `<tr><td>${checkinFormatDate(report.workDate)}<small>${esc(report.dh)}</small></td><td>${esc(report.engineer)}<small>${esc(activity.contractor || report.contractor || '—')}</small></td><td><strong>${esc(checkinGetActivityDiscipline(report, activity) || report.discipline || '—')}</strong><small>${shift === 'Noturno' ? '🌙 Noturno' : '☀️ Diurno'}${activity.stage || report.stage ? ` · ${esc(activity.stage || report.stage)}` : ''}</small></td><td><strong>${esc(activity.pstItem || '—')}</strong><small>${esc(activity.scheduleId || activity.unit || '')}</small></td><td><strong>${esc(activity.location || '—')}</strong><small>${esc(activity.activity || '')}</small></td><td>${checkinNumber(activity.plannedMeters)} ${esc(activity.unit || 'm')}</td></tr>`;
-  }).join('')}</tbody></table></div></article>` : `<section class="checkin-empty"><h2>Nenhum planejamento neste período</h2><p>Importe uma planilha semanal para abrir a agenda de atividades.</p></section>`}`;
+    const recKey = checkinActivityRecurrenceKey(report.dh, activity) || `${report.dh}|${activity.id}`;
+    const currentStatus = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
+    const unit = activity.unit || 'm';
+    return `<tr><td>${checkinFormatDate(report.workDate)}<small>${esc(report.dh)}</small></td><td>${esc(report.engineer)}<small>${esc(activity.contractor || report.contractor || '—')}</small></td><td><strong>${esc(checkinGetActivityDiscipline(report, activity) || report.discipline || '—')}</strong><small>${shift === 'Noturno' ? '🌙 Noturno' : '☀️ Diurno'}${activity.stage || report.stage ? ` · ${esc(activity.stage || report.stage)}` : ''}</small></td><td><strong>${esc(activity.pstItem || '—')}</strong><small>${esc(activity.scheduleId || unit)}</small></td><td><strong>${esc(activity.location || '—')}</strong><small>${esc(activity.activity || '')}</small></td><td>${checkinNumber(activity.plannedMeters)} ${esc(unit)}</td><td style="color:#15803d;font-weight:700;">${checkinNumber(activity.executedMeters)} ${esc(unit)}</td><td><span class="checkin-status-pill ${currentStatus === 'Concluído' ? 'closed' : currentStatus === 'Iniciado' ? 'running' : currentStatus === 'Parcial' ? 'partial' : currentStatus === 'Suspenso' ? 'suspended' : 'pending'}">${esc(currentStatus)}</span></td><td><button type="button" class="button button-outline compact" onclick="checkinOpenTaskEditor('${esc(recKey)}','${esc(checkinPlanStart)}','${esc(checkinPlanEnd)}')">✏️ Editar</button></td></tr>`;
+  }).join('')}</tbody></table></div></article>` : `<section class="checkin-empty"><h2>Nenhum planejamento neste período</h2><p>Importe uma planilha semanal ou ajuste os filtros acima.</p></section>`}`;
 }
 
 function checkinRenderPlanning(engineers, dataHalls, disciplines = checkinAllDisciplines(), companies = checkinCompanies()) {
@@ -1846,12 +2909,218 @@ function checkinRenderPlanning(engineers, dataHalls, disciplines = checkinAllDis
     <label><span>Disciplina</span><select onchange="checkinSetPlanDisciplineFilter(this.value)">${checkinSelectOptions(disciplines, checkinPlanDisciplineFilter, 'Todas')}</select></label>
     <label><span>Empresa</span><select onchange="checkinSetPlanCompanyFilter(this.value)">${checkinSelectOptions(companies, checkinPlanCompanyFilter, 'Todas')}</select></label>
     <label><span>Engenheiro</span><select onchange="checkinSetPlanEngineerFilter(this.value)">${checkinSelectOptions(engineers, checkinPlanEngineerFilter, 'Todos')}</select></label>
+    <label><span>Buscar tarefa / local / código</span><input type="search" value="${esc(checkinPlanSearch)}" placeholder="Ex.: MAIN RING, CAG 4, 04-RO..." oninput="checkinSetPlanSearch(this.value)"></label>
     ${checkinCanManagePlanning() ? `<button class="button button-outline" onclick="checkinOpenImport()">${icon('upload')} Importar planilha semanal</button>` : ''}
     <button class="button button-outline" onclick="checkinDownloadTemplate()">${icon('download')} Baixar modelo XLSX</button>
   </section>
   <div id="checkinPlanResults">
     ${checkinRenderPlanningResults()}
   </div>`;
+}
+
+function checkinSetPlanSearch(value) {
+  checkinSyncFiltersFromDom();
+  checkinPlanSearch = value;
+  const resultsEl = document.getElementById('checkinPlanResults');
+  if (resultsEl && checkinActiveTab === 'planejamento') {
+    resultsEl.innerHTML = checkinRenderPlanningResults();
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return;
+  }
+  renderCheckIn();
+}
+
+function checkinOpenTaskEditor(recKey, startDate = '', endDate = '') {
+  if (!recKey) return;
+  const entries = [];
+  checkinReports
+    .filter(r => (!startDate || r.workDate >= startDate) && (!endDate || r.workDate <= endDate))
+    .forEach(report => {
+      (report.activities || []).forEach(activity => {
+        const key = checkinActivityRecurrenceKey(report.dh, activity) || `${report.dh}|${activity.id}`;
+        if (key === recKey) {
+          entries.push({ report, activity });
+        }
+      });
+    });
+
+  if (!entries.length) {
+    return toast('Nenhum apontamento encontrado para esta tarefa no período.', true);
+  }
+
+  entries.sort((a, b) => a.report.workDate.localeCompare(b.report.workDate));
+  const sample = entries[0].activity;
+  const sampleReport = entries[0].report;
+  const area = checkinExtractAreaLabel(sampleReport, sample);
+  const titleCode = [sample.pstItem ? `Item ${sample.pstItem}` : '', sample.scheduleId].filter(Boolean).join(' · ');
+  const periodLabel = startDate && endDate ? `${checkinFormatDate(startDate)} a ${checkinFormatDate(endDate)}` : 'Todo o período';
+
+  const rowsHtml = entries.map(({ report, activity }, idx) => {
+    const unit = activity.unit || 'm';
+    const unitOptions = checkinUniqueOptions([...CHECKIN_UNITS, unit].filter(Boolean));
+    const currentStatus = checkinResolveMigratedStatus(activity, activity.checkinAt, activity.checkoutAt);
+    const isCarry = checkinIsCarryoverActivity(activity);
+    return `<tr data-editor-row data-report-id="${esc(report.id)}" data-activity-id="${esc(activity.id)}" data-is-carry="${isCarry ? '1' : '0'}">
+      <td><strong>${checkinFormatDate(report.workDate)}</strong><small>${esc(report.dh)} · ${esc(report.engineer)}</small>${isCarry ? '<span class="checkin-carryover-pill">↩️ Saldo</span>' : ''}</td>
+      <td><select data-ed-field="unit" class="checkin-unit-select" onchange="checkinUpdateTaskEditorTotals()">${unitOptions.map(u => `<option value="${esc(u)}" ${unit === u ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select></td>
+      <td><input type="number" min="0" step="0.1" class="checkin-number-input" data-ed-field="plannedMeters" value="${esc(checkinParseNumber(activity.plannedMeters))}" oninput="checkinUpdateTaskEditorTotals()"></td>
+      <td><input type="number" min="0" step="0.1" class="checkin-number-input" data-ed-field="executedMeters" value="${esc(checkinParseNumber(activity.executedMeters))}" oninput="checkinOnTaskEditorExecInput(this)"></td>
+      <td><select data-ed-field="status" onchange="checkinOnTaskEditorStatusChange(this)">${CHECKIN_STATUS.map(st => `<option ${currentStatus === st ? 'selected' : ''}>${st}</option>`).join('')}</select></td>
+      <td><input type="text" class="checkin-inline-text" style="margin:0;min-width:160px;" data-ed-field="notes" value="${esc(activity.notes || '')}" placeholder="Observação"></td>
+    </tr>`;
+  }).join('');
+
+  modal(`${modalHead(`Editar tarefa: ${sample.location || area}`, `${titleCode ? `${titleCode} · ` : ''}${sample.activity || 'Tarefa'} · Período: ${periodLabel}`)}
+    <form class="checkin-task-editor-form" onsubmit="checkinSaveTaskEditor(event)">
+      <div class="modal-body">
+        <section class="checkin-metrics" data-task-editor-summary style="margin-bottom:14px;"></section>
+        <div class="checkin-activity-table-wrap">
+          <table class="checkin-activity-table checkin-plan-table" style="min-width:760px;">
+            <thead><tr>
+              <th>Data / DH / Eng.</th>
+              <th>Un.</th>
+              <th>Prev. dia</th>
+              <th>Exec. dia</th>
+              <th>Status</th>
+              <th>Observação</th>
+            </tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="button button-outline" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="button button-green">Salvar alterações</button>
+      </div>
+    </form>`, 'modal-large');
+
+  checkinUpdateTaskEditorTotals();
+}
+
+function checkinOnTaskEditorExecInput(input) {
+  const row = input.closest('[data-editor-row]');
+  if (row) {
+    const planned = checkinParseNumber(row.querySelector('[data-ed-field="plannedMeters"]')?.value);
+    const executed = checkinParseNumber(input.value);
+    const statusSel = row.querySelector('[data-ed-field="status"]');
+    if (statusSel && planned > 0) {
+      if (executed >= planned && ['Não iniciado', 'Iniciado', 'Parcial'].includes(statusSel.value)) {
+        statusSel.value = 'Concluído';
+      } else if (executed > 0 && executed < planned && ['Não iniciado', 'Iniciado', 'Concluído'].includes(statusSel.value)) {
+        statusSel.value = 'Parcial';
+      }
+    }
+  }
+  checkinUpdateTaskEditorTotals();
+}
+
+function checkinOnTaskEditorStatusChange(select) {
+  const row = select.closest('[data-editor-row]');
+  if (row && select.value === 'Concluído') {
+    const plannedEl = row.querySelector('[data-ed-field="plannedMeters"]');
+    const execEl = row.querySelector('[data-ed-field="executedMeters"]');
+    const planned = checkinParseNumber(plannedEl?.value);
+    const executed = checkinParseNumber(execEl?.value);
+    if (planned > 0 && executed < planned && execEl) {
+      execEl.value = planned;
+    }
+  }
+  checkinUpdateTaskEditorTotals();
+}
+
+function checkinUpdateTaskEditorTotals() {
+  const summaryEl = document.querySelector('[data-task-editor-summary]');
+  if (!summaryEl) return;
+  let totalPlanned = 0;
+  let totalExecuted = 0;
+  let unit = 'm';
+  document.querySelectorAll('[data-editor-row]').forEach(row => {
+    const isCarry = row.dataset.isCarry === '1';
+    const p = checkinParseNumber(row.querySelector('[data-ed-field="plannedMeters"]')?.value);
+    const e = checkinParseNumber(row.querySelector('[data-ed-field="executedMeters"]')?.value);
+    const u = row.querySelector('[data-ed-field="unit"]')?.value;
+    if (u) unit = u;
+    if (!isCarry) totalPlanned += p;
+    totalExecuted += e;
+  });
+  totalPlanned = Math.round(totalPlanned * 100) / 100;
+  totalExecuted = Math.round(totalExecuted * 100) / 100;
+  const remaining = Math.max(0, Math.round((totalPlanned - totalExecuted) * 100) / 100);
+  const excess = totalPlanned > 0 && totalExecuted > totalPlanned ? Math.round((totalExecuted - totalPlanned) * 100) / 100 : 0;
+  const pct = totalPlanned > 0 ? Math.round((totalExecuted / totalPlanned) * 100) : (totalExecuted > 0 ? 100 : 0);
+
+  summaryEl.innerHTML = `
+    <article><small>TOTAL PROGRAMADO</small><strong>${checkinNumber(totalPlanned)} ${esc(unit)}</strong></article>
+    <article><small>TOTAL EXECUTADO</small><strong style="color:${excess > 0 ? '#b45309' : '#15803d'}">${checkinNumber(totalExecuted)} ${esc(unit)}</strong></article>
+    <article><small>${excess > 0 ? 'EXCEDENTE (CONFERIR)' : 'FALTA (SALDO)'}</small><strong style="color:${excess > 0 ? '#b91c1c' : remaining > 0 ? '#b45309' : '#15803d'}">${excess > 0 ? `⚠️ +${checkinNumber(excess)} ${esc(unit)}` : `${checkinNumber(remaining)} ${esc(unit)}`}</strong></article>
+    <article><small>% AVANÇO</small><strong style="color:${excess > 0 ? '#b91c1c' : pct >= 100 ? '#15803d' : '#0f172a'}">${pct}%</strong></article>
+  `;
+}
+
+async function checkinSaveTaskEditor(event) {
+  event.preventDefault();
+  const rows = [...document.querySelectorAll('[data-editor-row]')];
+  if (!rows.length) return closeModal();
+
+  const modifiedById = new Map();
+  const now = new Date().toISOString();
+
+  rows.forEach(row => {
+    const reportId = row.dataset.reportId;
+    const activityId = row.dataset.activityId;
+    let report = modifiedById.get(reportId);
+    if (!report) {
+      const original = checkinGetReport(reportId);
+      if (!original) return;
+      report = structuredClone(original);
+      modifiedById.set(reportId, report);
+    }
+    const activity = (report.activities || []).find(item => item.id === activityId);
+    if (!activity) return;
+
+    const newUnit = String(row.querySelector('[data-ed-field="unit"]')?.value || activity.unit || 'm').trim();
+    const newPlanned = checkinParseNumber(row.querySelector('[data-ed-field="plannedMeters"]')?.value);
+    const newExecuted = checkinParseNumber(row.querySelector('[data-ed-field="executedMeters"]')?.value);
+    const newStatus = String(row.querySelector('[data-ed-field="status"]')?.value || activity.status || 'Não iniciado').trim();
+    const newNotes = String(row.querySelector('[data-ed-field="notes"]')?.value || '').trim();
+
+    activity.unit = newUnit;
+    activity.plannedMeters = newPlanned;
+    const carried = checkinParseNumber(activity.carryoverAddedMeters);
+    if (carried > 0 && !checkinIsCarryoverActivity(activity)) {
+      activity.basePlannedMeters = Math.max(0, Math.round((newPlanned - carried) * 100) / 100);
+    }
+    activity.executedMeters = newExecuted;
+    activity.status = newStatus;
+    activity.notes = newNotes;
+
+    if (newStatus === 'Concluído') {
+      if (!activity.checkinAt) activity.checkinAt = now;
+      if (!activity.checkoutAt) activity.checkoutAt = now;
+    } else if (newStatus === 'Não iniciado') {
+      activity.checkinAt = '';
+      activity.checkoutAt = '';
+    } else if (newStatus === 'Iniciado') {
+      activity.checkoutAt = '';
+    }
+  });
+
+  const toPersist = [];
+  modifiedById.forEach(report => {
+    const checkedIn = report.activities.filter(item => item.checkinAt);
+    const checkedOut = report.activities.filter(item => item.checkoutAt);
+    report.checkinAt = checkedIn.map(item => item.checkinAt).sort()[0] || '';
+    report.checkoutAt = report.activities.length && checkedOut.length === report.activities.length
+      ? checkedOut.map(item => item.checkoutAt).sort().at(-1) : '';
+    report.status = report.checkoutAt ? 'fechado' : report.checkinAt ? 'iniciado' : 'planejado';
+    toPersist.push(report);
+  });
+
+  if (toPersist.length) {
+    await checkinPersistReports(toPersist, { silent: false });
+  }
+  closeModal();
+  renderCheckIn();
 }
 
 function checkinSetPlanRange(which, value) {
@@ -2370,8 +3639,21 @@ async function checkinImportWeekly(event) {
         const currentActivities = new Map(current.activities.map(activity => [activity.id, activity]));
         imported.activities = imported.activities.map(activity => {
           const saved = currentActivities.get(activity.id);
-          return saved ? {
+          if (!saved) return activity;
+          const carriedMeters = checkinParseNumber(saved.carryoverAddedMeters);
+          const mergedPlanned = carriedMeters > 0
+            ? Math.round((checkinParseNumber(activity.plannedMeters) + carriedMeters) * 100) / 100
+            : activity.plannedMeters;
+          return {
             ...activity,
+            plannedMeters: mergedPlanned,
+            ...(carriedMeters > 0 ? {
+              basePlannedMeters: checkinParseNumber(activity.plannedMeters),
+              carryoverAddedMeters: carriedMeters,
+              carryoverMergedFromId: saved.carryoverMergedFromId || '',
+              carryoverFromDate: saved.carryoverFromDate || '',
+              carryoverOriginDate: saved.carryoverOriginDate || ''
+            } : {}),
             shift: saved.shift || activity.shift || 'Diurno',
             status: saved.status || activity.status,
             checkinAt: saved.checkinAt || activity.checkinAt || '',
@@ -2381,10 +3663,11 @@ async function checkinImportWeekly(event) {
             ptaCount: saved.ptaCount ?? activity.ptaCount,
             forkliftCount: saved.forkliftCount ?? activity.forkliftCount,
             executedMeters: saved.executedMeters ?? activity.executedMeters,
+            subItems: Array.isArray(saved.subItems) ? saved.subItems : activity.subItems,
             problemCode: saved.problemCode || activity.problemCode,
             problemOther: saved.problemOther || activity.problemOther,
             notes: saved.notes || activity.notes
-          } : activity;
+          };
         });
         // Atividades extras foram lançadas no diário, não na planilha semanal.
         imported.activities.push(...current.activities.filter(activity =>
@@ -2697,7 +3980,8 @@ function checkinActivityTaskProgress(activity) {
   let executedTask = 0;
   if (taskDenominator > 0) {
     if (executed > 0) {
-      executedTask = executed / taskDenominator; // ex.: 20/30 = 0.67 no dia 1 + 10/30 = 0.33 no saldo do dia 2 = 1.00
+      // Limita o avanço físico da tarefa a 1,0 (100%) para que excedentes não mascarem outras tarefas atrasadas
+      executedTask = Math.min(1, executed / taskDenominator);
     } else if (status === 'Concluído' && !isCarryover) {
       executedTask = 1;
     }
@@ -2735,6 +4019,7 @@ function checkinIsActivityDeviation(activity) {
 }
 
 function checkinRenderCurveResults() {
+  const locationSearchNorm = checkinNormalizeSearchText(checkinCurveLocationSearch);
   const reports = checkinReports.filter(report =>
     report.workDate >= checkinCurveStart && report.workDate <= checkinCurveEnd
     && (!checkinCurveEngineer || report.engineer === checkinCurveEngineer)
@@ -2750,11 +4035,19 @@ function checkinRenderCurveResults() {
       const actDiscipline = checkinCurveActivityDiscipline(report, activity) || 'Sem disciplina';
       const actShift = checkinGetActivityShift(report, activity);
       const actCompany = activity.contractor || report.contractor || '';
+      const actArea = checkinExtractAreaLabel(report, activity);
+      const actLocation = checkinExtractLocationLabel(report, activity);
       if (checkinCurveDiscipline && actDiscipline !== checkinCurveDiscipline) return;
       if (checkinCurveShift && actShift !== checkinCurveShift) return;
       if (checkinCurveCompany && actCompany !== checkinCurveCompany) return;
+      if (checkinCurveArea && actArea !== checkinCurveArea) return;
+      if (locationSearchNorm) {
+        const locHaystack = checkinNormalizeSearchText([actArea, report.dh, actLocation, activity.activity].filter(Boolean).join(' '));
+        if (!locHaystack.includes(locationSearchNorm)) return;
+      }
 
       const plannedM = checkinParseNumber(activity.plannedMeters);
+      const origPlannedM = checkinActivityOriginalPlannedMeters(activity);
       const executedM = checkinParseNumber(activity.executedMeters);
       const isCompleted = checkinIsActivityCompleted(activity);
       const isDeviation = checkinIsActivityDeviation(activity);
@@ -2763,12 +4056,14 @@ function checkinRenderCurveResults() {
       row.plannedTasks += plannedTask;
       row.completedTasks += executedTask;
       if (isDeviation) row.deviationTasks += 1;
-      row.plannedMeters += (isExtra || isCarryover) ? 0 : plannedM;
+      row.plannedMeters += isExtra ? 0 : origPlannedM;
       row.executedMeters += executedM;
 
       matchedActivities.push({
         report,
         activity,
+        area: actArea,
+        location: actLocation,
         discipline: actDiscipline,
         shift: actShift,
         company: actCompany,
@@ -2778,8 +4073,9 @@ function checkinRenderCurveResults() {
         executedTask,
         progressPct,
         plannedM,
+        origPlannedM,
         executedM,
-        diffM: executedM - ((isExtra || isCarryover) ? 0 : plannedM),
+        diffM: executedM - (isExtra ? 0 : origPlannedM),
         isCompleted,
         isDeviation
       });
@@ -2820,7 +4116,7 @@ function checkinRenderCurveResults() {
   const totalCompletedTasks = matchedActivities.filter(item => item.isCompleted).length;
   const totalPartialTasks = matchedActivities.filter(item => checkinActivityBucket(item.activity) === 'partial').length;
   const totalDeviationTasks = matchedActivities.filter(item => item.isDeviation).length;
-  const totalPlannedM = matchedActivities.reduce((s, item) => s + (item.isExtra ? 0 : item.plannedM), 0);
+  const totalPlannedM = matchedActivities.reduce((s, item) => s + (item.isExtra ? 0 : item.origPlannedM), 0);
   const totalExecutedM = matchedActivities.reduce((s, item) => s + item.executedM, 0);
   const overallTaskPct = totalPlannedTasks > 0
     ? Math.round((totalExecutedTasks / totalPlannedTasks) * 100)
@@ -2839,7 +4135,7 @@ function checkinRenderCurveResults() {
     const notStarted = items.filter(m => checkinActivityBucket(m.activity) === 'notStarted').length;
     const withProblem = items.filter(m => m.activity.problemCode).length;
     const deviations = items.filter(m => m.isDeviation).length;
-    const plannedM = items.reduce((s, m) => s + (m.isExtra ? 0 : m.plannedM), 0);
+    const plannedM = items.reduce((s, m) => s + (m.isExtra ? 0 : m.origPlannedM), 0);
     const executedM = items.reduce((s, m) => s + m.executedM, 0);
     const topProblems = new Map();
     items.forEach(m => {
@@ -2867,18 +4163,114 @@ function checkinRenderCurveResults() {
     };
   }).filter(Boolean);
 
+  // Agrupamento consolidado por Tarefa (soma todos os dias em que a mesma tarefa apareceu no período)
+  const taskGroupMap = new Map();
+  matchedActivities.forEach(item => {
+    const recKey = checkinActivityRecurrenceKey(item.report.dh, item.activity) || `${item.report.dh}|${item.activity.id}`;
+    const entry = taskGroupMap.get(recKey) || {
+      key: recKey,
+      area: item.area,
+      dh: item.report.dh,
+      location: item.location,
+      discipline: item.discipline,
+      pstItem: item.activity.pstItem || '',
+      scheduleId: item.activity.scheduleId || '',
+      activityText: item.activity.activity || '',
+      isExtra: item.isExtra,
+      unit: item.activity.unit || 'm',
+      engineers: new Set(),
+      days: new Map(),
+      plannedM: 0,
+      executedM: 0
+    };
+    if (item.report.engineer) entry.engineers.add(item.report.engineer);
+    if (!entry.pstItem && item.activity.pstItem) entry.pstItem = item.activity.pstItem;
+    if (!entry.scheduleId && item.activity.scheduleId) entry.scheduleId = item.activity.scheduleId;
+    if (!entry.activityText && item.activity.activity) entry.activityText = item.activity.activity;
+    if (Array.isArray(item.activity.subItems) && item.activity.subItems.length) entry.subItems = item.activity.subItems;
+    const origP = item.isExtra ? checkinParseNumber(item.activity.plannedMeters) : item.origPlannedM;
+    entry.plannedM = Math.round((entry.plannedM + origP) * 100) / 100;
+    entry.executedM = Math.round((entry.executedM + item.executedM) * 100) / 100;
+    const dRow = entry.days.get(item.report.workDate) || { date: item.report.workDate, planned: 0, executed: 0, carryOnly: true };
+    dRow.planned = Math.round((dRow.planned + origP) * 100) / 100;
+    dRow.executed = Math.round((dRow.executed + item.executedM) * 100) / 100;
+    if (!item.isCarryover) dRow.carryOnly = false;
+    entry.days.set(item.report.workDate, dRow);
+    taskGroupMap.set(recKey, entry);
+  });
+  const byTaskConsolidated = [...taskGroupMap.values()]
+    .map(entry => {
+      const sortedDays = [...entry.days.values()].sort((a, b) => a.date.localeCompare(b.date));
+      const remainingM = Math.max(0, Math.round((entry.plannedM - entry.executedM) * 100) / 100);
+      const excessM = entry.executedM > entry.plannedM ? Math.round((entry.executedM - entry.plannedM) * 100) / 100 : 0;
+      const pct = entry.plannedM > 0 ? Math.round((entry.executedM / entry.plannedM) * 100) : (entry.executedM > 0 ? 100 : 0);
+      return { ...entry, sortedDays, daysCount: sortedDays.length, engineersLabel: [...entry.engineers].join(', '), remainingM, excessM, pct };
+    })
+    .sort((a, b) => {
+      const aCag = /^CAG\s+/i.test(a.area) ? 0 : 1;
+      const bCag = /^CAG\s+/i.test(b.area) ? 0 : 1;
+      if (aCag !== bCag) return aCag - bCag;
+      return b.remainingM - a.remainingM || a.area.localeCompare(b.area, 'pt-BR', { numeric: true }) || a.location.localeCompare(b.location, 'pt-BR');
+    });
+
+  // Agrupamento por Área e Local (CAG, Sala Elétrica, Corredor PDU, etc.)
+  const locMap = new Map();
+  matchedActivities.forEach(item => {
+    const locKey = `${checkinSlug(item.area)}|${checkinSlug(item.location)}`;
+    const entry = locMap.get(locKey) || {
+      area: item.area,
+      dh: item.report.dh,
+      location: item.location,
+      disciplines: new Set(),
+      plannedTasks: 0,
+      completed: 0,
+      partial: 0,
+      plannedM: 0,
+      executedM: 0,
+      unit: item.activity.unit || 'm'
+    };
+    entry.disciplines.add(item.discipline);
+    entry.plannedTasks += item.plannedTask;
+    if (checkinActivityBucket(item.activity) === 'completed') entry.completed += 1;
+    else if (checkinActivityBucket(item.activity) === 'partial') entry.partial += 1;
+    entry.plannedM = Math.round((entry.plannedM + (item.isExtra ? 0 : item.origPlannedM)) * 100) / 100;
+    entry.executedM = Math.round((entry.executedM + item.executedM) * 100) / 100;
+    locMap.set(locKey, entry);
+  });
+  const byAreaLocation = [...locMap.values()]
+    .map(entry => {
+      const remainingM = Math.max(0, Math.round((entry.plannedM - entry.executedM) * 100) / 100);
+      const excessM = entry.executedM > entry.plannedM ? Math.round((entry.executedM - entry.plannedM) * 100) / 100 : 0;
+      const pct = entry.plannedM > 0 ? Math.round((entry.executedM / entry.plannedM) * 100) : (entry.executedM > 0 ? 100 : 0);
+      return { ...entry, disciplinesLabel: [...entry.disciplines].join(', '), remainingM, excessM, pct };
+    })
+    .sort((a, b) => {
+      const aCag = /^CAG\s+/i.test(a.area) ? 0 : 1;
+      const bCag = /^CAG\s+/i.test(b.area) ? 0 : 1;
+      if (aCag !== bCag) return aCag - bCag;
+      return b.remainingM - a.remainingM || a.area.localeCompare(b.area, 'pt-BR', { numeric: true }) || a.location.localeCompare(b.location, 'pt-BR');
+    });
+
+  const visibleByTask = checkinCurvePendingOnly
+    ? byTaskConsolidated.filter(t => t.remainingM > 0)
+    : byTaskConsolidated;
+  const visibleByAreaLocation = checkinCurvePendingOnly
+    ? byAreaLocation.filter(loc => loc.remainingM > 0)
+    : byAreaLocation;
+
   // Lista detalhada de tarefas e desvios
   const taskRows = matchedActivities
     .filter(item => !checkinCurveDeviationOnly || item.isDeviation)
     .sort((a, b) => b.report.workDate.localeCompare(a.report.workDate) || a.discipline.localeCompare(b.discipline) || a.report.dh.localeCompare(b.report.dh));
 
-  const filterText = [checkinCurveDh || 'Todos os DHs', checkinCurveShift ? `Turno ${checkinCurveShift}` : 'Todos os turnos', checkinCurveDiscipline || 'Todas as disciplinas', checkinCurveCompany || 'Todas as empresas', checkinCurveEngineer || 'Todos os engenheiros', checkinCurveWeekday ? CHECKIN_WEEKDAYS[Number(checkinCurveWeekday)] : 'Todos os dias'].join(' · ');
+  const totalRemainingM = Math.max(0, Math.round((totalPlannedM - totalExecutedM) * 100) / 100);
+  const filterText = [checkinCurveArea || 'Todas as áreas', checkinCurveLocationSearch ? `Local: "${checkinCurveLocationSearch}"` : '', checkinCurveDh || 'Todos os DHs', checkinCurveShift ? `Turno ${checkinCurveShift}` : 'Todos os turnos', checkinCurveDiscipline || 'Todas as disciplinas', checkinCurveCompany || 'Todas as empresas', checkinCurveEngineer || 'Todos os engenheiros', checkinCurveWeekday ? CHECKIN_WEEKDAYS[Number(checkinCurveWeekday)] : 'Todos os dias'].filter(Boolean).join(' · ');
 
   return `<section class="checkin-metrics">
     <article><small>TAREFAS PLANEJADAS</small><strong>${totalPlannedTasks}${totalExtraTasks ? ` <span style="font-size:12px;color:#6d28d9;font-weight:700;">(+${totalExtraTasks} extra)</span>` : ''}</strong></article>
     <article><small>AVANÇO EM TAREFAS (EXEC.)</small><strong style="color:${overallTaskPct >= 100 ? '#15803d' : '#0f172a'}">${checkinNumber(totalExecutedTasks, 2)} (${overallTaskPct}%)</strong><small style="display:block;margin-top:2px;font-size:10px;color:#475569;font-weight:700;">${totalCompletedTasks} concluída(s) · ${totalPartialTasks} parcial(is)</small></article>
     <article><small>TAREFAS COM DESVIO</small><strong style="color:${totalDeviationTasks ? '#b91c1c' : '#143d2b'}">${totalDeviationTasks}</strong></article>
-    <article><small>VOLUME (PREV. / EXEC.)</small><strong>${checkinNumber(totalPlannedM)} / ${checkinNumber(totalExecutedM)}</strong></article>
+    <article><small>VOLUME (PREV. / EXEC.)</small><strong>${checkinNumber(totalPlannedM)} / ${checkinNumber(totalExecutedM)}</strong><small style="display:block;margin-top:2px;font-size:10px;color:${totalRemainingM > 0 ? '#b45309' : '#15803d'};font-weight:800;">Falta: ${checkinNumber(totalRemainingM)} m</small></article>
   </section>
 
   <article class="checkin-report-card">
@@ -2913,6 +4305,115 @@ function checkinRenderCurveResults() {
         </tr>`).join('')}
       </tbody>
     </table></div>` : `<div class="checkin-empty"><p>Nenhuma tarefa encontrada para este filtro.</p></div>`}
+  </article>
+
+  <article class="checkin-report-card">
+    <header class="checkin-report-head">
+      <div>
+        <p class="eyebrow">${checkinCurveBreakdownMode === 'task' ? 'CONSOLIDADO POR TAREFA NO PERÍODO' : 'ANÁLISE POR ÁREA E LOCAL'}</p>
+        <h2>${checkinCurveBreakdownMode === 'task'
+    ? `Total Programado, Executado e Falta por Tarefa (${byTaskConsolidated.length})`
+    : `Programado, Executado e Saldo (Falta) por Área / Local (${byAreaLocation.length})`}</h2>
+        <p>${checkinCurveBreakdownMode === 'task'
+    ? 'Cada tarefa importada da planilha ou criada no sistema, consolidando os dias do período (CAG, Sala Elétrica, Corredores, etc.).'
+    : 'Veja exatamente o que falta em cada CAG, Sala Elétrica, Corredor ou Data Hall. Clique em uma área ou local para filtrar a Curva S.'}</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;cursor:pointer;color:#b91c1c;">
+          <input type="checkbox" ${checkinCurvePendingOnly ? 'checked' : ''} onchange="checkinSetCurveFilter('pendingOnly', this.checked)">
+          Apenas com saldo faltando (&gt; 0)
+        </label>
+        <button type="button" class="button compact ${checkinCurveBreakdownMode === 'task' ? 'button-dark' : 'button-outline'}" onclick="checkinSetCurveFilter('breakdownMode', 'task')">Por Tarefa (${visibleByTask.length})</button>
+        <button type="button" class="button compact ${checkinCurveBreakdownMode === 'area' ? 'button-dark' : 'button-outline'}" onclick="checkinSetCurveFilter('breakdownMode', 'area')">Por Área / Local (${visibleByAreaLocation.length})</button>
+        ${(checkinCurveArea || checkinCurveLocationSearch) ? `<button type="button" class="button button-outline compact" onclick="checkinClearCurveAreaLocation()">Limpar filtro</button>` : ''}
+      </div>
+    </header>
+    ${checkinCurveBreakdownMode === 'task'
+    ? (visibleByTask.length ? `<div class="checkin-activity-table-wrap"><table class="checkin-activity-table checkin-plan-table">
+        <thead><tr>
+          <th>Área / Local</th>
+          <th>Tarefa (Planilha / Sistema)</th>
+          <th>Disciplina / Eng.</th>
+          <th>Programação por dia</th>
+          <th>Total Previsto</th>
+          <th>Total Executado</th>
+          <th>Falta (Saldo)</th>
+          <th>% Avanço</th>
+          <th>Ação</th>
+        </tr></thead>
+        <tbody>
+          ${visibleByTask.map(t => {
+      const isOver = t.excessM > 0 && t.plannedM > 0;
+      const barClass = isOver ? 'is-warn' : t.pct >= 100 ? '' : t.pct >= 50 ? 'is-warn' : 'is-low';
+      const isAreaActive = checkinCurveArea === t.area;
+      const subSum = checkinSubItemsSummary(t.subItems);
+      const dayChips = t.sortedDays.map(d => {
+        const shortDate = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(`${d.date}T12:00:00`));
+        const isCarryChip = d.carryOnly && d.planned === 0 && d.executed === 0;
+        const chipClass = isCarryChip ? '' : d.planned > 0 && d.executed > d.planned ? 'is-over' : d.planned > 0 && d.executed >= d.planned ? 'is-done' : d.executed > 0 ? 'is-partial' : '';
+        const label = isCarryChip ? `${shortDate}: saldo` : `${shortDate}: ${checkinNumber(d.executed)}/${checkinNumber(d.planned)} ${esc(t.unit)}`;
+        return `<button type="button" class="checkin-day-chip ${chipClass}" onclick="checkinJumpToDay('${esc(d.date)}','${esc(t.dh)}','${esc(t.area)}')" title="Clique para abrir ${checkinFormatDate(d.date)} no Diário e conferir/corrigir">${label}</button>`;
+      }).join('');
+      return `<tr>
+              <td>
+                <button type="button" class="checkin-area-row-btn ${isAreaActive ? 'is-active' : ''}" onclick="checkinSetCurveFilter('area', '${esc(isAreaActive ? '' : t.area)}')">${esc(t.area)}${t.area !== t.dh ? ` <small style="color:#64748b;font-weight:600;">(${esc(t.dh)})</small>` : ''}</button>
+                <small style="display:block;margin-top:3px;font-weight:700;color:#334155;">${esc(t.location)}</small>
+              </td>
+              <td>
+                ${t.isExtra ? `<span class="checkin-extra-pill">➕ Extra</span>` : ''}
+                <strong>${esc(t.activityText || '—')}</strong>
+                <small>${esc([t.pstItem ? `Item ${t.pstItem}` : '', t.scheduleId].filter(Boolean).join(' · ') || 'Criada no sistema')}</small>
+                ${subSum ? `<small style="display:block;margin-top:3px;color:#0369a1;font-weight:700;">🔧 ${subSum.done}/${subSum.total}${subSum.pendingLabels.length ? ` · Falta: ${esc(subSum.pendingLabels.join(', '))}` : ' · Concluídas'}</small>` : ''}
+              </td>
+              <td><span class="checkin-discipline-tag">${esc(t.discipline)}</span><small>${esc(t.engineersLabel || '—')}</small></td>
+              <td style="min-width:190px;">
+                <small style="font-weight:700;color:#334155;">${t.daysCount} dia(s)</small>
+                <div class="checkin-day-chips">${dayChips}</div>
+              </td>
+              <td><strong>${checkinNumber(t.plannedM)} ${esc(t.unit)}</strong></td>
+              <td style="color:${isOver ? '#b45309' : '#15803d'};font-weight:800;">${checkinNumber(t.executedM)} ${esc(t.unit)}</td>
+              <td style="color:${isOver ? '#b91c1c' : t.remainingM > 0 ? '#b91c1c' : '#15803d'};font-weight:800;">${isOver ? `⚠️ Excedeu +${checkinNumber(t.excessM)} ${esc(t.unit)}` : t.remainingM > 0 ? `${checkinNumber(t.remainingM)} ${esc(t.unit)}` : `0 ${esc(t.unit)}`}</td>
+              <td style="min-width:115px;">
+                <strong style="color:${isOver ? '#b91c1c' : 'inherit'}">${t.pct}%</strong>
+                <div class="checkin-mini-bar" style="margin-top:4px;"><div class="checkin-mini-bar-fill ${barClass}" style="width:${Math.min(100, Math.max(0, t.pct))}%"></div></div>
+              </td>
+              <td><button type="button" class="button button-outline compact" onclick="checkinOpenTaskEditor('${esc(t.key)}','${esc(checkinCurveStart)}','${esc(checkinCurveEnd)}')">✏️ Editar</button></td>
+            </tr>`;
+    }).join('')}
+        </tbody>
+      </table></div>` : `<div class="checkin-empty"><p>Nenhuma tarefa encontrada para este filtro.</p></div>`)
+    : (visibleByAreaLocation.length ? `<div class="checkin-activity-table-wrap"><table class="checkin-activity-table checkin-plan-table">
+        <thead><tr>
+          <th>Área / DH</th>
+          <th>Local / Sala</th>
+          <th>Disciplina(s)</th>
+          <th>Tarefas (Plan. / Concl.)</th>
+          <th>Previsto</th>
+          <th>Executado</th>
+          <th>Falta (Saldo)</th>
+          <th>% Avanço</th>
+        </tr></thead>
+        <tbody>
+          ${visibleByAreaLocation.map(loc => {
+      const barClass = loc.pct >= 100 ? '' : loc.pct >= 50 ? 'is-warn' : 'is-low';
+      const isAreaActive = checkinCurveArea === loc.area;
+      const isLocActive = checkinNormalizeSearchText(checkinCurveLocationSearch) === checkinNormalizeSearchText(loc.location) && Boolean(checkinCurveLocationSearch);
+      return `<tr>
+              <td><button type="button" class="checkin-area-row-btn ${isAreaActive ? 'is-active' : ''}" onclick="checkinSetCurveFilter('area', '${esc(isAreaActive ? '' : loc.area)}')">${esc(loc.area)}${loc.area !== loc.dh ? ` <small style="color:#64748b;font-weight:600;">(${esc(loc.dh)})</small>` : ''}</button></td>
+              <td><button type="button" class="checkin-area-row-btn ${isLocActive ? 'is-active' : ''}" onclick="checkinSetCurveFilter('locationSearch', '${esc(isLocActive ? '' : loc.location)}')">${esc(loc.location)}</button></td>
+              <td><small>${esc(loc.disciplinesLabel)}</small></td>
+              <td><strong>${loc.plannedTasks}</strong> <small>(${loc.completed} concl.${loc.partial ? ` · ${loc.partial} parc.` : ''})</small></td>
+              <td><strong>${checkinNumber(loc.plannedM)} ${esc(loc.unit)}</strong></td>
+              <td style="color:#15803d;font-weight:800;">${checkinNumber(loc.executedM)} ${esc(loc.unit)}</td>
+              <td style="color:${loc.remainingM > 0 ? '#b91c1c' : '#15803d'};font-weight:800;">${loc.remainingM > 0 ? `${checkinNumber(loc.remainingM)} ${esc(loc.unit)}` : loc.excessM > 0 ? `0 (+${checkinNumber(loc.excessM)} ${esc(loc.unit)})` : `0 ${esc(loc.unit)}`}</td>
+              <td style="min-width:120px;">
+                <strong>${loc.pct}%</strong>
+                <div class="checkin-mini-bar" style="margin-top:4px;"><div class="checkin-mini-bar-fill ${barClass}" style="width:${Math.min(100, Math.max(0, loc.pct))}%"></div></div>
+              </td>
+            </tr>`;
+    }).join('')}
+        </tbody>
+      </table></div>` : `<div class="checkin-empty"><p>Nenhum local encontrado para este filtro.</p></div>`)}
   </article>
 
   <article class="checkin-curve-card"><header><div><p class="eyebrow">ACOMPANHAMENTO FÍSICO</p><h2>Curva S — ${isTasksMetric ? 'Tarefas Planejadas x Avanço Executado (Proporcional)' : 'Quantidade Planejada x Executada'}</h2><p>Acumulado diário (${isTasksMetric ? 'peso 1,0 por tarefa planejada · avanço proporcional ao volume executado' : 'em quantidade/metros'}) · ${checkinFormatDate(checkinCurveStart)} a ${checkinFormatDate(checkinCurveEnd)}</p></div><div class="checkin-curve-legend"><span class="planned">${isTasksMetric ? `Tarefas planejadas (${checkinNumber(points.at(-1)?.planned || 0, 2)})` : `Planejado (${checkinNumber(points.at(-1)?.planned || 0, 1)})`}</span><span class="executed">${isTasksMetric ? `Avanço executado (${checkinNumber(points.at(-1)?.executed || 0, 2)})` : `Executado (${checkinNumber(points.at(-1)?.executed || 0, 1)})`}</span></div></header>
@@ -2972,6 +4473,7 @@ function checkinRenderCurveResults() {
 
 function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
   const isTasksMetric = checkinCurveMetric === 'tasks';
+  const areas = checkinAllAreas();
   return `<section class="checkin-filter-panel checkin-curve-filters">
     <label><span>Data inicial</span><input type="date" data-checkin-curve-start value="${checkinCurveStart}" oninput="checkinSetCurveRange('start',this.value)" onchange="checkinSetCurveRange('start',this.value)"></label>
     <label><span>Data final</span><input type="date" data-checkin-curve-end value="${checkinCurveEnd}" oninput="checkinSetCurveRange('end',this.value)" onchange="checkinSetCurveRange('end',this.value)"></label>
@@ -2980,6 +4482,8 @@ function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
     <label><span>Empresa</span><select onchange="checkinSetCurveFilter('company',this.value)">${checkinSelectOptions(companies, checkinCurveCompany, 'Todas')}</select></label>
     <label><span>Engenheiro</span><select onchange="checkinSetCurveFilter('engineer',this.value)">${checkinSelectOptions(engineers, checkinCurveEngineer, 'Todos')}</select></label>
     <label><span>Data Hall</span><select onchange="checkinSetCurveFilter('dh',this.value)">${checkinSelectOptions(dataHalls, checkinCurveDh, 'Todos')}</select></label>
+    <label><span>Área / CAG</span><select data-checkin-curve-area onchange="checkinSetCurveFilter('area',this.value)">${checkinSelectOptions(areas, checkinCurveArea, 'Todas')}</select></label>
+    <label><span>Buscar local / tarefa</span><input type="search" data-checkin-curve-loc-search value="${esc(checkinCurveLocationSearch)}" placeholder="Ex.: CAG 4, Sala Elétrica, tubulação..." oninput="checkinSetCurveFilter('locationSearch',this.value)"></label>
     <label><span>Dia da semana</span><select onchange="checkinSetCurveFilter('weekday',this.value)"><option value="">Todos</option>${CHECKIN_WEEKDAYS.map((day, index) => `<option value="${index}" ${checkinCurveWeekday === String(index) ? 'selected' : ''}>${day}</option>`).join('')}</select></label>
     <label><span>Unidade do gráfico</span><select onchange="checkinSetCurveFilter('metric',this.value)">
       <option value="tasks" ${isTasksMetric ? 'selected' : ''}>Por tarefas (Avanço proporcional x Planejadas)</option>
@@ -2990,6 +4494,22 @@ function checkinRenderCurve(engineers, dataHalls, disciplines, companies) {
   <div id="checkinCurveResults">
     ${checkinRenderCurveResults()}
   </div>`;
+}
+
+function checkinClearCurveAreaLocation() {
+  checkinCurveArea = '';
+  checkinCurveLocationSearch = '';
+  const areaSelect = document.querySelector('[data-checkin-curve-area]');
+  if (areaSelect) areaSelect.value = '';
+  const locInput = document.querySelector('[data-checkin-curve-loc-search]');
+  if (locInput) locInput.value = '';
+  const resultsEl = document.getElementById('checkinCurveResults');
+  if (resultsEl && checkinActiveTab === 'curva') {
+    resultsEl.innerHTML = checkinRenderCurveResults();
+    if (typeof hydrateIcons === 'function') hydrateIcons();
+    return;
+  }
+  renderCheckIn();
 }
 
 function checkinSetCurveRange(which, value) {
@@ -3011,13 +4531,25 @@ function checkinSetCurveFilter(which, value) {
   else if (which === 'discipline') checkinCurveDiscipline = value;
   else if (which === 'shift') checkinCurveShift = value;
   else if (which === 'company') checkinCurveCompany = value;
+  else if (which === 'area') checkinCurveArea = value;
+  else if (which === 'locationSearch') checkinCurveLocationSearch = value;
   else if (which === 'weekday') checkinCurveWeekday = value;
   else if (which === 'metric') checkinCurveMetric = value;
+  else if (which === 'breakdownMode') checkinCurveBreakdownMode = value === 'area' ? 'area' : 'task';
+  else if (which === 'pendingOnly') checkinCurvePendingOnly = Boolean(value);
   else if (which === 'deviationOnly') checkinCurveDeviationOnly = Boolean(value);
   else checkinCurveDh = value;
   const resultsEl = document.getElementById('checkinCurveResults');
   if (resultsEl && checkinActiveTab === 'curva') {
     resultsEl.innerHTML = checkinRenderCurveResults();
+    if (which === 'area') {
+      const areaSelect = document.querySelector('[data-checkin-curve-area]');
+      if (areaSelect) areaSelect.value = checkinCurveArea;
+    }
+    if (which === 'locationSearch') {
+      const locInput = document.querySelector('[data-checkin-curve-loc-search]');
+      if (locInput && locInput.value !== checkinCurveLocationSearch) locInput.value = checkinCurveLocationSearch;
+    }
     if (typeof hydrateIcons === 'function') hydrateIcons();
     return;
   }
@@ -3032,6 +4564,8 @@ function checkinOpenReportPDF(initialScope = '') {
   const startDate = isDaily ? checkinSelectedDate : checkinCurveStart;
   const endDate = isDaily ? checkinSelectedDate : checkinCurveEnd;
   const filterDh = isDaily ? checkinDhFilter : checkinCurveDh;
+  const filterArea = isDaily ? checkinAreaFilter : checkinCurveArea;
+  const filterLocationNorm = isDaily ? '' : checkinNormalizeSearchText(checkinCurveLocationSearch);
   const filterDisc = isDaily ? checkinDisciplineFilter : checkinCurveDiscipline;
   const filterShift = isDaily ? checkinShiftFilter : checkinCurveShift;
   const filterCompany = isDaily ? checkinCompanyFilter : checkinCurveCompany;
@@ -3066,8 +4600,13 @@ function checkinOpenReportPDF(initialScope = '') {
       if (filterDisc && actDiscipline !== filterDisc) return;
       if (filterShift && actShift !== filterShift) return;
       if (filterCompany && actCompany !== filterCompany) return;
+      const actArea = checkinExtractAreaLabel(report, activity);
+      const actLocation = checkinExtractLocationLabel(report, activity);
+      if (filterArea && actArea !== filterArea) return;
+      if (filterLocationNorm && !checkinNormalizeSearchText([actArea, report.dh, actLocation, activity.activity].filter(Boolean).join(' ')).includes(filterLocationNorm)) return;
 
       const plannedM = checkinParseNumber(activity.plannedMeters);
+      const origPlannedM = checkinActivityOriginalPlannedMeters(activity);
       const executedM = checkinParseNumber(activity.executedMeters);
       const isCompleted = checkinIsActivityCompleted(activity);
       const isDeviation = checkinIsActivityDeviation(activity);
@@ -3084,8 +4623,9 @@ function checkinOpenReportPDF(initialScope = '') {
         executedTask,
         progressPct,
         plannedM,
+        origPlannedM,
         executedM,
-        diffM: executedM - (isExtra ? 0 : plannedM),
+        diffM: executedM - (isExtra ? 0 : origPlannedM),
         isCompleted,
         isDeviation
       });
@@ -3112,10 +4652,14 @@ function checkinOpenReportPDF(initialScope = '') {
       if (filterDisc && actDiscipline !== filterDisc) return;
       if (filterShift && actShift !== filterShift) return;
       if (filterCompany && actCompany !== filterCompany) return;
+      const actArea = checkinExtractAreaLabel(report, activity);
+      const actLocation = checkinExtractLocationLabel(report, activity);
+      if (filterArea && actArea !== filterArea) return;
+      if (filterLocationNorm && !checkinNormalizeSearchText([actArea, report.dh, actLocation, activity.activity].filter(Boolean).join(' ')).includes(filterLocationNorm)) return;
       const { isExtra, plannedTask, executedTask } = checkinActivityTaskProgress(activity);
       row.plannedTasks += plannedTask;
       row.completedTasks += executedTask;
-      row.plannedMeters += isExtra ? 0 : checkinParseNumber(activity.plannedMeters);
+      row.plannedMeters += isExtra ? 0 : checkinActivityOriginalPlannedMeters(activity);
       row.executedMeters += checkinParseNumber(activity.executedMeters);
     });
     byDate.set(report.workDate, row);
@@ -3154,7 +4698,7 @@ function checkinOpenReportPDF(initialScope = '') {
   const totalCompletedTasks = matchedActivities.filter(item => item.isCompleted).length;
   const totalPartialTasks = matchedActivities.filter(item => checkinActivityBucket(item.activity) === 'partial').length;
   const totalDeviationTasks = matchedActivities.filter(item => item.isDeviation).length;
-  const totalPlannedM = matchedActivities.reduce((s, item) => s + (item.isExtra ? 0 : item.plannedM), 0);
+  const totalPlannedM = matchedActivities.reduce((s, item) => s + (item.isExtra ? 0 : item.origPlannedM), 0);
   const totalExecutedM = matchedActivities.reduce((s, item) => s + item.executedM, 0);
   const totalCrew = matchedActivities.reduce((s, item) => s + (Number(item.activity.actualCrew) || 0), 0);
   const totalPta = matchedActivities.reduce((s, item) => s + (Number(item.activity.ptaCount) || 0), 0);
@@ -3173,7 +4717,7 @@ function checkinOpenReportPDF(initialScope = '') {
     const partial = items.filter(m => checkinActivityBucket(m.activity) === 'partial').length;
     const notStarted = items.filter(m => checkinActivityBucket(m.activity) === 'notStarted').length;
     const deviations = items.filter(m => m.isDeviation).length;
-    const plannedM = items.reduce((s, m) => s + (m.isExtra ? 0 : m.plannedM), 0);
+    const plannedM = items.reduce((s, m) => s + (m.isExtra ? 0 : m.origPlannedM), 0);
     const executedM = items.reduce((s, m) => s + m.executedM, 0);
     const crew = items.reduce((s, m) => s + (Number(m.activity.actualCrew) || 0), 0);
     const topProblems = new Map();
@@ -3528,6 +5072,12 @@ window.checkinSetPlanEngineerFilter = checkinSetPlanEngineerFilter;
 window.checkinSetPlanCompanyFilter = checkinSetPlanCompanyFilter;
 window.checkinSetPlanDisciplineFilter = checkinSetPlanDisciplineFilter;
 window.checkinSetPlanShiftFilter = checkinSetPlanShiftFilter;
+window.checkinSetPlanSearch = checkinSetPlanSearch;
+window.checkinOpenTaskEditor = checkinOpenTaskEditor;
+window.checkinOnTaskEditorExecInput = checkinOnTaskEditorExecInput;
+window.checkinOnTaskEditorStatusChange = checkinOnTaskEditorStatusChange;
+window.checkinUpdateTaskEditorTotals = checkinUpdateTaskEditorTotals;
+window.checkinSaveTaskEditor = checkinSaveTaskEditor;
 window.checkinGetActivityDiscipline = checkinGetActivityDiscipline;
 window.checkinGetActivityShift = checkinGetActivityShift;
 window.checkinUpdateContractor = checkinUpdateContractor;
@@ -3536,15 +5086,27 @@ window.checkinReportContractorsDisplay = checkinReportContractorsDisplay;
 window.checkinLoadTestTasks = checkinLoadTestTasks;
 window.checkinSetCurveRange = checkinSetCurveRange;
 window.checkinSetCurveFilter = checkinSetCurveFilter;
+window.checkinClearCurveAreaLocation = checkinClearCurveAreaLocation;
 window.checkinUpdatePercent = checkinUpdatePercent;
 window.checkinToggleOther = checkinToggleOther;
 window.checkinToggleExtraReason = checkinToggleExtraReason;
 window.checkinToggleExtraReasonOther = checkinToggleExtraReasonOther;
 window.checkinAutoSaveReport = checkinAutoSaveReport;
+window.checkinOnExecutedChange = checkinOnExecutedChange;
+window.checkinOnTaskStatusChange = checkinOnTaskStatusChange;
+window.checkinDismissCarryover = checkinDismissCarryover;
+window.checkinCreateSubItems = checkinCreateSubItems;
+window.checkinEditSubItems = checkinEditSubItems;
+window.checkinToggleSubItem = checkinToggleSubItem;
+window.checkinJumpToDay = checkinJumpToDay;
 window.checkinOnTaskDisciplineChange = checkinOnTaskDisciplineChange;
 window.checkinOnTaskShiftChange = checkinOnTaskShiftChange;
 window.checkinOnTaskExtraChange = checkinOnTaskExtraChange;
 window.checkinUpdateTaskTime = checkinUpdateTaskTime;
 window.checkinReopenTask = checkinReopenTask;
+window.checkinOpenSummaryFromDaily = checkinOpenSummaryFromDaily;
+window.checkinSetSummaryPeriod = checkinSetSummaryPeriod;
+window.checkinSetSummaryRange = checkinSetSummaryRange;
+window.checkinSetSummaryFilter = checkinSetSummaryFilter;
 window.checkinOpenReportPDF = checkinOpenReportPDF;
 window.checkinPrintReportPDF = checkinPrintReportPDF;

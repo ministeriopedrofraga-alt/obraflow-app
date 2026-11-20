@@ -827,7 +827,56 @@ let lastUserApprovalsSyncAt = 0;
 let activeSessionCheck = null;
 let lastSessionCheckAt = 0;
 
-const SESSION_CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutos entre consultas remotas (economia máxima de dados no Supabase)
+const SESSION_CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2 minutos entre consultas leves de perfil/sessão do próprio usuário
+
+function syncCachedUserApprovalEntry(account) {
+  if (!account || !Array.isArray(userApprovals)) return false;
+  const accEmail = String(account.email || '').trim().toLowerCase();
+  const accId = account.id ? String(account.id) : '';
+  const normalizedRole = account.role ? normalizeAccessRole(account.role) : '';
+  const normalizedCompany = account.company ? normalizeCompanyName(account.company) : '';
+  let changed = false;
+  let matched = false;
+
+  userApprovals.forEach(item => {
+    if (!item) return;
+    const itemEmail = String(item.email || '').trim().toLowerCase();
+    const itemId = item.id ? String(item.id) : '';
+    if ((accId && itemId === accId) || (accEmail && itemEmail === accEmail)) {
+      matched = true;
+      if (normalizedRole && normalizeAccessRole(item.role) !== normalizedRole) {
+        item.role = normalizedRole;
+        changed = true;
+      }
+      if (account.status && item.status !== account.status) {
+        item.status = account.status;
+        changed = true;
+      }
+      if (account.name && item.name !== account.name) {
+        item.name = account.name;
+        changed = true;
+      }
+      if (normalizedCompany && item.company !== normalizedCompany) {
+        item.company = normalizedCompany;
+        changed = true;
+      }
+    }
+  });
+
+  if (!matched && accEmail) {
+    userApprovals.push({
+      ...account,
+      role: normalizedRole || 'operador',
+      company: normalizedCompany || account.company || ''
+    });
+    changed = true;
+  }
+
+  if (changed) {
+    try { localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals)); } catch (e) { }
+  }
+  return changed;
+}
 
 function verifyCurrentUserSessionLocal() {
   if (!currentUser) return false;
@@ -908,18 +957,33 @@ async function verifyCurrentUserSession({ force = false } = {}) {
       }
 
       if (account) {
+        const prevEffectiveRole = getEffectiveAccessRole();
+        const approvalCacheChanged = syncCachedUserApprovalEntry(account);
         let profileUpdated = false;
-        if (account.role && account.role !== currentUser.role && !isSysAdmin) {
-          currentUser.role = normalizeAccessRole(account.role);
+        const normalizedAccountRole = account.role ? normalizeAccessRole(account.role) : '';
+        if (normalizedAccountRole && normalizedAccountRole !== normalizeAccessRole(currentUser.role) && !isSysAdmin) {
+          currentUser.role = normalizedAccountRole;
           profileUpdated = true;
         }
         if (account.name && account.name !== currentUser.name) {
           currentUser.name = account.name;
           profileUpdated = true;
         }
-        if (profileUpdated) {
+        if (account.company) {
+          const normalizedAccountCompany = normalizeCompanyName(account.company);
+          if (normalizedAccountCompany && normalizedAccountCompany !== currentUser.company) {
+            currentUser.company = normalizedAccountCompany;
+            profileUpdated = true;
+          }
+        }
+        const nextEffectiveRole = getEffectiveAccessRole();
+        const roleChanged = prevEffectiveRole !== nextEffectiveRole;
+        if (profileUpdated || approvalCacheChanged || roleChanged) {
           try { localStorage.setItem('obraflow_user', JSON.stringify(currentUser)); } catch (e) { }
           updateAppShellAccess();
+          if (roleChanged && !document.querySelector('#modalRoot form') && typeof render === 'function') {
+            render();
+          }
         }
       }
 
@@ -972,6 +1036,7 @@ async function syncUserApprovalsFromSupabase({ force = false } = {}) {
           };
         });
 
+        const prevEffectiveRole = getEffectiveAccessRole();
         if (currentUser) {
           const currentEmail = String(currentUser.email || '').trim().toLowerCase();
           const isSysAdmin = isSystemAdminEmail(currentEmail);
@@ -994,12 +1059,37 @@ async function syncUserApprovalsFromSupabase({ force = false } = {}) {
             logoutUser('Sua senha está incorreta ou foi alterada. Entre novamente com a senha correta.');
             return false;
           }
+          if (activeAccount) {
+            let currentUserChanged = false;
+            const normalizedAccountRole = activeAccount.role ? normalizeAccessRole(activeAccount.role) : '';
+            if (normalizedAccountRole && normalizedAccountRole !== normalizeAccessRole(currentUser.role) && !isSysAdmin) {
+              currentUser.role = normalizedAccountRole;
+              currentUserChanged = true;
+            }
+            if (activeAccount.name && activeAccount.name !== currentUser.name) {
+              currentUser.name = activeAccount.name;
+              currentUserChanged = true;
+            }
+            if (activeAccount.company) {
+              const normalizedCompany = normalizeCompanyName(activeAccount.company);
+              if (normalizedCompany && normalizedCompany !== currentUser.company) {
+                currentUser.company = normalizedCompany;
+                currentUserChanged = true;
+              }
+            }
+            if (currentUserChanged) {
+              try { localStorage.setItem('obraflow_user', JSON.stringify(currentUser)); } catch (e) { }
+            }
+          }
         }
 
         userApprovals = validRows;
         localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
+        const nextEffectiveRole = getEffectiveAccessRole();
         updateAppShellAccess();
-        if (currentPage === 'usuarios' && userManagementTab !== 'convidar' && canSafelyAutoRender(['usuarios'])) {
+        if (prevEffectiveRole !== nextEffectiveRole && !document.querySelector('#modalRoot form') && typeof render === 'function') {
+          render();
+        } else if (currentPage === 'usuarios' && userManagementTab !== 'convidar' && canSafelyAutoRender(['usuarios'])) {
           renderUserManagement();
         }
         return true;
@@ -4726,10 +4816,28 @@ async function updateApprovedUserRole(id, newRole, email) {
   }
   const user = findUserApproval(id, email);
   if (user) {
-    user.role = normalizeAccessRole(newRole);
-    user.updated_at = new Date().toISOString();
+    const normalizedRole = normalizeAccessRole(newRole);
+    const updatedAt = new Date().toISOString();
+    const targetEmail = String(user.email || email || '').trim().toLowerCase();
+    const matchingRows = userApprovals.filter(u =>
+      u && (
+        (user.id && u.id === user.id) ||
+        (targetEmail && String(u.email || '').trim().toLowerCase() === targetEmail)
+      )
+    );
+    matchingRows.forEach(item => {
+      item.role = normalizedRole;
+      item.updated_at = updatedAt;
+    });
     localStorage.setItem('obraflow_user_approvals', JSON.stringify(userApprovals));
-    await saveUserApprovalToSupabase(user);
+    for (const item of matchingRows) {
+      await saveUserApprovalToSupabase(item);
+    }
+    if (currentUser && targetEmail && String(currentUser.email || '').trim().toLowerCase() === targetEmail && !isSystemAdminEmail(targetEmail)) {
+      currentUser.role = normalizedRole;
+      try { localStorage.setItem('obraflow_user', JSON.stringify(currentUser)); } catch (e) { }
+      updateAppShellAccess();
+    }
     toast(`Perfil de ${user.name} atualizado para ${accessRoleLabel(user.role)}.`);
     renderUserManagement();
   }
